@@ -10,7 +10,7 @@
 
 Most people don't think about the air they breathe until it's a problem — and by then, the damage is already being done. Air quality affects everyone, but especially kids, the elderly, and anyone with asthma or other respiratory conditions. Bad air days aren't just uncomfortable, they're a genuine health risk. Wildfire smoke, ground-level ozone, particulate pollution from traffic and industry — these things are measurable, they're trackable, and knowing about them lets you make smarter decisions about when to go outside, when to open your windows, and when to keep your family inside.
 
-I built this integration because I wanted that data in my smart home — not buried in an app, but right alongside everything else I monitor. If you've got Home Assistant running, you might as well know what you're breathing.
+I live in Chicago, and air quality here isn't just an abstract concern — it's a day to day reality. Between wildfire smoke drifting in from out west, traffic, an active industrial base, and the general reality of dense city living, the air outside my door varies in ways that actually matter. I built this integration because I wanted one consistent format to both see what's happening right now and project what's coming — not buried in an app, but living right alongside everything else I monitor in Home Assistant. If you've got HA running, you might as well know what you're breathing.
 
 ---
 
