@@ -477,10 +477,18 @@ class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self.coordinator
         today = _date.today()
-        days_elapsed = today.day
-        days_in_month = _calendar.monthrange(today.year, today.month)[1]
+        period_start = _date.fromisoformat(c._tracking_period_start)
+        days_elapsed = max(1, (today - period_start).days + 1)
+        # Compute period length: period_start → same day next month
+        if period_start.month == 12:
+            next_year, next_month = period_start.year + 1, 1
+        else:
+            next_year, next_month = period_start.year, period_start.month + 1
+        days_next = _calendar.monthrange(next_year, next_month)[1]
+        next_period = _date(next_year, next_month, min(c.reset_day, days_next))
+        days_in_period = (next_period - period_start).days
         projected = (
-            round(c._monthly_aq_calls * days_in_month / days_elapsed)
+            round(c._monthly_aq_calls * days_in_period / days_elapsed)
             if days_elapsed > 0 else 0
         )
         limit = c.aq_monthly_limit
@@ -498,7 +506,7 @@ class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
             "pct_of_limit": pct_used,
             "pct_projected": pct_projected,
             "status": status,
-            "tracking_month": c._tracking_month,
+            "tracking_period_start": c._tracking_period_start,
             ATTR_ATTRIBUTION: ATTRIBUTION,
         }
 
@@ -525,10 +533,17 @@ class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self.coordinator
         today = _date.today()
-        days_elapsed = today.day
-        days_in_month = _calendar.monthrange(today.year, today.month)[1]
+        period_start = _date.fromisoformat(c._tracking_period_start)
+        days_elapsed = max(1, (today - period_start).days + 1)
+        if period_start.month == 12:
+            next_year, next_month = period_start.year + 1, 1
+        else:
+            next_year, next_month = period_start.year, period_start.month + 1
+        days_next = _calendar.monthrange(next_year, next_month)[1]
+        next_period = _date(next_year, next_month, min(c.reset_day, days_next))
+        days_in_period = (next_period - period_start).days
         projected = (
-            round(c._monthly_pollen_calls * days_in_month / days_elapsed)
+            round(c._monthly_pollen_calls * days_in_period / days_elapsed)
             if days_elapsed > 0 else 0
         )
         limit = c.pollen_monthly_limit
@@ -546,6 +561,6 @@ class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
             "pct_of_limit": pct_used,
             "pct_projected": pct_projected,
             "status": status,
-            "tracking_month": c._tracking_month,
+            "tracking_period_start": c._tracking_period_start,
             ATTR_ATTRIBUTION: ATTRIBUTION,
         }

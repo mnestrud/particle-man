@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from .const import (
     CONF_AQ_MONTHLY_LIMIT,
     CONF_API_KEY,
+    CONF_ENFORCE_LIMITS,
     CONF_FORECAST_DAYS,
     CONF_HEALTH_RECS,
     CONF_LANGUAGE,
@@ -18,8 +19,10 @@ from .const import (
     CONF_PLANT_DESCRIPTIONS,
     CONF_PLANT_SENSORS,
     CONF_POLLEN_MONTHLY_LIMIT,
+    CONF_RESET_DAY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_AQ_MONTHLY_LIMIT,
+    DEFAULT_ENFORCE_LIMITS,
     DEFAULT_FORECAST_DAYS,
     DEFAULT_HEALTH_RECS,
     DEFAULT_LANGUAGE,
@@ -28,6 +31,7 @@ from .const import (
     DEFAULT_PLANT_DESCRIPTIONS,
     DEFAULT_PLANT_SENSORS,
     DEFAULT_POLLEN_MONTHLY_LIMIT,
+    DEFAULT_RESET_DAY,
     DEFAULT_UPDATE_INTERVAL,
 )
 from .coordinator import GoogleAirQualityCoordinator
@@ -57,6 +61,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         include_plant_descriptions=_opt(entry, CONF_PLANT_DESCRIPTIONS, DEFAULT_PLANT_DESCRIPTIONS),
         aq_monthly_limit=_opt(entry, CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT),
         pollen_monthly_limit=_opt(entry, CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT),
+        reset_day=_opt(entry, CONF_RESET_DAY, DEFAULT_RESET_DAY),
+        enforce_limits=_opt(entry, CONF_ENFORCE_LIMITS, DEFAULT_ENFORCE_LIMITS),
         entry_id=entry.entry_id,
     )
     await coordinator.async_load_tracking()

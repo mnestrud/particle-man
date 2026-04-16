@@ -30,6 +30,10 @@ DEFAULT_POLLEN_MONTHLY_LIMIT = 5000
 # --- Config keys for monthly API limits ---
 CONF_AQ_MONTHLY_LIMIT = "aq_monthly_limit"
 CONF_POLLEN_MONTHLY_LIMIT = "pollen_monthly_limit"
+CONF_RESET_DAY = "reset_day"
+DEFAULT_RESET_DAY = 1
+CONF_ENFORCE_LIMITS = "enforce_limits"
+DEFAULT_ENFORCE_LIMITS = False
 
 # --- API ---
 BASE_URL = "https://airquality.googleapis.com/v1"

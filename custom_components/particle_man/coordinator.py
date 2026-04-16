@@ -18,11 +18,13 @@ from .const import (
     BASE_URL,
     CURRENT_EXTRA_COMPUTATIONS_BASE,
     DEFAULT_AQ_MONTHLY_LIMIT,
+    DEFAULT_ENFORCE_LIMITS,
     DEFAULT_FORECAST_DAYS,
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
     DEFAULT_LOCAL_AQI_CODE,
     DEFAULT_POLLEN_MONTHLY_LIMIT,
+    DEFAULT_RESET_DAY,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EPA_BREAKPOINTS,
@@ -120,6 +122,23 @@ def _day_to_datetime(date_obj: dict) -> str | None:
         return None
 
 
+def _period_start_date(reset_day: int) -> _date:
+    """Return the start date of the current billing period."""
+    today = _date.today()
+    days_this_month = _calendar.monthrange(today.year, today.month)[1]
+    effective_day = min(reset_day, days_this_month)
+    candidate = today.replace(day=effective_day)
+    if today >= candidate:
+        return candidate
+    # Reset day hasn't arrived yet this month — period started last month
+    if today.month == 1:
+        prev_year, prev_month = today.year - 1, 12
+    else:
+        prev_year, prev_month = today.year, today.month - 1
+    days_prev = _calendar.monthrange(prev_year, prev_month)[1]
+    return _date(prev_year, prev_month, min(reset_day, days_prev))
+
+
 # Coordinator
 
 class GoogleAirQualityCoordinator(DataUpdateCoordinator):
@@ -141,6 +160,8 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         include_plant_descriptions: bool = True,
         aq_monthly_limit: int = DEFAULT_AQ_MONTHLY_LIMIT,
         pollen_monthly_limit: int = DEFAULT_POLLEN_MONTHLY_LIMIT,
+        reset_day: int = DEFAULT_RESET_DAY,
+        enforce_limits: bool = DEFAULT_ENFORCE_LIMITS,
         entry_id: str = "",
     ) -> None:
         self.api_key = api_key
@@ -155,6 +176,8 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         self.include_plant_descriptions = include_plant_descriptions
         self.aq_monthly_limit = int(aq_monthly_limit)
         self.pollen_monthly_limit = int(pollen_monthly_limit)
+        self.reset_day = max(1, min(28, int(reset_day)))
+        self.enforce_limits = enforce_limits
         self.entry_id = entry_id
         self._session_start: datetime = datetime.now(timezone.utc)
         self._aq_current_calls: int = 0
@@ -162,7 +185,7 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         self._pollen_calls: int = 0
         self._monthly_aq_calls: int = 0
         self._monthly_pollen_calls: int = 0
-        self._tracking_month: str = datetime.now(timezone.utc).strftime("%Y-%m")
+        self._tracking_period_start: str = _period_start_date(self.reset_day).isoformat()
         self._store: Store = Store(hass, _STORAGE_VERSION, f"{_STORAGE_KEY}.{entry_id}")
         super().__init__(
             hass,
@@ -172,32 +195,46 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         )
 
     async def async_load_tracking(self) -> None:
-        """Load persistent monthly API call counts from storage."""
+        """Load persistent API call counts from storage."""
         stored = await self._store.async_load()
         if stored:
-            stored_month = stored.get("month", "")
-            current_month = datetime.now(timezone.utc).strftime("%Y-%m")
-            if stored_month == current_month:
+            current_period = _period_start_date(self.reset_day).isoformat()
+            # Support both new format (period_start) and old format (month)
+            stored_period = stored.get("period_start") or stored.get("month", "")
+            if stored_period == current_period:
                 self._monthly_aq_calls = stored.get("aq_calls", 0)
                 self._monthly_pollen_calls = stored.get("pollen_calls", 0)
-                self._tracking_month = stored_month
+                self._tracking_period_start = stored_period
 
     async def _save_tracking(self) -> None:
-        """Persist monthly call counts to storage."""
+        """Persist API call counts to storage."""
         await self._store.async_save({
-            "month": self._tracking_month,
+            "period_start": self._tracking_period_start,
             "aq_calls": self._monthly_aq_calls,
             "pollen_calls": self._monthly_pollen_calls,
         })
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch current conditions, forecast, and pollen in parallel."""
-        # Reset monthly counters on month rollover
-        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
-        if current_month != self._tracking_month:
-            self._tracking_month = current_month
+        # Reset counters on billing period rollover
+        current_period = _period_start_date(self.reset_day).isoformat()
+        if current_period != self._tracking_period_start:
+            self._tracking_period_start = current_period
             self._monthly_aq_calls = 0
             self._monthly_pollen_calls = 0
+
+        # Enforce API limits if enabled
+        if self.enforce_limits:
+            if self.aq_monthly_limit > 0 and self._monthly_aq_calls >= self.aq_monthly_limit:
+                raise UpdateFailed(
+                    f"AQ API limit reached ({self._monthly_aq_calls}/{self.aq_monthly_limit} calls). "
+                    "Polling suspended. Disable 'Enforce API limits' in options to resume."
+                )
+            if self.pollen_monthly_limit > 0 and self._monthly_pollen_calls >= self.pollen_monthly_limit:
+                raise UpdateFailed(
+                    f"Pollen API limit reached ({self._monthly_pollen_calls}/{self.pollen_monthly_limit} calls). "
+                    "Polling suspended. Disable 'Enforce API limits' in options to resume."
+                )
 
         session = async_get_clientsession(self.hass)
 

@@ -29,15 +29,15 @@ That's what this is.
   - *With EPA health category:* PM2.5, PM10, Ozone (O3), Nitrogen Dioxide (NO2), Carbon Monoxide (CO), Sulfur Dioxide (SO2)
   - *Concentration only:* Any additional pollutants returned by the API for your location (varies by region)
 - **Pollen sensors** by type (Grass, Tree, Weed) with index, color, and trend
-- **API usage tracking** — monthly call counts with projected usage and free-tier warnings (see [API Usage Tracking](#api-usage-tracking))
+- **API usage tracking** — billing-period call counts with projected usage and free-tier warnings (see [API Usage Tracking](#api-usage-tracking))
 
 ### Forecast
 
-- **Hourly AQI forecast** up to 96 hours — available as a sensor attribute for use in dashboard charts
-- **Daily AQI forecast** up to 5 days — peak AQI per day
-- **Hourly pollutant forecast** up to 96 hours per pollutant — available as a sensor attribute
-- **Daily pollutant forecast** up to 5 days — peak concentration per day
-- **Daily pollen forecast** up to 5 days with trend and expected peak (pollen data is daily only — no hourly pollen data is available from Google)
+- **Hourly AQI forecast** up to 96 hours — stored as `hourly_forecast` attribute for dashboard charts
+- **Daily AQI forecast** up to 5 days — peak AQI per day, stored as `daily_forecast` attribute
+- **Hourly pollutant forecast** up to 96 hours per pollutant — stored as `hourly_forecast` attribute
+- **Daily pollutant forecast** up to 5 days — peak concentration per day, stored as `daily_forecast` attribute
+- **Daily pollen forecast** up to 5 days with trend and expected peak — stored as `daily_forecast` attribute (pollen data is daily only — no hourly pollen data is available from Google)
 
 ### Optional
 
@@ -56,21 +56,33 @@ If you want a country-specific index like the US AQI, enable the **Local AQI ind
 
 ---
 
+## Devices
+
+Particle Man creates three devices in Home Assistant:
+
+| Device | Contains |
+|---|---|
+| **Particle Man Pollution** | Universal AQI, pollutant sensors, Local AQI (if enabled) |
+| **Particle Man Pollen** | Pollen type sensors (Grass, Tree, Weed) and per-plant sensors (if enabled) |
+| **Particle Man Diagnostics** | Last API Update timestamp, AQ API Calls (Monthly), Pollen API Calls (Monthly) |
+
+---
+
 ## API Usage Tracking
 
-Particle Man includes two diagnostic sensors that track how many API calls have been made this calendar month and project your usage through the end of the month:
+Particle Man includes two diagnostic sensors that track how many API calls have been made in the current billing period and project usage through the end of the period:
 
 - **AQ API Calls (Monthly)** — tracks Air Quality API calls (current conditions + forecast = 2 calls per poll)
 - **Pollen API Calls (Monthly)** — tracks Pollen API calls (1 call per poll)
 
-Each sensor includes attributes for `monthly_limit`, `projected_monthly`, `pct_of_limit`, `pct_projected`, and `status` (`ok` / `warning` at 80% projected / `critical` at 95% projected).
+Each sensor includes attributes for `monthly_limit`, `projected_monthly`, `pct_of_limit`, `pct_projected`, `status` (`ok` / `warning` at 80% projected / `critical` at 95% projected), and `tracking_period_start`.
 
 **Important notes:**
-- Tracking resets on the **1st of each calendar month**, not your Google billing cycle — these may not align exactly
-- Usage is **estimated, not pulled from Google** — Google does not expose actual quota usage through the API key. This is a projection based on calls made since the tracking reset
+- Tracking resets on the **configured reset day** (default: 1st of each month). You can change this to match your Google billing cycle in the **API Limits** section of Configure
+- Usage is **estimated, not pulled from Google** — Google does not expose actual quota usage through the API key. This is a projection based on calls made since the last reset
 - Counts survive HA restarts via persistent storage
-- Default limits match the Google free tier: **10,000 AQ calls/month** and **5,000 Pollen calls/month**. You can adjust these in the integration's Configure options if you have a paid plan
-- Limits are **not enforced** — the integration will continue polling regardless of usage. The sensors are informational only; if you want to act on a warning, wire up a HA automation against the `status` attribute
+- Default limits match the Google free tier: **10,000 AQ calls/month** and **5,000 Pollen calls/month**. Adjust in Configure if you have a paid plan
+- By default, limits are **not enforced** — the integration keeps polling regardless of usage. Enable **Enforce limits** to suspend polling when a limit is reached; sensors will show unavailable until the next billing period or until you disable enforcement
 
 ---
 
@@ -120,23 +132,72 @@ During initial setup you will be prompted for:
 
 ## Options
 
-After setup, additional options are available via **Configure**:
+After setup, click **Configure** to access additional options. Settings are organized into collapsible sections.
+
+### Location & Polling
+
+| Option | Default | Description |
+|---|---|---|
+| Latitude | (from setup) | Location latitude |
+| Longitude | (from setup) | Location longitude |
+| Update interval | 60 min | How often to poll both APIs (15–1440 minutes) |
+
+### Forecast
 
 | Option | Default | Description |
 |---|---|---|
 | Forecast days | 5 | Number of days of daily forecast data (1–5) |
-| Language | en | Language for health recommendations and pollutant descriptions |
+| Language | en | BCP-47 language code for health recommendations and display names |
+
+### Air Quality
+
+| Option | Default | Description |
+|---|---|---|
 | Local AQI index | disabled | Show a regional AQI index in addition to Universal AQI |
 | Local AQI index code | us_aqi | Which regional index to use when local AQI is enabled |
-| Health recommendations | disabled | Include health recommendation text in sensor attributes |
+| Health recommendations | disabled | Include per-population health recommendation text in sensor attributes |
+
+### Pollen
+
+| Option | Default | Description |
+|---|---|---|
 | Plant sensors | enabled | Create individual sensors for each pollen plant species |
 | Plant descriptions | enabled | Include plant family, genus, and cross-reaction info in plant sensor attributes |
+
+### API Limits
+
+| Option | Default | Description |
+|---|---|---|
 | AQ API monthly limit | 10,000 | Monthly call limit for usage tracking and warnings |
 | Pollen API monthly limit | 5,000 | Monthly call limit for usage tracking and warnings |
+| Billing period reset day | 1 | Day of the month tracking resets (1–28). Set to match your Google billing cycle |
+| Enforce limits | disabled | When enabled, polling stops when a limit is reached instead of just warning |
 
 ### Local AQI Index
 
 Supported regional indices: US AQI, Canada (EC), UK (DEFRA), Germany (UBA), France (ATMO), China (MEP), India (CPCB), Japan (CAQI), Mexico (SEDEMA), Netherlands (LKI), Singapore (NEA), South Korea (KECO), Spain (Calidad).
+
+---
+
+## Sensor Attributes
+
+Forecast data is stored as sensor attributes for use in dashboard cards and templates.
+
+### AQI and Pollutant sensors
+
+| Attribute | Description |
+|---|---|
+| `daily_forecast` | List of daily peak values, up to 5 days. Each entry: `datetime`, `aqi` or `max`, `category`, `epa_category` |
+| `hourly_forecast` | List of hourly values, up to 96 hours. Each entry: `datetime`, `aqi` or `value`, `category`, `epa_category` |
+| `trend` | Direction based on hourly slope: `rising`, `falling`, or `stable` |
+
+### Pollen sensors
+
+| Attribute | Description |
+|---|---|
+| `daily_forecast` | List of daily forecast entries. Each entry: `datetime`, `index`, `category`, `color_hex` |
+| `trend` | Direction based on today vs tomorrow: `up`, `down`, or `flat` |
+| `expected_peak` | Forecast entry with the highest index value |
 
 ---
 
