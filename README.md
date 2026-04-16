@@ -1,7 +1,9 @@
 <div align="center">
   <img src="images/PARTICLE_MAN_LARGE.png" alt="Particle Man" width="400"/>
 
-  # PARTICLE MAN FIGHTS BAD AIR QUALITY
+  # PARTICLE MAN HELPS YOU FIGHT BAD AIR QUALITY
+
+  A Home Assistant custom integration that pulls air quality and pollen data from the [Google Air Quality API](https://developers.google.com/maps/documentation/air-quality) and [Google Pollen API](https://developers.google.com/maps/documentation/pollen).
 </div>
 
 ---
@@ -15,8 +17,6 @@ The integrations that already existed weren't cutting it for me. Some had curren
 That's what this is.
 
 ---
-
-A Home Assistant custom integration that pulls air quality and pollen data from the [Google Air Quality API](https://developers.google.com/maps/documentation/air-quality) and [Google Pollen API](https://developers.google.com/maps/documentation/pollen).
 
 ## Features
 
