@@ -18,21 +18,27 @@ A Home Assistant custom integration that pulls air quality and pollen data from 
 
 ## Features
 
-- **Universal AQI** (UAQI) with health category and dominant pollutant — this is Google's Universal Air Quality Index, a global standard, not the US EPA AQI
-- Optional **US AQI** and other regional indices (see [Local AQI index](#options) option)
-- Per-pollutant sensors (PM2.5, PM10, O3, NO2, CO, SO2) with health categories calculated using US EPA (Environmental Protection Agency) breakpoints
-- Hourly and daily AQI forecasts
-- Pollen sensors by type (Grass, Tree, Weed) with trend and peak forecasts
-- Optional per-plant-species pollen sensors (Oak, Ragweed, etc.) with family/genus/cross-reaction attributes
-- EPA AQI calculation using 2024 NAAQS revised PM2.5 breakpoints
-- API call tracking with free-tier usage projections
-- Optional health recommendations
+### Core
+
+- **Universal AQI (UAQI)** with health category, dominant pollutant, and hourly/daily forecast
+- **Pollutant sensors** — each sensor includes concentration, unit, EPA health category (where applicable), dominant pollutant flag, sources and effects, and a daily forecast. Pollutants are split by whether US EPA (Environmental Protection Agency) breakpoints exist:
+  - *With EPA health category:* PM2.5, PM10, Ozone (O3), Nitrogen Dioxide (NO2), Carbon Monoxide (CO), Sulfur Dioxide (SO2)
+  - *Concentration only:* Any additional pollutants returned by the API for your location (varies by region)
+- **Pollen sensors** by type (Grass, Tree, Weed) with index, color, trend, and peak forecast
+- **API call tracker** with free-tier usage projections
+
+### Optional
+
+- **Regional AQI index** — US AQI and 12 other country-specific indices (see [supported indices](#local-aqi-index))
+- **Health recommendations** — text guidance included as sensor attributes
+- **Per-plant pollen sensors** — individual species (Oak, Ragweed, etc.) with index, trend, and peak
+- **Plant descriptions** — family, genus, and cross-reaction info added to plant sensor attributes
 
 ## About the AQI
 
-The primary AQI sensor uses the **Universal AQI (UAQI)** — a global index developed by Google that works consistently across all countries. It is **not** the same as the US EPA AQI (US Environmental Protection Agency Air Quality Index).
+The primary AQI sensor uses the [**Universal AQI (UAQI)**](https://developers.google.com/maps/documentation/air-quality/laqis) — a global index developed by Google that provides consistent, [hyper-local air quality readings](https://developers.google.com/maps/documentation/air-quality/overview) at 500m resolution across 100+ countries. It accounts for six core pollutants and is designed to work the same way everywhere in the world.
 
-If you want the US EPA AQI specifically, enable the **Local AQI index** option after setup and select **US AQI**. Both can be tracked simultaneously.
+If you want a country-specific index like the US AQI, enable the **Local AQI index** option after setup. Both can be tracked simultaneously.
 
 ## Prerequisites
 
@@ -76,10 +82,14 @@ After setup, additional options are available via **Configure**:
 |---|---|---|
 | Forecast days | 5 | Number of days of forecast data (1–5) |
 | Language | en | Language for health recommendations and pollutant descriptions |
-| Local AQI index | disabled | Show a regional AQI index (e.g., US AQI) in addition to Universal AQI |
+| Local AQI index | disabled | Show a regional AQI index in addition to Universal AQI |
 | Health recommendations | disabled | Include health recommendation text in sensor attributes |
 | Plant sensors | disabled | Create individual sensors for each pollen plant species |
 | Plant descriptions | disabled | Include plant family, genus, and cross-reaction info in plant sensor attributes |
+
+### Local AQI Index
+
+Supported regional indices: US AQI, Canada (EC), UK (DEFRA), Germany (UBA), France (ATMO), China (MEP), India (CPCB), Japan (CAQI), Mexico (SEDEMA), Netherlands (LKI), Singapore (NEA), South Korea (KECO), Spain (Calidad).
 
 ## License
 
