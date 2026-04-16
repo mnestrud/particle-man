@@ -45,6 +45,7 @@ That's what this is.
 - **Health recommendations** — text guidance included as sensor attributes
 - **Per-plant pollen sensors** — individual species (Oak, Ragweed, etc.) with index, trend, and peak
 - **Plant descriptions** — family, genus, and cross-reaction info added to plant sensor attributes
+- **Enforce API limits** — suspend polling when a monthly call limit is reached, keeping usage within the free tier
 
 ---
 
