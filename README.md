@@ -18,14 +18,20 @@ A Home Assistant custom integration that pulls air quality and pollen data from 
 
 ## Features
 
-### Core
+### Current Conditions
 
-- **Universal AQI (UAQI)** with health category, dominant pollutant, and hourly/daily forecast
-- **Pollutant sensors** — each sensor includes concentration, unit, EPA health category (where applicable), dominant pollutant flag, sources and effects, and a daily forecast. Pollutants are split by whether US EPA (Environmental Protection Agency) breakpoints exist:
+- **Universal AQI (UAQI)** with health category and dominant pollutant
+- **Pollutant sensors** — each sensor includes concentration, unit, EPA health category (where applicable), dominant pollutant flag, and sources and effects. Pollutants are split by whether US EPA (Environmental Protection Agency) breakpoints exist:
   - *With EPA health category:* PM2.5, PM10, Ozone (O3), Nitrogen Dioxide (NO2), Carbon Monoxide (CO), Sulfur Dioxide (SO2)
   - *Concentration only:* Any additional pollutants returned by the API for your location (varies by region)
-- **Pollen sensors** by type (Grass, Tree, Weed) with index, color, trend, and peak forecast
+- **Pollen sensors** by type (Grass, Tree, Weed) with index and color
 - **API call tracker** with free-tier usage projections
+
+### Forecast
+
+- **Hourly and daily AQI forecast** up to 5 days
+- **Daily pollutant forecast** for all tracked pollutants
+- **Pollen trend and peak forecast** per type (Grass, Tree, Weed)
 
 ### Optional
 
