@@ -8,9 +8,11 @@
 
 ## Why Air Quality Matters
 
-Most people don't think about the air they breathe until it's a problem — and by then, the damage is already being done. Air quality affects everyone, but especially kids, the elderly, and anyone with asthma or other respiratory conditions. Bad air days aren't just uncomfortable, they're a genuine health risk. Wildfire smoke, ground-level ozone, particulate pollution from traffic and industry — these things are measurable, they're trackable, and knowing about them lets you make smarter decisions about when to go outside, when to open your windows, and when to keep your family inside.
+I live in Chicago. Between wildfire smoke drifting in from out west, traffic, an active industrial base, and just the general reality of dense city living, air quality has a real impact on day to day life here — when I open the windows, when the kids play outside, when I go for a run. It's not abstract.
 
-I live in Chicago, and air quality here isn't just an abstract concern — it's a day to day reality. Between wildfire smoke drifting in from out west, traffic, an active industrial base, and the general reality of dense city living, the air outside my door varies in ways that actually matter. I built this integration because I wanted one consistent format to both see what's happening right now and project what's coming — not buried in an app, but living right alongside everything else I monitor in Home Assistant. If you've got HA running, you might as well know what you're breathing.
+The integrations that already existed weren't cutting it for me. Some had current conditions but no forecasts. Some covered a few pollutants but not all the ones I cared about. None of them surfaced the plain-language risk levels behind the numbers — the part that actually tells you what to do with the information. I wanted one integration that did all of it, in a consistent format, so I could see what's happening right now and what's coming, without bouncing between apps or stitching together multiple data sources.
+
+That's what this is.
 
 ---
 
