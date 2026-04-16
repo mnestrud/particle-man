@@ -24,18 +24,20 @@ That's what this is.
 
 ### Current Conditions
 
-- **Universal AQI (UAQI)** with health category and dominant pollutant
-- **Pollutant sensors** — each sensor includes concentration, unit, EPA health category (where applicable), dominant pollutant flag, and sources and effects. Pollutants are split by whether US EPA (Environmental Protection Agency) breakpoints exist:
+- **Universal AQI (UAQI)** with health category, dominant pollutant, and trend
+- **Pollutant sensors** — each sensor includes concentration, unit, EPA health category (where applicable), dominant pollutant flag, sources and effects, and trend. Pollutants are split by whether US EPA (Environmental Protection Agency) breakpoints exist:
   - *With EPA health category:* PM2.5, PM10, Ozone (O3), Nitrogen Dioxide (NO2), Carbon Monoxide (CO), Sulfur Dioxide (SO2)
   - *Concentration only:* Any additional pollutants returned by the API for your location (varies by region)
-- **Pollen sensors** by type (Grass, Tree, Weed) with index and color
-- **API call tracker** with free-tier usage projections
+- **Pollen sensors** by type (Grass, Tree, Weed) with index, color, and trend
+- **API usage tracking** — monthly call counts with projected usage and free-tier warnings (see [API Usage Tracking](#api-usage-tracking))
 
 ### Forecast
 
-- **Hourly and daily AQI forecast** up to 5 days
-- **Daily pollutant forecast** for all tracked pollutants
-- **Pollen trend and peak forecast** per type (Grass, Tree, Weed)
+- **Hourly AQI forecast** up to 96 hours — available as a sensor attribute for use in dashboard charts
+- **Daily AQI forecast** up to 5 days — peak AQI per day
+- **Hourly pollutant forecast** up to 96 hours per pollutant — available as a sensor attribute
+- **Daily pollutant forecast** up to 5 days — peak concentration per day
+- **Daily pollen forecast** up to 5 days with trend and expected peak (pollen data is daily only — no hourly pollen data is available from Google)
 
 ### Optional
 
@@ -44,11 +46,32 @@ That's what this is.
 - **Per-plant pollen sensors** — individual species (Oak, Ragweed, etc.) with index, trend, and peak
 - **Plant descriptions** — family, genus, and cross-reaction info added to plant sensor attributes
 
+---
+
 ## About the AQI
 
 The primary AQI sensor uses the [**Universal AQI (UAQI)**](https://developers.google.com/maps/documentation/air-quality/laqis) — a global index developed by Google that provides consistent, [hyper-local air quality readings](https://developers.google.com/maps/documentation/air-quality/overview) at 500m resolution across 100+ countries. It accounts for six core pollutants and is designed to work the same way everywhere in the world.
 
 If you want a country-specific index like the US AQI, enable the **Local AQI index** option after setup. Both can be tracked simultaneously.
+
+---
+
+## API Usage Tracking
+
+Particle Man includes two diagnostic sensors that track how many API calls have been made this calendar month and project your usage through the end of the month:
+
+- **AQ API Calls (Monthly)** — tracks Air Quality API calls (current conditions + forecast = 2 calls per poll)
+- **Pollen API Calls (Monthly)** — tracks Pollen API calls (1 call per poll)
+
+Each sensor includes attributes for `monthly_limit`, `projected_monthly`, `pct_of_limit`, `pct_projected`, and `status` (`ok` / `warning` at 80% projected / `critical` at 95% projected).
+
+**Important notes:**
+- Tracking resets on the **1st of each calendar month**, not your Google billing cycle — these may not align exactly
+- Usage is **estimated, not pulled from Google** — Google does not expose actual quota usage through the API key. This is a projection based on calls made since the tracking reset
+- Counts survive HA restarts via persistent storage
+- Default limits match the Google free tier: **10,000 AQ calls/month** and **5,000 Pollen calls/month**. You can adjust these in the integration's Configure options if you have a paid plan
+
+---
 
 ## Prerequisites
 
@@ -59,19 +82,27 @@ You need a Google Cloud API key with both the **Air Quality API** and **Pollen A
 3. Enable the **Air Quality API** and **Pollen API**
 4. Create an API key under **Credentials**
 
-Google offers a free tier — the integration includes an API call counter so you can monitor usage.
+---
 
 ## Installation
+
+### HACS (recommended)
+
+1. In HACS, go to **Integrations → three-dot menu → Custom repositories**
+2. Add `https://github.com/mnestrud/particle-man` as an **Integration**
+3. Install **Particle Man** from HACS
+4. Restart Home Assistant
 
 ### Manual
 
 1. Copy the `custom_components/particle_man/` directory into your Home Assistant `config/custom_components/` folder
 2. Restart Home Assistant
-3. Go to **Settings → Devices & Services → Add Integration** and search for **Particle Man**
 
-### HACS (coming soon)
+### Setup
 
-HACS support is planned.
+Go to **Settings → Devices & Services → Add Integration** and search for **Particle Man**.
+
+---
 
 ## Configuration
 
@@ -84,22 +115,29 @@ During initial setup you will be prompted for:
 | Longitude | Location longitude (defaults to your HA home location) |
 | Update interval | How often to poll the API (minutes, default: 60) |
 
+---
+
 ## Options
 
 After setup, additional options are available via **Configure**:
 
 | Option | Default | Description |
 |---|---|---|
-| Forecast days | 5 | Number of days of forecast data (1–5) |
+| Forecast days | 5 | Number of days of daily forecast data (1–5) |
 | Language | en | Language for health recommendations and pollutant descriptions |
 | Local AQI index | disabled | Show a regional AQI index in addition to Universal AQI |
+| Local AQI index code | us_aqi | Which regional index to use when local AQI is enabled |
 | Health recommendations | disabled | Include health recommendation text in sensor attributes |
-| Plant sensors | disabled | Create individual sensors for each pollen plant species |
-| Plant descriptions | disabled | Include plant family, genus, and cross-reaction info in plant sensor attributes |
+| Plant sensors | enabled | Create individual sensors for each pollen plant species |
+| Plant descriptions | enabled | Include plant family, genus, and cross-reaction info in plant sensor attributes |
+| AQ API monthly limit | 10,000 | Monthly call limit for usage tracking and warnings |
+| Pollen API monthly limit | 5,000 | Monthly call limit for usage tracking and warnings |
 
 ### Local AQI Index
 
 Supported regional indices: US AQI, Canada (EC), UK (DEFRA), Germany (UBA), France (ATMO), China (MEP), India (CPCB), Japan (CAQI), Mexico (SEDEMA), Netherlands (LKI), Singapore (NEA), South Korea (KECO), Spain (Calidad).
+
+---
 
 ## License
 

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Particle Man",
-        "description": "Enter your Google Maps API key and location.",
+        "description": "Enter your Google Maps API key and location. Additional options (forecast days, pollen, local AQI) can be configured after setup via the Configure button.",
         "data": {
           "api_key": "API Key",
           "latitude": "Latitude",
@@ -35,7 +35,9 @@
           "local_aqi_code": "Local AQI index",
           "include_health_recommendations": "Include health recommendations as attributes",
           "include_plant_sensors": "Create individual plant species sensors",
-          "include_plant_descriptions": "Include plant descriptions (family, genus, cross-reactions)"
+          "include_plant_descriptions": "Include plant descriptions (family, genus, cross-reactions)",
+          "aq_monthly_limit": "Air Quality API monthly call limit",
+          "pollen_monthly_limit": "Pollen API monthly call limit"
         },
         "data_description": {
           "latitude": "Latitude of the location to monitor.",
@@ -47,7 +49,9 @@
           "local_aqi_code": "Preferred local AQI standard when overriding the regional default.",
           "include_health_recommendations": "Adds per-population-group health guidance as an attribute on the AQI and pollen type sensors.",
           "include_plant_sensors": "Creates a sensor for each individual plant species (e.g. Oak, Ragweed). Adds ~10–15 entities per location.",
-          "include_plant_descriptions": "Adds family, genus, seasonality, and cross-reaction attributes to plant sensors."
+          "include_plant_descriptions": "Adds family, genus, seasonality, and cross-reaction attributes to plant sensors.",
+          "aq_monthly_limit": "Monthly Air Quality API call limit for usage tracking. Defaults to the Google free tier (10,000 calls/month). Set to 0 to disable threshold warnings.",
+          "pollen_monthly_limit": "Monthly Pollen API call limit for usage tracking. Defaults to the Google free tier (5,000 calls/month). Set to 0 to disable threshold warnings."
         }
       }
     }

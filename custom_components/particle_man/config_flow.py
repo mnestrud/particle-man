@@ -26,6 +26,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     BASE_URL,
     CONF_API_KEY,
+    CONF_AQ_MONTHLY_LIMIT,
     CONF_FORECAST_DAYS,
     CONF_HEALTH_RECS,
     CONF_LANGUAGE,
@@ -35,7 +36,9 @@ from .const import (
     CONF_LONGITUDE,
     CONF_PLANT_DESCRIPTIONS,
     CONF_PLANT_SENSORS,
+    CONF_POLLEN_MONTHLY_LIMIT,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_AQ_MONTHLY_LIMIT,
     DEFAULT_FORECAST_DAYS,
     DEFAULT_HEALTH_RECS,
     DEFAULT_LANGUAGE,
@@ -43,6 +46,7 @@ from .const import (
     DEFAULT_LOCAL_AQI_CODE,
     DEFAULT_PLANT_DESCRIPTIONS,
     DEFAULT_PLANT_SENSORS,
+    DEFAULT_POLLEN_MONTHLY_LIMIT,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     LOCAL_AQI_CODES,
@@ -196,6 +200,12 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(CONF_HEALTH_RECS): BooleanSelector(),
                 vol.Required(CONF_PLANT_SENSORS): BooleanSelector(),
                 vol.Required(CONF_PLANT_DESCRIPTIONS): BooleanSelector(),
+                vol.Required(CONF_AQ_MONTHLY_LIMIT): NumberSelector(
+                    NumberSelectorConfig(min=0, max=500000, step=1000, mode=NumberSelectorMode.BOX)
+                ),
+                vol.Required(CONF_POLLEN_MONTHLY_LIMIT): NumberSelector(
+                    NumberSelectorConfig(min=0, max=500000, step=1000, mode=NumberSelectorMode.BOX)
+                ),
             }
         )
 
@@ -210,6 +220,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             CONF_HEALTH_RECS: _get(CONF_HEALTH_RECS, DEFAULT_HEALTH_RECS),
             CONF_PLANT_SENSORS: _get(CONF_PLANT_SENSORS, DEFAULT_PLANT_SENSORS),
             CONF_PLANT_DESCRIPTIONS: _get(CONF_PLANT_DESCRIPTIONS, DEFAULT_PLANT_DESCRIPTIONS),
+            CONF_AQ_MONTHLY_LIMIT: _get(CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT),
+            CONF_POLLEN_MONTHLY_LIMIT: _get(CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT),
         }
 
         return self.async_show_form(

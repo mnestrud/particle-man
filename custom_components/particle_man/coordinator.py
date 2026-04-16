@@ -1,10 +1,8 @@
 """Google Air Quality + Pollen data coordinator."""
-from __future__ import annotations
-
 import asyncio
-import logging
-import math
+import calendar as _calendar
 from collections import defaultdict
+from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -12,19 +10,19 @@ import aiohttp
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
     BASE_URL,
     CURRENT_EXTRA_COMPUTATIONS_BASE,
+    DEFAULT_AQ_MONTHLY_LIMIT,
     DEFAULT_FORECAST_DAYS,
-    DEFAULT_HEALTH_RECS,
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
     DEFAULT_LOCAL_AQI_CODE,
-    DEFAULT_PLANT_DESCRIPTIONS,
-    DEFAULT_PLANT_SENSORS,
+    DEFAULT_POLLEN_MONTHLY_LIMIT,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EPA_BREAKPOINTS,
@@ -34,48 +32,41 @@ from .const import (
     POLLEN_API_URL,
 )
 
+import logging
 _LOGGER = logging.getLogger(__name__)
 
+_STORAGE_KEY = "particle_man"
+_STORAGE_VERSION = 1
 
-# ---------------------------------------------------------------------------
-# Unit helpers
-# ---------------------------------------------------------------------------
 
-def _parse_units(units_raw: str) -> str:
-    if "BILLION" in units_raw:
+def _parse_units(api_units: str) -> str:
+    if api_units == "PARTS_PER_BILLION":
         return "ppb"
-    if "CUBIC" in units_raw:
-        return "μg/m³"
-    return units_raw
+    if api_units == "PARTS_PER_MILLION":
+        return "ppm"
+    return "μg/m³"
 
 
 def _to_canonical(value: float, from_units: str, target_units: str, code: str) -> float:
     """Convert concentration to EPA canonical units for breakpoint comparison."""
-    def _n(s: str) -> str:
-        return s.replace("\u00b5", "\u03bc")
-
-    f, t = _n(from_units), _n(target_units)
+    f = from_units.lower()
+    t = target_units.lower()
     if f == t:
         return value
     mw = GAS_MW.get(code)
-    if mw is None:
+    if not mw:
         return value
-    ugm3 = "\u03bcg/m\u00b3"
-    if f == ugm3:
+    if f == "μg/m³":
         val_ppb = value * (MOLAR_VOL / mw)
     elif f == "ppb":
         val_ppb = value
-    elif f == "ppm":
-        val_ppb = value * 1000.0
     else:
-        return value
+        val_ppb = value * 1000.0
     if t == "ppb":
         return val_ppb
     if t == "ppm":
         return val_ppb / 1000.0
-    if t == ugm3:
-        return val_ppb * (mw / MOLAR_VOL)
-    return value
+    return val_ppb * (mw / MOLAR_VOL)
 
 
 def _epa_category(code: str, value: float | None, units: str) -> str | None:
@@ -83,30 +74,24 @@ def _epa_category(code: str, value: float | None, units: str) -> str | None:
     if value is None:
         return None
     entry = EPA_BREAKPOINTS.get(code)
-    if entry is None:
+    if not entry:
         return None
     target_units, breakpoints = entry
     converted = _to_canonical(value, units, target_units, code)
     for upper, category in breakpoints:
         if converted <= upper:
             return category
-    return "Hazardous"
+    return breakpoints[-1][1]
 
 
-# ---------------------------------------------------------------------------
 # Pollen color / RGB helpers
-# ---------------------------------------------------------------------------
 
-def _normalize_channel(v: Any) -> int | None:
-    try:
-        f = float(v)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    if not math.isfinite(f):
-        return None
-    if 0.0 <= f <= 1.0:
-        f *= 255.0
-    return max(0, min(255, int(round(f))))
+def _normalize_channel(val: Any) -> int:
+    if isinstance(val, float):
+        return round(val * 255)
+    if isinstance(val, int):
+        return max(0, min(255, val))
+    return 0
 
 
 def _rgb_from_api(color: dict[str, Any] | None) -> tuple[int, int, int] | None:
@@ -115,28 +100,27 @@ def _rgb_from_api(color: dict[str, Any] | None) -> tuple[int, int, int] | None:
     r = _normalize_channel(color.get("red"))
     g = _normalize_channel(color.get("green"))
     b = _normalize_channel(color.get("blue"))
-    if r is None and g is None and b is None:
-        return None
-    return (r or 0, g or 0, b or 0)
+    return (r, g, b)
 
 
 def _rgb_to_hex(rgb: tuple[int, int, int] | None) -> str | None:
     if rgb is None:
         return None
-    return f"#{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
 def _day_to_datetime(date_obj: dict) -> str | None:
     """Convert pollen API date dict {year, month, day} to ISO 8601 noon UTC string."""
-    if not all(k in date_obj for k in ("year", "month", "day")):
+    try:
+        y = date_obj["year"]
+        m = date_obj["month"]
+        d = date_obj["day"]
+        return f"{y:04d}-{m:02d}-{d:02d}T12:00:00+00:00"
+    except (KeyError, TypeError):
         return None
-    y, m, d = date_obj["year"], date_obj["month"], date_obj["day"]
-    return f"{y:04d}-{m:02d}-{d:02d}T12:00:00+00:00"
 
 
-# ---------------------------------------------------------------------------
 # Coordinator
-# ---------------------------------------------------------------------------
 
 class GoogleAirQualityCoordinator(DataUpdateCoordinator):
     """Coordinator for Google Air Quality API + Google Pollen API."""
@@ -152,9 +136,11 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         language_code: str = DEFAULT_LANGUAGE,
         enable_local_aqi: bool = DEFAULT_LOCAL_AQI,
         local_aqi_code: str = DEFAULT_LOCAL_AQI_CODE,
-        include_health_recs: bool = DEFAULT_HEALTH_RECS,
-        include_plant_sensors: bool = DEFAULT_PLANT_SENSORS,
-        include_plant_descriptions: bool = DEFAULT_PLANT_DESCRIPTIONS,
+        include_health_recs: bool = False,
+        include_plant_sensors: bool = True,
+        include_plant_descriptions: bool = True,
+        aq_monthly_limit: int = DEFAULT_AQ_MONTHLY_LIMIT,
+        pollen_monthly_limit: int = DEFAULT_POLLEN_MONTHLY_LIMIT,
         entry_id: str = "",
     ) -> None:
         self.api_key = api_key
@@ -167,11 +153,17 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         self.include_health_recs = include_health_recs
         self.include_plant_sensors = include_plant_sensors
         self.include_plant_descriptions = include_plant_descriptions
+        self.aq_monthly_limit = int(aq_monthly_limit)
+        self.pollen_monthly_limit = int(pollen_monthly_limit)
         self.entry_id = entry_id
         self._session_start: datetime = datetime.now(timezone.utc)
         self._aq_current_calls: int = 0
         self._aq_forecast_calls: int = 0
         self._pollen_calls: int = 0
+        self._monthly_aq_calls: int = 0
+        self._monthly_pollen_calls: int = 0
+        self._tracking_month: str = datetime.now(timezone.utc).strftime("%Y-%m")
+        self._store: Store = Store(hass, _STORAGE_VERSION, f"{_STORAGE_KEY}.{entry_id}")
         super().__init__(
             hass,
             _LOGGER,
@@ -179,8 +171,34 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(minutes=update_interval_minutes),
         )
 
+    async def async_load_tracking(self) -> None:
+        """Load persistent monthly API call counts from storage."""
+        stored = await self._store.async_load()
+        if stored:
+            stored_month = stored.get("month", "")
+            current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+            if stored_month == current_month:
+                self._monthly_aq_calls = stored.get("aq_calls", 0)
+                self._monthly_pollen_calls = stored.get("pollen_calls", 0)
+                self._tracking_month = stored_month
+
+    async def _save_tracking(self) -> None:
+        """Persist monthly call counts to storage."""
+        await self._store.async_save({
+            "month": self._tracking_month,
+            "aq_calls": self._monthly_aq_calls,
+            "pollen_calls": self._monthly_pollen_calls,
+        })
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch current conditions, forecast, and pollen in parallel."""
+        # Reset monthly counters on month rollover
+        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+        if current_month != self._tracking_month:
+            self._tracking_month = current_month
+            self._monthly_aq_calls = 0
+            self._monthly_pollen_calls = 0
+
         session = async_get_clientsession(self.hass)
 
         try:
@@ -208,6 +226,7 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                     if key.startswith("pollen_"):
                         data[key] = val
 
+        await self._save_tracking()
         return data
 
     async def _fetch_current(self, session: aiohttp.ClientSession) -> dict:
@@ -234,6 +253,7 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                 )
             resp.raise_for_status()
             self._aq_current_calls += 1
+            self._monthly_aq_calls += 1
             return await resp.json()
 
     async def _fetch_forecast(self, session: aiohttp.ClientSession) -> list[dict]:
@@ -267,6 +287,7 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                 )
             resp.raise_for_status()
             self._aq_forecast_calls += 1
+            self._monthly_aq_calls += 1
             result = await resp.json()
             return result.get("hourlyForecasts", [])
 
@@ -291,6 +312,7 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                 )
                 resp.raise_for_status()
             self._pollen_calls += 1
+            self._monthly_pollen_calls += 1
             return await resp.json()
 
     def _build_data(self, current: dict, forecast_hours: list[dict]) -> dict[str, Any]:
@@ -303,7 +325,15 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
             uaqi = indexes[0]
 
         dominant_code = (uaqi.get("dominantPollutant") if uaqi else None) or ""
-        aqi_forecast, local_aqi_forecast = self._build_aqi_daily_forecast(forecast_hours)
+
+        aqi_daily_forecast, local_aqi_daily_forecast = self._build_aqi_daily_forecast(forecast_hours)
+        aqi_hourly_forecast, local_aqi_hourly_forecast = self._build_aqi_hourly_forecast(forecast_hours)
+        pollutant_daily_forecasts = self._build_pollutant_daily_forecast(forecast_hours)
+        pollutant_hourly_forecasts = self._build_pollutant_hourly_forecast(forecast_hours)
+
+        aqi_trend = self._compute_hourly_trend(
+            [h["aqi"] for h in aqi_hourly_forecast if h.get("aqi") is not None]
+        )
 
         health_recs = current.get("healthRecommendations") if self.include_health_recs else None
 
@@ -315,7 +345,9 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
             "region_code": current.get("regionCode"),
             "datetime": current.get("dateTime"),
             "health_recommendations": health_recs,
-            "forecast": aqi_forecast,
+            "daily_forecast": aqi_daily_forecast,
+            "hourly_forecast": aqi_hourly_forecast,
+            "trend": aqi_trend,
         }
 
         if self.enable_local_aqi:
@@ -323,6 +355,9 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                 (i for i in indexes if i.get("code") not in ("uaqi", None)), None
             )
             if local_idx:
+                local_trend = self._compute_hourly_trend(
+                    [h["aqi"] for h in local_aqi_hourly_forecast if h.get("aqi") is not None]
+                )
                 new_data["local_aqi"] = {
                     "value": local_idx.get("aqi"),
                     "display": local_idx.get("aqiDisplay"),
@@ -330,16 +365,20 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                     "code": local_idx.get("code"),
                     "display_name": local_idx.get("displayName"),
                     "dominant_pollutant": local_idx.get("dominantPollutant"),
-                    "forecast": local_aqi_forecast,
+                    "daily_forecast": local_aqi_daily_forecast,
+                    "hourly_forecast": local_aqi_hourly_forecast,
+                    "trend": local_trend,
                 }
-
-        pollutant_forecasts = self._build_pollutant_daily_forecast(forecast_hours)
 
         for p in current.get("pollutants", []):
             code = p.get("code", "")
             conc = p.get("concentration", {})
             units = _parse_units(conc.get("units", ""))
             info = p.get("additionalInfo", {})
+            hourly = pollutant_hourly_forecasts.get(code, [])
+            trend = self._compute_hourly_trend(
+                [h["value"] for h in hourly if h.get("value") is not None]
+            )
             new_data[f"pollutant_{code}"] = {
                 "code": code,
                 "display_name": p.get("displayName", code.upper()),
@@ -350,10 +389,60 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                 "sources": info.get("sources"),
                 "effects": info.get("effects"),
                 "is_dominant": code == dominant_code,
-                "forecast": pollutant_forecasts.get(code, []),
+                "daily_forecast": pollutant_daily_forecasts.get(code, []),
+                "hourly_forecast": hourly,
+                "trend": trend,
             }
 
         return new_data
+
+    def _build_aqi_hourly_forecast(
+        self, hours: list[dict]
+    ) -> tuple[list[dict], list[dict]]:
+        """Build per-hour AQI lists for UAQI and local AQI."""
+        uaqi_hourly: list[dict] = []
+        local_hourly: list[dict] = []
+        for h in hours:
+            dt_str = h.get("dateTime", "")
+            for idx in h.get("indexes", []):
+                if idx.get("code") == "uaqi" and idx.get("aqi") is not None:
+                    uaqi_hourly.append({
+                        "datetime": dt_str,
+                        "aqi": idx["aqi"],
+                        "category": idx.get("category"),
+                        "dominant_pollutant": idx.get("dominantPollutant"),
+                    })
+                elif (
+                    idx.get("code") not in ("uaqi", None)
+                    and idx.get("aqi") is not None
+                ):
+                    local_hourly.append({
+                        "datetime": dt_str,
+                        "aqi": idx["aqi"],
+                        "category": idx.get("category"),
+                    })
+        return uaqi_hourly, local_hourly
+
+    def _build_pollutant_hourly_forecast(
+        self, hours: list[dict]
+    ) -> dict[str, list[dict]]:
+        """Build per-hour concentration lists for each pollutant."""
+        result: dict[str, list[dict]] = defaultdict(list)
+        for h in hours:
+            dt_str = h.get("dateTime", "")
+            for p in h.get("pollutants", []):
+                code = p.get("code", "")
+                conc = p.get("concentration", {})
+                val = conc.get("value")
+                units = _parse_units(conc.get("units", ""))
+                if val is not None:
+                    result[code].append({
+                        "datetime": dt_str,
+                        "value": val,
+                        "units": units,
+                        "epa_category": _epa_category(code, val, units),
+                    })
+        return dict(result)
 
     def _build_aqi_daily_forecast(
         self, hours: list[dict]
@@ -556,6 +645,7 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
 
     @staticmethod
     def _compute_trend(current_val: Any, forecast: list[dict]) -> str | None:
+        """Pollen trend: compare today vs tomorrow (up/down/flat)."""
         if not isinstance(current_val, (int, float)) or not forecast:
             return None
         tomorrow = forecast[0].get("index")
@@ -566,6 +656,27 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         if tomorrow < current_val:
             return "down"
         return "flat"
+
+    @staticmethod
+    def _compute_hourly_trend(values: list[float]) -> str:
+        """AQI/pollutant trend: linear slope across hourly forecast values."""
+        clean = [v for v in values if isinstance(v, (int, float))]
+        if len(clean) < 3:
+            return "stable"
+        n = len(clean)
+        x_mean = (n - 1) / 2.0
+        y_mean = sum(clean) / n
+        numerator = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(clean))
+        denominator = sum((i - x_mean) ** 2 for i in range(n))
+        if denominator == 0:
+            return "stable"
+        slope = numerator / denominator
+        relative_slope = slope / abs(y_mean) if y_mean != 0 else slope
+        if relative_slope > 0.02:
+            return "rising"
+        if relative_slope < -0.02:
+            return "falling"
+        return "stable"
 
     @staticmethod
     def _compute_peak(forecast: list[dict]) -> dict | None:

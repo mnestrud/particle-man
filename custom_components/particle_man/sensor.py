@@ -1,7 +1,9 @@
 """Particle Man sensors."""
 from __future__ import annotations
 
+import calendar as _calendar
 import logging
+from datetime import date as _date
 from datetime import datetime as _datetime
 from typing import Any
 
@@ -56,7 +58,8 @@ async def async_setup_entry(
         AqiSensor(coordinator),
         AqiLevelSensor(coordinator),
         LastApiUpdateSensor(coordinator),
-        ApiCallsSensor(coordinator),
+        MonthlyAqUsageSensor(coordinator),
+        MonthlyPollenUsageSensor(coordinator),
     ]
 
     if "local_aqi" in data:
@@ -117,6 +120,7 @@ class _BasePollenSensor(CoordinatorEntity, SensorEntity):
 class AqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:air-filter"
+    _unrecorded_attributes = frozenset({"hourly_forecast"})
 
     def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
         super().__init__(coordinator)
@@ -138,7 +142,9 @@ class AqiSensor(_BaseGaqSensor):
             "dominant_pollutant": info.get("dominant_pollutant"),
             "region_code": info.get("region_code"),
             "last_updated": info.get("datetime"),
-            "forecast": info.get("forecast", []),
+            "trend": info.get("trend"),
+            "daily_forecast": info.get("daily_forecast", []),
+            "hourly_forecast": info.get("hourly_forecast", []),
             ATTR_ATTRIBUTION: ATTRIBUTION,
         }
         if info.get("health_recommendations") is not None:
@@ -175,6 +181,7 @@ class AqiLevelSensor(_BaseGaqSensor):
 class LocalAqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:air-filter"
+    _unrecorded_attributes = frozenset({"hourly_forecast"})
 
     def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
         super().__init__(coordinator)
@@ -200,13 +207,16 @@ class LocalAqiSensor(_BaseGaqSensor):
             "aqi_display": info.get("display"),
             "dominant_pollutant": info.get("dominant_pollutant"),
             "index_code": info.get("code"),
-            "forecast": info.get("forecast", []),
+            "trend": info.get("trend"),
+            "daily_forecast": info.get("daily_forecast", []),
+            "hourly_forecast": info.get("hourly_forecast", []),
             ATTR_ATTRIBUTION: ATTRIBUTION,
         }
 
 
 class PollutantSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _unrecorded_attributes = frozenset({"hourly_forecast"})
 
     def __init__(self, coordinator: GoogleAirQualityCoordinator, code: str) -> None:
         super().__init__(coordinator)
@@ -242,7 +252,9 @@ class PollutantSensor(_BaseGaqSensor):
             "is_dominant": info.get("is_dominant"),
             "sources": info.get("sources"),
             "effects": info.get("effects"),
-            "forecast": info.get("forecast", []),
+            "trend": info.get("trend"),
+            "daily_forecast": info.get("daily_forecast", []),
+            "hourly_forecast": info.get("hourly_forecast", []),
             ATTR_ATTRIBUTION: ATTRIBUTION,
         }
 
@@ -315,9 +327,9 @@ class PollenTypeSensor(_BasePollenSensor):
             "category": info.get("category"),
             "in_season": info.get("in_season"),
             "color_hex": info.get("color_hex"),
-            "forecast": info.get("forecast", []),
             "trend": info.get("trend"),
             "expected_peak": info.get("expected_peak"),
+            "daily_forecast": info.get("forecast", []),
             ATTR_ATTRIBUTION: POLLEN_ATTRIBUTION,
         }
         if info.get("health_recommendations") is not None:
@@ -390,9 +402,9 @@ class PollenPlantSensor(_BasePollenSensor):
             "category": info.get("category"),
             "in_season": info.get("in_season"),
             "color_hex": info.get("color_hex"),
-            "forecast": info.get("forecast", []),
             "trend": info.get("trend"),
             "expected_peak": info.get("expected_peak"),
+            "daily_forecast": info.get("forecast", []),
             ATTR_ATTRIBUTION: POLLEN_ATTRIBUTION,
         }
         for k in ("family", "genus", "season", "cross_reaction", "picture"):
@@ -425,42 +437,97 @@ class LastApiUpdateSensor(_BaseGaqSensor):
             return None
 
 
-class ApiCallsSensor(_BaseGaqSensor):
-    _attr_state_class = SensorStateClass.MEASUREMENT
+class MonthlyAqUsageSensor(_BaseGaqSensor):
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:api"
+    _attr_native_unit_of_measurement = "calls"
 
     def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry_id}_api_calls_session"
+        self._attr_unique_id = f"{coordinator.entry_id}_monthly_aq_calls"
 
     @property
     def name(self) -> str:
-        return "API Calls (Session)"
+        return "AQ API Calls (Monthly)"
 
     @property
     def native_value(self) -> int:
-        c = self.coordinator
-        return c._aq_current_calls + c._aq_forecast_calls + c._pollen_calls
+        return self.coordinator._monthly_aq_calls
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self.coordinator
-        interval_min = c.update_interval.total_seconds() / 60
-        cycles_per_day = 24 * 60 / interval_min
-        aq_per_day = round((1 + c.forecast_days) * cycles_per_day)
-        pollen_per_day = round(cycles_per_day)
+        today = _date.today()
+        days_elapsed = today.day
+        days_in_month = _calendar.monthrange(today.year, today.month)[1]
+        projected = (
+            round(c._monthly_aq_calls * days_in_month / days_elapsed)
+            if days_elapsed > 0 else 0
+        )
+        limit = c.aq_monthly_limit
+        pct_used = round(c._monthly_aq_calls / limit * 100, 1) if limit > 0 else 0.0
+        pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
+        if pct_projected >= 95:
+            status = "critical"
+        elif pct_projected >= 80:
+            status = "warning"
+        else:
+            status = "ok"
         return {
-            "aq_current_calls": c._aq_current_calls,
-            "aq_forecast_calls": c._aq_forecast_calls,
-            "pollen_calls": c._pollen_calls,
-            "session_start": c._session_start.isoformat(),
-            "update_interval_minutes": int(interval_min),
-            "projected_aq_calls_per_day": aq_per_day,
-            "projected_pollen_calls_per_day": pollen_per_day,
-            "projected_aq_calls_per_month": aq_per_day * 30,
-            "projected_pollen_calls_per_month": pollen_per_day * 30,
-            "aq_free_tier_monthly": 10000,
-            "pollen_free_tier_monthly": 5000,
+            "monthly_limit": limit,
+            "projected_monthly": projected,
+            "pct_of_limit": pct_used,
+            "pct_projected": pct_projected,
+            "status": status,
+            "tracking_month": c._tracking_month,
+            ATTR_ATTRIBUTION: ATTRIBUTION,
+        }
+
+
+class MonthlyPollenUsageSensor(_BaseGaqSensor):
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:flower-pollen-outline"
+    _attr_native_unit_of_measurement = "calls"
+
+    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_monthly_pollen_calls"
+
+    @property
+    def name(self) -> str:
+        return "Pollen API Calls (Monthly)"
+
+    @property
+    def native_value(self) -> int:
+        return self.coordinator._monthly_pollen_calls
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        c = self.coordinator
+        today = _date.today()
+        days_elapsed = today.day
+        days_in_month = _calendar.monthrange(today.year, today.month)[1]
+        projected = (
+            round(c._monthly_pollen_calls * days_in_month / days_elapsed)
+            if days_elapsed > 0 else 0
+        )
+        limit = c.pollen_monthly_limit
+        pct_used = round(c._monthly_pollen_calls / limit * 100, 1) if limit > 0 else 0.0
+        pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
+        if pct_projected >= 95:
+            status = "critical"
+        elif pct_projected >= 80:
+            status = "warning"
+        else:
+            status = "ok"
+        return {
+            "monthly_limit": limit,
+            "projected_monthly": projected,
+            "pct_of_limit": pct_used,
+            "pct_projected": pct_projected,
+            "status": status,
+            "tracking_month": c._tracking_month,
             ATTR_ATTRIBUTION: ATTRIBUTION,
         }

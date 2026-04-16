@@ -24,6 +24,12 @@ DEFAULT_LOCAL_AQI_CODE = "us_aqi"
 DEFAULT_HEALTH_RECS = False
 DEFAULT_PLANT_SENSORS = True
 DEFAULT_PLANT_DESCRIPTIONS = True
+DEFAULT_AQ_MONTHLY_LIMIT = 10000
+DEFAULT_POLLEN_MONTHLY_LIMIT = 5000
+
+# --- Config keys for monthly API limits ---
+CONF_AQ_MONTHLY_LIMIT = "aq_monthly_limit"
+CONF_POLLEN_MONTHLY_LIMIT = "pollen_monthly_limit"
 
 # --- API ---
 BASE_URL = "https://airquality.googleapis.com/v1"
