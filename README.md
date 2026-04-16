@@ -57,6 +57,21 @@ If you want a country-specific index like the US AQI, enable the **Local AQI ind
 
 ---
 
+## Hyper-Local Data
+
+Most air quality sources give you a reading for your city or your zip code. Google's Air Quality API goes further:
+
+- **500-meter resolution** — data is localized to your specific block, not your neighborhood
+- **50+ million updates daily** — powered by Google Maps data, continuously refreshed
+- **100+ countries covered** — consistent global data with 70+ local and regional AQI indices
+- **96-hour hourly forecast** — plan around air quality the way you plan around weather, with per-pollutant hourly projections
+- **Multi-source modeling** — Google's ML models factor in traffic, weather, industrial activity, historical monitoring, and more — inputs that even robust city monitoring networks don't combine into a single number
+- **Health guidance** — WHO-aligned recommendations for general and sensitive population groups, not just a raw number
+
+This is the same data infrastructure that powers health apps, HVAC automation, and route optimization for developers worldwide. Particle Man surfaces it in Home Assistant.
+
+---
+
 ## Devices
 
 Particle Man creates three devices in Home Assistant:
