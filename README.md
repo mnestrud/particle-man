@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="images/PARTICLE_MAN_LARGE.png" alt="Particle Man" width="200"/>
+  <img src="images/PARTICLE_MAN_LARGE.png" alt="Particle Man" width="400"/>
 
   # PARTICLE MAN FIGHTS BAD AIR QUALITY
 </div>
