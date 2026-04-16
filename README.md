@@ -70,6 +70,7 @@ Each sensor includes attributes for `monthly_limit`, `projected_monthly`, `pct_o
 - Usage is **estimated, not pulled from Google** — Google does not expose actual quota usage through the API key. This is a projection based on calls made since the tracking reset
 - Counts survive HA restarts via persistent storage
 - Default limits match the Google free tier: **10,000 AQ calls/month** and **5,000 Pollen calls/month**. You can adjust these in the integration's Configure options if you have a paid plan
+- Limits are **not enforced** — the integration will continue polling regardless of usage. The sensors are informational only; if you want to act on a warning, wire up a HA automation against the `status` attribute
 
 ---
 

@@ -50,8 +50,8 @@
           "include_health_recommendations": "Adds per-population-group health guidance as an attribute on the AQI and pollen type sensors.",
           "include_plant_sensors": "Creates a sensor for each individual plant species (e.g. Oak, Ragweed). Adds ~10–15 entities per location.",
           "include_plant_descriptions": "Adds family, genus, seasonality, and cross-reaction attributes to plant sensors.",
-          "aq_monthly_limit": "Monthly Air Quality API call limit for usage tracking. Defaults to the Google free tier (10,000 calls/month). Set to 0 to disable threshold warnings.",
-          "pollen_monthly_limit": "Monthly Pollen API call limit for usage tracking. Defaults to the Google free tier (5,000 calls/month). Set to 0 to disable threshold warnings."
+          "aq_monthly_limit": "Monthly Air Quality API call limit for usage tracking and warnings. Limits are not enforced — the integration will keep polling regardless. Defaults to the Google free tier (10,000 calls/month). Set to 0 to disable threshold warnings.",
+          "pollen_monthly_limit": "Monthly Pollen API call limit for usage tracking and warnings. Limits are not enforced — the integration will keep polling regardless. Defaults to the Google free tier (5,000 calls/month). Set to 0 to disable threshold warnings."
         }
       }
     }
