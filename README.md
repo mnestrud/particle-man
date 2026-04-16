@@ -8,7 +8,7 @@
 
 ## Why Air Quality Matters
 
-I live in Chicago. Between wildfire smoke drifting in from out west, traffic, an active industrial base, and just the general reality of dense city living, air quality has a real impact on day to day life here — when I open the windows, when the kids play outside, when I go for a run. It's not abstract.
+I live in Chicago. Between wildfire smoke drifting in from out west, traffic, an active industrial base, and just the general reality of dense city living, air quality has a real impact on day to day life here. It's not abstract.
 
 The integrations that already existed weren't cutting it for me. Some had current conditions but no forecasts. Some covered a few pollutants but not all the ones I cared about. None of them surfaced the plain-language risk levels behind the numbers — the part that actually tells you what to do with the information. I wanted one integration that did all of it, in a consistent format, so I could see what's happening right now and what's coming, without bouncing between apps or stitching together multiple data sources.
 
