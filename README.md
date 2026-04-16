@@ -59,7 +59,7 @@ If you want a country-specific index like the US AQI, enable the **Local AQI ind
 
 ## Hyper-Local Data
 
-Most air quality sources give you a reading for your city or your zip code. Google's Air Quality API goes further:
+Most air quality sources give you a reading for your city or your zip code. [Google's Air Quality API](https://mapsplatform.google.com/maps-products/air-quality/) goes further:
 
 - **500-meter resolution** — data is localized to your specific block, not your neighborhood
 - **50+ million updates daily** — powered by Google Maps data, continuously refreshed
