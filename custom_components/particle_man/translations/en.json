@@ -1,0 +1,55 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Particle Man",
+        "description": "Enter your Google Maps API key and location.",
+        "data": {
+          "api_key": "API Key",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "update_interval": "Update interval (minutes)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid API key or insufficient permissions",
+      "cannot_connect": "Cannot connect to Google Air Quality API",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This location is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Particle Man — Options",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "update_interval": "Update interval",
+          "forecast_days": "Forecast days (1–5)",
+          "language_code": "Language code (BCP-47, e.g. en, es, fr)",
+          "enable_local_aqi": "Enable local / regional AQI index",
+          "local_aqi_code": "Local AQI index",
+          "include_health_recommendations": "Include health recommendations as attributes",
+          "include_plant_sensors": "Create individual plant species sensors",
+          "include_plant_descriptions": "Include plant descriptions (family, genus, cross-reactions)"
+        },
+        "data_description": {
+          "latitude": "Latitude of the location to monitor.",
+          "longitude": "Longitude of the location to monitor.",
+          "update_interval": "How often to poll both APIs (15–1440 minutes).",
+          "forecast_days": "Number of daily forecast entries on all sensors (1 = today only, 5 = maximum).",
+          "language_code": "Language for display names and health recommendations.",
+          "enable_local_aqi": "Adds a sensor for the regional AQI standard (e.g. US AQI for US locations).",
+          "local_aqi_code": "Preferred local AQI standard when overriding the regional default.",
+          "include_health_recommendations": "Adds per-population-group health guidance as an attribute on the AQI and pollen type sensors.",
+          "include_plant_sensors": "Creates a sensor for each individual plant species (e.g. Oak, Ragweed). Adds ~10–15 entities per location.",
+          "include_plant_descriptions": "Adds family, genus, seasonality, and cross-reaction attributes to plant sensors."
+        }
+      }
+    }
+  }
+}
