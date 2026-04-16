@@ -1,7 +1,7 @@
 {
   "domain": "particle_man",
   "name": "Particle Man",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "config_flow": true,
   "documentation": "https://github.com/mnestrud/particle-man",
   "issue_tracker": "https://github.com/mnestrud/particle-man/issues",

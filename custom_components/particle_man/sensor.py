@@ -93,7 +93,7 @@ class _BaseGaqSensor(CoordinatorEntity, SensorEntity):
     def device_info(self) -> dict:
         return {
             "identifiers": {(DOMAIN, self.coordinator.entry_id)},
-            "name": "Particle Man",
+            "name": "Particle Man Pollution",
             "manufacturer": "Google",
             "model": "Air Quality API",
         }
@@ -113,6 +113,24 @@ class _BasePollenSensor(CoordinatorEntity, SensorEntity):
             "name": "Particle Man Pollen",
             "manufacturer": "Google",
             "model": "Pollen API",
+            "via_device": (DOMAIN, self.coordinator.entry_id),
+        }
+
+
+class _BaseDiagnosticSensor(CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+        super().__init__(coordinator)
+        self.coordinator = coordinator
+
+    @property
+    def device_info(self) -> dict:
+        return {
+            "identifiers": {(DOMAIN, f"{self.coordinator.entry_id}_diagnostics")},
+            "name": "Particle Man Diagnostics",
+            "manufacturer": "Google",
+            "model": "Air Quality API",
             "via_device": (DOMAIN, self.coordinator.entry_id),
         }
 
@@ -413,7 +431,7 @@ class PollenPlantSensor(_BasePollenSensor):
         return attrs
 
 
-class LastApiUpdateSensor(_BaseGaqSensor):
+class LastApiUpdateSensor(_BaseDiagnosticSensor):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:clock-check-outline"
@@ -437,7 +455,7 @@ class LastApiUpdateSensor(_BaseGaqSensor):
             return None
 
 
-class MonthlyAqUsageSensor(_BaseGaqSensor):
+class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:api"
@@ -485,7 +503,7 @@ class MonthlyAqUsageSensor(_BaseGaqSensor):
         }
 
 
-class MonthlyPollenUsageSensor(_BaseGaqSensor):
+class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:flower-pollen-outline"
