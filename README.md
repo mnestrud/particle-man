@@ -102,6 +102,16 @@ Each sensor includes attributes for `monthly_limit`, `projected_monthly`, `pct_o
 
 ---
 
+## Known Limitations
+
+- **Pollen data availability varies by region** — Google's Pollen API has strong coverage in North America and Europe but may return no pollen data for other locations. Air quality data is available in 100+ countries regardless.
+- **Plant sensors add entities** — enabling per-plant sensors creates ~10–15 additional entities per location depending on what Google returns for your area.
+- **Hourly forecast is not recorded** — the `hourly_forecast` attribute (up to 96 data points) is intentionally excluded from the Home Assistant database to avoid excessive storage use. It is available in real-time for dashboards and templates but will not appear in history.
+- **API usage tracking is estimated** — call counts are tracked locally; Google does not expose actual quota usage via the API key. Projected usage is a linear extrapolation and may not match your Google billing exactly.
+- **Requires Home Assistant 2025.1.0 or later.**
+
+---
+
 ## Prerequisites
 
 You need a Google Cloud API key with both the **Air Quality API** and **Pollen API** enabled.
