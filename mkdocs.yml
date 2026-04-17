@@ -1,0 +1,37 @@
+site_name: Particle Man
+site_url: https://mnestrud.github.io/particle-man/
+repo_url: https://github.com/mnestrud/particle-man
+repo_name: mnestrud/particle-man
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  logo: assets/icon.png
+  favicon: assets/icon.png
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light-blue
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.action.edit
+
+nav:
+  - Getting Started: index.md
+  - What's Included: sensors.md
+  - Dashboard Examples: dashboard.md
+  - Automations & Blueprints: automations.md
+  - API Usage & Free Tier: api-usage.md
+  - Troubleshooting: troubleshooting.md
+  - Configuration Reference: configuration.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true

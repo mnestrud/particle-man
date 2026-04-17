@@ -4,6 +4,8 @@
   # PARTICLE MAN HELPS YOU FIGHT BAD AIR QUALITY
 
   A Home Assistant custom integration that pulls air quality and pollen data from the [Google Air Quality API](https://developers.google.com/maps/documentation/air-quality) and [Google Pollen API](https://developers.google.com/maps/documentation/pollen).
+
+  [📖 Documentation](https://mnestrud.github.io/particle-man/)
 </div>
 
 ---
@@ -263,6 +265,14 @@ Particle Man targets [Silver tier](https://www.home-assistant.io/docs/quality_sc
 - [x] Error recovery — AQ API errors raise `UpdateFailed`; pollen errors fall back to last known data
 - [ ] Re-authentication flow — if the API key is revoked, the integration retries indefinitely; needs `async_start_reauth` to surface a reauthentication prompt in the HA UI
 - [ ] Detailed documentation — add a Troubleshooting section covering: pollen unavailable by region, verifying API key permissions, interpreting usage sensor warnings, and resetting call counts
+
+**Gold** (requires Silver)
+- [x] Reconfigurability — options flow (`Configure` button) supports all settings after initial setup
+- [x] Translation support — `strings.json` and `translations/en.json` present
+- [ ] Auto-discovery — N/A for cloud API integrations (no local device to discover)
+- [ ] Firmware updates — N/A for cloud API integrations
+- [ ] Comprehensive documentation for non-technical users — [docs site](https://mnestrud.github.io/particle-man/) scaffolded; content in progress
+- [ ] Full test coverage — same gap as Bronze; blocks all tiers above it
 
 ---
 
