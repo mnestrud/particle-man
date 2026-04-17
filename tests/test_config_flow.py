@@ -1,6 +1,6 @@
 """Tests for Particle Man config flow and options flow."""
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import aiohttp
 
 from homeassistant import config_entries, data_entry_flow
@@ -68,6 +68,9 @@ async def test_config_flow_success(hass):
     with patch(
         "custom_components.particle_man.config_flow._validate_api_key",
         return_value=None,
+    ), patch(
+        "custom_components.particle_man.async_setup_entry",
+        return_value=True,
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -83,7 +86,7 @@ async def test_config_flow_success(hass):
 
 
 async def test_config_flow_invalid_auth(hass):
-    err = aiohttp.ClientResponseError(None, (), status=403, message="Forbidden")
+    err = aiohttp.ClientResponseError(MagicMock(), (), status=403, message="Forbidden")
     with patch(
         "custom_components.particle_man.config_flow._validate_api_key",
         side_effect=err,
@@ -100,7 +103,7 @@ async def test_config_flow_invalid_auth(hass):
 
 
 async def test_config_flow_bad_request_is_invalid_auth(hass):
-    err = aiohttp.ClientResponseError(None, (), status=400, message="Bad Request")
+    err = aiohttp.ClientResponseError(MagicMock(), (), status=400, message="Bad Request")
     with patch(
         "custom_components.particle_man.config_flow._validate_api_key",
         side_effect=err,
@@ -150,6 +153,9 @@ async def test_config_flow_duplicate_location_aborted(hass):
     with patch(
         "custom_components.particle_man.config_flow._validate_api_key",
         return_value=None,
+    ), patch(
+        "custom_components.particle_man.async_setup_entry",
+        return_value=True,
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
