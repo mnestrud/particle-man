@@ -109,7 +109,7 @@ Particle Man targets [Gold tier](https://www.home-assistant.io/docs/quality_scal
 **Bronze**
 - [x] UI setup via config flow
 - [x] Basic end-user documentation
-- [x] Code adheres to basic HA standards — **fixed**: `DeviceInfo` typed returns, `SensorStateClass.MEASUREMENT` on usage sensors, shared billing projection helper, dead counters removed; CI (`ruff`, `mypy`, `hassfest`, `hacs`) added via `.github/workflows/validate.yml` — all passing
+- [x] Code adheres to basic HA standards — CI (`ruff`, `mypy`, `hassfest`, `hacs`) via `.github/workflows/validate.yml` — all passing
 - [ ] Automated tests (`pytest-homeassistant-custom-component` — cover coordinator init, mocked poll cycle, config flow, options flow) — not yet written
 
 **Silver** (requires Bronze)
