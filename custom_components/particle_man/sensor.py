@@ -11,6 +11,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -90,13 +91,13 @@ class _BaseGaqSensor(CoordinatorEntity, SensorEntity):
         self.coordinator = coordinator
 
     @property
-    def device_info(self) -> dict:
-        return {
-            "identifiers": {(DOMAIN, self.coordinator.entry_id)},
-            "name": "Particle Man Pollution",
-            "manufacturer": "Google",
-            "model": "Air Quality API",
-        }
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.coordinator.entry_id)},
+            name="Particle Man Pollution",
+            manufacturer="Google",
+            model="Air Quality API",
+        )
 
 
 class _BasePollenSensor(CoordinatorEntity, SensorEntity):
@@ -107,14 +108,14 @@ class _BasePollenSensor(CoordinatorEntity, SensorEntity):
         self.coordinator = coordinator
 
     @property
-    def device_info(self) -> dict:
-        return {
-            "identifiers": {(DOMAIN, f"{self.coordinator.entry_id}_pollen")},
-            "name": "Particle Man Pollen",
-            "manufacturer": "Google",
-            "model": "Pollen API",
-            "via_device": (DOMAIN, self.coordinator.entry_id),
-        }
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self.coordinator.entry_id}_pollen")},
+            name="Particle Man Pollen",
+            manufacturer="Google",
+            model="Pollen API",
+            via_device=(DOMAIN, self.coordinator.entry_id),
+        )
 
 
 class _BaseDiagnosticSensor(CoordinatorEntity, SensorEntity):
@@ -125,14 +126,14 @@ class _BaseDiagnosticSensor(CoordinatorEntity, SensorEntity):
         self.coordinator = coordinator
 
     @property
-    def device_info(self) -> dict:
-        return {
-            "identifiers": {(DOMAIN, f"{self.coordinator.entry_id}_diagnostics")},
-            "name": "Particle Man Diagnostics",
-            "manufacturer": "Google",
-            "model": "Air Quality API",
-            "via_device": (DOMAIN, self.coordinator.entry_id),
-        }
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self.coordinator.entry_id}_diagnostics")},
+            name="Particle Man Diagnostics",
+            manufacturer="Google",
+            model="Air Quality API",
+            via_device=(DOMAIN, self.coordinator.entry_id),
+        )
 
 
 class AqiSensor(_BaseGaqSensor):
@@ -455,8 +456,43 @@ class LastApiUpdateSensor(_BaseDiagnosticSensor):
             return None
 
 
+def _billing_projection_attrs(
+    calls: int,
+    limit: int,
+    period_start: str,
+    reset_day: int,
+) -> dict[str, Any]:
+    today = _date.today()
+    start = _date.fromisoformat(period_start)
+    days_elapsed = max(1, (today - start).days + 1)
+    if start.month == 12:
+        next_year, next_month = start.year + 1, 1
+    else:
+        next_year, next_month = start.year, start.month + 1
+    days_next = _calendar.monthrange(next_year, next_month)[1]
+    next_period = _date(next_year, next_month, min(reset_day, days_next))
+    days_in_period = (next_period - start).days
+    projected = round(calls * days_in_period / days_elapsed) if days_elapsed > 0 else 0
+    pct_used = round(calls / limit * 100, 1) if limit > 0 else 0.0
+    pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
+    if pct_projected >= 95:
+        status = "critical"
+    elif pct_projected >= 80:
+        status = "warning"
+    else:
+        status = "ok"
+    return {
+        "monthly_limit": limit,
+        "projected_monthly": projected,
+        "pct_of_limit": pct_used,
+        "pct_projected": pct_projected,
+        "status": status,
+        "tracking_period_start": period_start,
+    }
+
+
 class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:api"
     _attr_native_unit_of_measurement = "calls"
@@ -476,43 +512,15 @@ class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self.coordinator
-        today = _date.today()
-        period_start = _date.fromisoformat(c._tracking_period_start)
-        days_elapsed = max(1, (today - period_start).days + 1)
-        # Compute period length: period_start → same day next month
-        if period_start.month == 12:
-            next_year, next_month = period_start.year + 1, 1
-        else:
-            next_year, next_month = period_start.year, period_start.month + 1
-        days_next = _calendar.monthrange(next_year, next_month)[1]
-        next_period = _date(next_year, next_month, min(c.reset_day, days_next))
-        days_in_period = (next_period - period_start).days
-        projected = (
-            round(c._monthly_aq_calls * days_in_period / days_elapsed)
-            if days_elapsed > 0 else 0
+        attrs = _billing_projection_attrs(
+            c._monthly_aq_calls, c.aq_monthly_limit, c._tracking_period_start, c.reset_day
         )
-        limit = c.aq_monthly_limit
-        pct_used = round(c._monthly_aq_calls / limit * 100, 1) if limit > 0 else 0.0
-        pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
-        if pct_projected >= 95:
-            status = "critical"
-        elif pct_projected >= 80:
-            status = "warning"
-        else:
-            status = "ok"
-        return {
-            "monthly_limit": limit,
-            "projected_monthly": projected,
-            "pct_of_limit": pct_used,
-            "pct_projected": pct_projected,
-            "status": status,
-            "tracking_period_start": c._tracking_period_start,
-            ATTR_ATTRIBUTION: ATTRIBUTION,
-        }
+        attrs[ATTR_ATTRIBUTION] = ATTRIBUTION
+        return attrs
 
 
 class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:flower-pollen-outline"
     _attr_native_unit_of_measurement = "calls"
@@ -532,35 +540,8 @@ class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self.coordinator
-        today = _date.today()
-        period_start = _date.fromisoformat(c._tracking_period_start)
-        days_elapsed = max(1, (today - period_start).days + 1)
-        if period_start.month == 12:
-            next_year, next_month = period_start.year + 1, 1
-        else:
-            next_year, next_month = period_start.year, period_start.month + 1
-        days_next = _calendar.monthrange(next_year, next_month)[1]
-        next_period = _date(next_year, next_month, min(c.reset_day, days_next))
-        days_in_period = (next_period - period_start).days
-        projected = (
-            round(c._monthly_pollen_calls * days_in_period / days_elapsed)
-            if days_elapsed > 0 else 0
+        attrs = _billing_projection_attrs(
+            c._monthly_pollen_calls, c.pollen_monthly_limit, c._tracking_period_start, c.reset_day
         )
-        limit = c.pollen_monthly_limit
-        pct_used = round(c._monthly_pollen_calls / limit * 100, 1) if limit > 0 else 0.0
-        pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
-        if pct_projected >= 95:
-            status = "critical"
-        elif pct_projected >= 80:
-            status = "warning"
-        else:
-            status = "ok"
-        return {
-            "monthly_limit": limit,
-            "projected_monthly": projected,
-            "pct_of_limit": pct_used,
-            "pct_projected": pct_projected,
-            "status": status,
-            "tracking_period_start": c._tracking_period_start,
-            ATTR_ATTRIBUTION: ATTRIBUTION,
-        }
+        attrs[ATTR_ATTRIBUTION] = ATTRIBUTION
+        return attrs

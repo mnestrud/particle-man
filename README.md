@@ -109,12 +109,7 @@ Particle Man targets [Gold tier](https://www.home-assistant.io/docs/quality_scal
 **Bronze**
 - [x] UI setup via config flow
 - [x] Basic end-user documentation
-- [ ] Code adheres to basic HA standards — specific fixes needed:
-  - `device_info` return type on all three base sensor classes should be `DeviceInfo` not `dict` (`sensor.py`)
-  - `SensorStateClass.TOTAL` on both usage sensors requires `last_reset` to be set on period rollover, or switch to `SensorStateClass.MEASUREMENT`
-  - Billing period projection logic is duplicated across `MonthlyAqUsageSensor` and `MonthlyPollenUsageSensor` — extract to shared helper
-  - `_session_start`, `_aq_current_calls`, `_aq_forecast_calls` in `coordinator.py` are set but never read — remove or expose
-  - Add CI: `ruff`, `mypy`, and `hassfest` via GitHub Actions — **added** (`.github/workflows/validate.yml`); must pass
+- [x] Code adheres to basic HA standards — **fixed**: `DeviceInfo` typed returns, `SensorStateClass.MEASUREMENT` on usage sensors, shared billing projection helper, dead counters removed; CI (`ruff`, `mypy`, `hassfest`) added via `.github/workflows/validate.yml` — must pass
 - [ ] Automated tests (`pytest-homeassistant-custom-component` — cover coordinator init, mocked poll cycle, config flow, options flow) — not yet written
 
 **Silver** (requires Bronze)

@@ -179,9 +179,6 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         self.reset_day = max(1, min(28, int(reset_day)))
         self.enforce_limits = enforce_limits
         self.entry_id = entry_id
-        self._session_start: datetime = datetime.now(timezone.utc)
-        self._aq_current_calls: int = 0
-        self._aq_forecast_calls: int = 0
         self._pollen_calls: int = 0
         self._monthly_aq_calls: int = 0
         self._monthly_pollen_calls: int = 0
@@ -289,7 +286,6 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                     "Google AQI currentConditions error %s: %s", resp.status, error_body
                 )
             resp.raise_for_status()
-            self._aq_current_calls += 1
             self._monthly_aq_calls += 1
             return await resp.json()
 
@@ -323,7 +319,6 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                     "Google AQI forecast error %s: %s", resp.status, error_body
                 )
             resp.raise_for_status()
-            self._aq_forecast_calls += 1
             self._monthly_aq_calls += 1
             result = await resp.json()
             return result.get("hourlyForecasts", [])
