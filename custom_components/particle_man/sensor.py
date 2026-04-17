@@ -55,7 +55,7 @@ async def async_setup_entry(
     coordinator: GoogleAirQualityCoordinator = entry.runtime_data
     data = coordinator.data or {}
 
-    entities: list[CoordinatorEntity] = [
+    entities: list[SensorEntity] = [
         AqiSensor(coordinator),
         AqiLevelSensor(coordinator),
         LastApiUpdateSensor(coordinator),
