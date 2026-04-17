@@ -110,7 +110,7 @@ Particle Man targets [Gold tier](https://www.home-assistant.io/docs/quality_scal
 - [x] UI setup via config flow
 - [x] Basic end-user documentation
 - [x] Code adheres to basic HA standards — CI (`ruff`, `mypy`, `hassfest`, `hacs`) via `.github/workflows/validate.yml` — all passing
-- [ ] Automated tests (`pytest-homeassistant-custom-component` — cover coordinator init, mocked poll cycle, config flow, options flow) — not yet written
+- [x] Automated tests (`pytest-homeassistant-custom-component`) — coordinator, config flow, options flow, EPA category — all passing via CI
 
 **Silver** (requires Bronze)
 - [x] Stable experience — pollen API failures are caught and logged without crashing the integration

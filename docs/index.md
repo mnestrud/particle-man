@@ -73,3 +73,12 @@ After setup you'll find three new devices under **Settings → Devices & Service
 - **Particle Man Diagnostics** — API call tracking
 
 Head to [What's Included](sensors.md) for a plain-language guide to every sensor, or jump to [Dashboard Examples](dashboard.md) to start visualizing the data.
+
+---
+
+## Removing the integration
+
+1. Go to **Settings → Devices & Services → Particle Man**
+2. Click the three-dot menu → **Delete**
+3. Restart Home Assistant
+4. (Optional) Remove the component files via HACS or manually delete `custom_components/particle_man/` from your config directory
