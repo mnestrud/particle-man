@@ -1,6 +1,6 @@
 """Tests for GoogleAirQualityCoordinator."""
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -22,13 +22,17 @@ from .conftest import (
 
 @pytest.fixture
 def coordinator(hass):
-    return GoogleAirQualityCoordinator(
-        hass=hass,
-        api_key=MOCK_API_KEY,
-        latitude=MOCK_LAT,
-        longitude=MOCK_LON,
-        entry_id="test_entry",
-    )
+    with patch(
+        "custom_components.particle_man.coordinator.async_get_clientsession",
+        return_value=MagicMock(),
+    ):
+        yield GoogleAirQualityCoordinator(
+            hass=hass,
+            api_key=MOCK_API_KEY,
+            latitude=MOCK_LAT,
+            longitude=MOCK_LON,
+            entry_id="test_entry",
+        )
 
 
 # ---------------------------------------------------------------------------
