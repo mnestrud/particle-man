@@ -106,7 +106,7 @@ Requirements per [HACS publishing docs](https://www.hacs.xyz/docs/publish/includ
 
 Particle Man targets [Gold tier](https://www.home-assistant.io/docs/quality_scale/). Current status:
 
-**Bronze**
+**Bronze** — ALL REQUIREMENTS MET
 - [x] UI setup via config flow
 - [x] Basic end-user documentation
 - [x] Code adheres to basic HA standards — CI (`ruff`, `mypy`, `hassfest`, `hacs`) via `.github/workflows/validate.yml` — all passing
