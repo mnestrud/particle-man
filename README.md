@@ -85,9 +85,26 @@ Just Breathe.
 - Weather entity parity
 - HACS default catalog
 
+### HACS Default Catalog Submission
+
+Requirements per [HACS publishing docs](https://www.hacs.xyz/docs/publish/include/).
+
+- [x] Public GitHub repository
+- [x] Repository description set
+- [x] Issues enabled
+- [x] README with documentation
+- [x] `hacs.json` with `name` field
+- [x] GitHub release published (v1.0.3)
+- [x] `manifest.json` with all required fields (`domain`, `name`, `version`, `documentation`, `issue_tracker`, `codeowners`)
+- [x] Brand directory with `icon.png`
+- [ ] GitHub Topics added (e.g. `home-assistant`, `hacs`, `air-quality`, `pollen`)
+- [ ] HACS validation GitHub Action added and passing (required before PR submission)
+- [ ] Hassfest GitHub Action added and passing (required for integrations)
+- [ ] Submit PR to [hacs/default](https://github.com/hacs/default) adding entry alphabetically to `integration` file
+
 ### HA Integration Quality Scale
 
-Particle Man targets [Silver tier](https://www.home-assistant.io/docs/quality_scale/). Current status:
+Particle Man targets [Gold tier](https://www.home-assistant.io/docs/quality_scale/). Current status:
 
 **Bronze**
 - [x] UI setup via config flow
