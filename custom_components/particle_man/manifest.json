@@ -1,11 +1,11 @@
 {
   "domain": "particle_man",
   "name": "Particle Man",
-  "version": "1.0.3",
+  "codeowners": ["@mnestrud"],
   "config_flow": true,
   "documentation": "https://github.com/mnestrud/particle-man",
+  "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/mnestrud/particle-man/issues",
   "requirements": [],
-  "iot_class": "cloud_polling",
-  "codeowners": ["@mnestrud"]
+  "version": "1.0.3"
 }
