@@ -79,11 +79,11 @@ Just Breathe.
 
 ### Features
 
-- **Multiple locations** — each config entry covers one lat/lon; support for multiple addresses (home, work, cabin) is a natural extension but requires per-entry coordinator isolation and careful entity naming.
-- **Google Solar API integration** — surface solar irradiance and sunlight data alongside air quality, enabling automations that combine UV index, cloud cover, and solar energy potential with pollution and pollen conditions.
-- **Alert binary sensors** — simple on/off threshold sensors (e.g. "AQI is Unhealthy", "Tree pollen is High") that work cleanly in automations and notifications without requiring the user to write templates.
-- **Weather entity parity** — expose AQI and pollen forecasts as proper HA `weather`-style forecast events so native forecast cards can render them without custom YAML.
-- **HACS default catalog** — submit to the HACS default repository list for easier discoverability (requires passing `hassfest` validation and HACS validation checks).
+- Multiple locations
+- Google Solar API integration
+- Alert binary sensors
+- Weather entity parity
+- HACS default catalog
 
 ### HA Integration Quality Scale
 
