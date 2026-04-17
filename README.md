@@ -98,8 +98,8 @@ Requirements per [HACS publishing docs](https://www.hacs.xyz/docs/publish/includ
 - [x] `manifest.json` with all required fields (`domain`, `name`, `version`, `documentation`, `issue_tracker`, `codeowners`)
 - [x] Brand directory with `icon.png`
 - [x] GitHub Topics added (`home-assistant`, `hacs`, `air-quality`, `pollen`, `home-assistant-integration`, `google-api`)
-- [ ] HACS validation GitHub Action added and passing (required before PR submission)
-- [ ] Hassfest GitHub Action added and passing (required for integrations)
+- [x] HACS validation GitHub Action added and passing (required before PR submission)
+- [x] Hassfest GitHub Action added and passing (required for integrations)
 - [ ] Submit PR to [hacs/default](https://github.com/hacs/default) adding entry alphabetically to `integration` file
 
 ### HA Integration Quality Scale
@@ -114,8 +114,8 @@ Particle Man targets [Gold tier](https://www.home-assistant.io/docs/quality_scal
   - `SensorStateClass.TOTAL` on both usage sensors requires `last_reset` to be set on period rollover, or switch to `SensorStateClass.MEASUREMENT`
   - Billing period projection logic is duplicated across `MonthlyAqUsageSensor` and `MonthlyPollenUsageSensor` — extract to shared helper
   - `_session_start`, `_aq_current_calls`, `_aq_forecast_calls` in `coordinator.py` are set but never read — remove or expose
-  - Add CI: `ruff`, `mypy`, and `hassfest` via GitHub Actions
-- [ ] Automated tests (`pytest-homeassistant-custom-component` — cover coordinator init, mocked poll cycle, config flow, options flow)
+  - Add CI: `ruff`, `mypy`, and `hassfest` via GitHub Actions — **added** (`.github/workflows/validate.yml`); must pass
+- [ ] Automated tests (`pytest-homeassistant-custom-component` — cover coordinator init, mocked poll cycle, config flow, options flow) — not yet written
 
 **Silver** (requires Bronze)
 - [x] Stable experience — pollen API failures are caught and logged without crashing the integration
