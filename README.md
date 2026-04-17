@@ -227,6 +227,45 @@ Forecast data is stored as sensor attributes for use in dashboard cards and temp
 
 ---
 
+## TODO
+
+### Features
+
+- **Multiple locations** — each config entry covers one lat/lon; support for multiple addresses (home, work, cabin) is a natural extension but requires per-entry coordinator isolation and careful entity naming.
+- **Google Solar API integration** — surface solar irradiance and sunlight data alongside air quality, enabling automations that combine UV index, cloud cover, and solar energy potential with pollution and pollen conditions.
+- **Alert binary sensors** — simple on/off threshold sensors (e.g. "AQI is Unhealthy", "Tree pollen is High") that work cleanly in automations and notifications without requiring the user to write templates.
+- **Automation / notification blueprints** — starter blueprints for common use cases: alert when AQI crosses a threshold, close HVAC fresh-air intake when air quality drops, notify on high pollen days before going outside.
+- **Dashboard card examples** — sample YAML for common cards: mini-graph card showing the 96-hour hourly AQI forecast, ApexCharts daily forecast bar chart, glance card with EPA color coding. The data is already in attributes; this just makes it usable out of the box.
+- **Weather entity parity** — expose AQI and pollen forecasts as proper HA `weather`-style forecast events so native forecast cards can render them without custom YAML.
+- **HACS default catalog** — submit to the HACS default repository list for easier discoverability (requires passing `hassfest` validation and HACS validation checks).
+
+### Code Quality & Linting
+
+- **Add CI pipeline** — add a GitHub Actions workflow running `ruff` (linting + formatting), `mypy` (type checking), and [`hassfest`](https://developers.home-assistant.io/docs/development_testing) (HA integration validator). No CI currently means issues accumulate silently.
+- **Fix `device_info` return type** — all three base sensor classes (`_BaseGaqSensor`, `_BasePollenSensor`, `_BaseDiagnosticSensor` in `sensor.py`) annotate `device_info` as `-> dict` instead of `-> DeviceInfo`. Swap in `homeassistant.helpers.entity.DeviceInfo` for correct typing.
+- **Fix `SensorStateClass.TOTAL` + `last_reset`** — `MonthlyAqUsageSensor` and `MonthlyPollenUsageSensor` use `SensorStateClass.TOTAL` but never set `last_reset` when the billing period rolls over. HA's long-term statistics engine will misinterpret the monthly reset as a data gap. Either set `last_reset` to the period start datetime or switch to `SensorStateClass.MEASUREMENT`.
+- **Deduplicate billing projection logic** — the ~35-line projection calculation in `extra_state_attributes` is copy-pasted between `MonthlyAqUsageSensor` and `MonthlyPollenUsageSensor`. Extract to a shared helper method on the coordinator or a base diagnostic sensor class.
+- **Remove dead session-level counters** — `_session_start`, `_aq_current_calls`, and `_aq_forecast_calls` are set in `coordinator.py` `__init__` but never read anywhere. Remove or expose them.
+
+### HA Integration Quality Scale
+
+Particle Man targets [Silver tier](https://www.home-assistant.io/docs/quality_scale/). Current status:
+
+**Bronze**
+- [x] UI setup via config flow
+- [x] Code adheres to basic HA standards
+- [x] Basic end-user documentation
+- [ ] Automated tests (`pytest-homeassistant-custom-component` — cover coordinator init, mocked poll cycle, config flow, options flow)
+
+**Silver** (requires Bronze)
+- [x] Stable experience — pollen API failures are caught and logged without crashing the integration
+- [x] Active maintenance — `@mnestrud` listed as codeowner in `manifest.json`
+- [x] Error recovery — AQ API errors raise `UpdateFailed`; pollen errors fall back to last known data
+- [ ] Re-authentication flow — if the API key is revoked, the integration retries indefinitely; needs `async_start_reauth` to surface a reauthentication prompt in the HA UI
+- [ ] Detailed documentation — add a Troubleshooting section covering: pollen unavailable by region, verifying API key permissions, interpreting usage sensor warnings, and resetting call counts
+
+---
+
 ## License
 
 MIT
