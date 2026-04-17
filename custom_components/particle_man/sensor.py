@@ -83,7 +83,7 @@ async def async_setup_entry(
     async_add_entities(entities, True)
 
 
-class _BaseGaqSensor(CoordinatorEntity, SensorEntity):
+class _BaseGaqSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
@@ -100,7 +100,7 @@ class _BaseGaqSensor(CoordinatorEntity, SensorEntity):
         )
 
 
-class _BasePollenSensor(CoordinatorEntity, SensorEntity):
+class _BasePollenSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
@@ -118,7 +118,7 @@ class _BasePollenSensor(CoordinatorEntity, SensorEntity):
         )
 
 
-class _BaseDiagnosticSensor(CoordinatorEntity, SensorEntity):
+class _BaseDiagnosticSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
@@ -387,7 +387,7 @@ class PollenTypeLevelSensor(_BasePollenSensor):
         return {
             "index": info.get("value"),
             "in_season": info.get("in_season"),
-            "color_hex": info.get("color_hex") or POLLEN_COLORS.get(category),
+            "color_hex": info.get("color_hex") or (POLLEN_COLORS.get(category) if category else None),
             ATTR_ATTRIBUTION: POLLEN_ATTRIBUTION,
         }
 
