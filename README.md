@@ -97,7 +97,7 @@ Requirements per [HACS publishing docs](https://www.hacs.xyz/docs/publish/includ
 - [x] GitHub release published (v1.0.3)
 - [x] `manifest.json` with all required fields (`domain`, `name`, `version`, `documentation`, `issue_tracker`, `codeowners`)
 - [x] Brand directory with `icon.png`
-- [ ] GitHub Topics added (e.g. `home-assistant`, `hacs`, `air-quality`, `pollen`)
+- [x] GitHub Topics added (`home-assistant`, `hacs`, `air-quality`, `pollen`, `home-assistant-integration`, `google-api`)
 - [ ] HACS validation GitHub Action added and passing (required before PR submission)
 - [ ] Hassfest GitHub Action added and passing (required for integrations)
 - [ ] Submit PR to [hacs/default](https://github.com/hacs/default) adding entry alphabetically to `integration` file
