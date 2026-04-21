@@ -167,7 +167,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> ParticleManOptionsFlow:
-        return ParticleManOptionsFlow(config_entry)
+        return ParticleManOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -274,8 +274,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ParticleManOptionsFlow(config_entries.OptionsFlow):
     """Multi-step options flow for Particle Man."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+    def __init__(self) -> None:
         self._options: dict[str, Any] = {}
 
     def _get(self, key: str, default: Any) -> Any:

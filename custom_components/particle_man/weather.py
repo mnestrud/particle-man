@@ -66,7 +66,7 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
     @callback
     def _handle_coordinator_update(self) -> None:
         super()._handle_coordinator_update()
-        self.async_update_listeners()
+        self.hass.async_create_task(self.async_update_listeners(None))
 
     # -------------------------------------------------------------------------
     # Unit declarations (depend on weather_units setting)
