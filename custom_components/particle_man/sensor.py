@@ -9,7 +9,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ATTRIBUTION
+from homeassistant.const import ATTR_ATTRIBUTION, PERCENTAGE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
@@ -18,13 +18,16 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTRIBUTION,
+    CONF_API_KEY,
     DOMAIN,
     EPA_BREAKPOINT_POLLUTANTS,
     EPA_COLORS,
     POLLEN_ATTRIBUTION,
     POLLEN_COLORS,
+    WEATHER_ATTRIBUTION,
+    _PACIFIC_TZ,
 )
-from .coordinator import GoogleAirQualityCoordinator
+from .coordinator import ParticleManCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,41 +55,65 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up all sensors from config entry."""
-    coordinator: GoogleAirQualityCoordinator = entry.runtime_data
+    coordinator: ParticleManCoordinator = entry.runtime_data
     data = coordinator.data or {}
+    entities: list[SensorEntity] = [LastApiUpdateSensor(coordinator)]
 
-    entities: list[SensorEntity] = [
-        AqiSensor(coordinator),
-        AqiLevelSensor(coordinator),
-        LastApiUpdateSensor(coordinator),
-        MonthlyAqUsageSensor(coordinator),
-        MonthlyPollenUsageSensor(coordinator),
-    ]
+    # --- Air Quality ---
+    if coordinator.enable_air_quality:
+        entities.extend([
+            AqiSensor(coordinator),
+            AqiLevelSensor(coordinator),
+            AirQualityAdvisorySensor(coordinator),
+            MonthlyAqUsageSensor(coordinator),
+        ])
+        if "local_aqi" in data:
+            entities.append(LocalAqiSensor(coordinator))
+        for key in data:
+            if key.startswith("pollutant_"):
+                code = key[len("pollutant_"):]
+                entities.append(PollutantSensor(coordinator, code))
+                if code in EPA_BREAKPOINT_POLLUTANTS:
+                    entities.append(PollutantLevelSensor(coordinator, code))
 
-    if "local_aqi" in data:
-        entities.append(LocalAqiSensor(coordinator))
+    # --- Pollen ---
+    if coordinator.enable_pollen:
+        entities.extend([
+            PollenAdvisorySensor(coordinator),
+            MonthlyPollenUsageSensor(coordinator),
+        ])
+        for key in data:
+            if key.startswith("pollen_type_"):
+                ptype = key[len("pollen_type_"):]
+                entities.append(PollenTypeSensor(coordinator, ptype))
+                entities.append(PollenTypeLevelSensor(coordinator, ptype))
+            elif key.startswith("pollen_plant_"):
+                pcode = key[len("pollen_plant_"):]
+                entities.append(PollenPlantSensor(coordinator, pcode))
 
-    for key in data:
-        if key.startswith("pollutant_"):
-            code = key[len("pollutant_"):]
-            entities.append(PollutantSensor(coordinator, code))
-            if code in EPA_BREAKPOINT_POLLUTANTS:
-                entities.append(PollutantLevelSensor(coordinator, code))
-        elif key.startswith("pollen_type_"):
-            ptype = key[len("pollen_type_"):]
-            entities.append(PollenTypeSensor(coordinator, ptype))
-            entities.append(PollenTypeLevelSensor(coordinator, ptype))
-        elif key.startswith("pollen_plant_"):
-            pcode = key[len("pollen_plant_"):]
-            entities.append(PollenPlantSensor(coordinator, pcode))
+    # --- Weather ---
+    if coordinator.enable_weather:
+        entities.append(MonthlyWeatherUsageSensor(coordinator))
+        if "weather_current" in data:
+            entities.extend([
+                ThunderstormProbabilitySensor(coordinator),
+                HeatIndexSensor(coordinator),
+                WindChillSensor(coordinator),
+            ])
+        if coordinator.enable_weather_alerts:
+            entities.append(WeatherAlertsSensor(coordinator))
 
     async_add_entities(entities, True)
 
 
-class _BaseGaqSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEntity):
+# ---------------------------------------------------------------------------
+# Base classes
+# ---------------------------------------------------------------------------
+
+class _BaseGaqSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self.coordinator = coordinator
 
@@ -100,10 +127,10 @@ class _BaseGaqSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEntit
         )
 
 
-class _BasePollenSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEntity):
+class _BasePollenSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self.coordinator = coordinator
 
@@ -118,10 +145,28 @@ class _BasePollenSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEn
         )
 
 
-class _BaseDiagnosticSensor(CoordinatorEntity[GoogleAirQualityCoordinator], SensorEntity):
+class _BaseWeatherSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self.coordinator = coordinator
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self.coordinator.entry_id}_weather")},
+            name="Particle Man Weather",
+            manufacturer="Google",
+            model="Weather API",
+            via_device=(DOMAIN, self.coordinator.entry_id),
+        )
+
+
+class _BaseDiagnosticSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self.coordinator = coordinator
 
@@ -136,12 +181,16 @@ class _BaseDiagnosticSensor(CoordinatorEntity[GoogleAirQualityCoordinator], Sens
         )
 
 
+# ---------------------------------------------------------------------------
+# Air Quality sensors
+# ---------------------------------------------------------------------------
+
 class AqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:air-filter"
     _unrecorded_attributes = frozenset({"hourly_forecast"})
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry_id}_aqi"
 
@@ -175,7 +224,7 @@ class AqiLevelSensor(_BaseGaqSensor):
     _attr_entity_category = None
     _attr_icon = "mdi:air-filter"
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry_id}_aqi_level"
 
@@ -197,12 +246,43 @@ class AqiLevelSensor(_BaseGaqSensor):
         }
 
 
+class AirQualityAdvisorySensor(_BaseGaqSensor):
+    _attr_icon = "mdi:shield-alert-outline"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_aq_advisory"
+
+    @property
+    def name(self) -> str:
+        return "Air Quality Advisory"
+
+    @property
+    def native_value(self) -> str | None:
+        return self.coordinator.data.get("aq_advisory", {}).get("value")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self.coordinator.data.get("aq_advisory", {})
+        attrs: dict[str, Any] = {
+            "aqi": info.get("aqi"),
+            "category": info.get("category"),
+            "dominant_pollutant": info.get("dominant_pollutant"),
+            "elevated_pollutants": info.get("elevated_pollutants", []),
+            "trend": info.get("trend"),
+            ATTR_ATTRIBUTION: ATTRIBUTION,
+        }
+        if info.get("health_recommendations") is not None:
+            attrs["health_recommendations"] = info["health_recommendations"]
+        return attrs
+
+
 class LocalAqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:air-filter"
     _unrecorded_attributes = frozenset({"hourly_forecast"})
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry_id}_local_aqi"
 
@@ -237,7 +317,7 @@ class PollutantSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _unrecorded_attributes = frozenset({"hourly_forecast"})
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator, code: str) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator, code: str) -> None:
         super().__init__(coordinator)
         self.code = code
         self._attr_unique_id = f"{coordinator.entry_id}_pollutant_{code}"
@@ -281,7 +361,7 @@ class PollutantSensor(_BaseGaqSensor):
 class PollutantLevelSensor(_BaseGaqSensor):
     _attr_entity_category = None
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator, code: str) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator, code: str) -> None:
         super().__init__(coordinator)
         self.code = code
         self._attr_unique_id = f"{coordinator.entry_id}_pollutant_{code}_level"
@@ -314,11 +394,45 @@ class PollutantLevelSensor(_BaseGaqSensor):
         }
 
 
+# ---------------------------------------------------------------------------
+# Pollen sensors
+# ---------------------------------------------------------------------------
+
+class PollenAdvisorySensor(_BasePollenSensor):
+    _attr_icon = "mdi:flower-pollen"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_pollen_advisory"
+
+    @property
+    def name(self) -> str:
+        return "Pollen Advisory"
+
+    @property
+    def native_value(self) -> str | None:
+        return self.coordinator.data.get("pollen_advisory", {}).get("value")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self.coordinator.data.get("pollen_advisory", {})
+        attrs: dict[str, Any] = {
+            "dominant_type": info.get("dominant_type"),
+            "dominant_index": info.get("dominant_index"),
+            "in_season_types": info.get("in_season_types", []),
+            "all_levels": info.get("all_levels", {}),
+            ATTR_ATTRIBUTION: POLLEN_ATTRIBUTION,
+        }
+        if info.get("health_recommendations") is not None:
+            attrs["health_recommendations"] = info["health_recommendations"]
+        return attrs
+
+
 class PollenTypeSensor(_BasePollenSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator, ptype: str) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator, ptype: str) -> None:
         super().__init__(coordinator)
         self.ptype = ptype
         self._attr_unique_id = f"{coordinator.entry_id}_pollen_type_{ptype}"
@@ -359,7 +473,7 @@ class PollenTypeSensor(_BasePollenSensor):
 class PollenTypeLevelSensor(_BasePollenSensor):
     _attr_entity_category = None
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator, ptype: str) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator, ptype: str) -> None:
         super().__init__(coordinator)
         self.ptype = ptype
         self._attr_unique_id = f"{coordinator.entry_id}_pollen_type_{ptype}_level"
@@ -397,7 +511,7 @@ class PollenPlantSensor(_BasePollenSensor):
     _attr_suggested_display_precision = 0
     _attr_icon = "mdi:flower-pollen"
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator, pcode: str) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator, pcode: str) -> None:
         super().__init__(coordinator)
         self.pcode = pcode
         self._attr_unique_id = f"{coordinator.entry_id}_pollen_plant_{pcode}"
@@ -432,12 +546,130 @@ class PollenPlantSensor(_BasePollenSensor):
         return attrs
 
 
+# ---------------------------------------------------------------------------
+# Weather sensors
+# ---------------------------------------------------------------------------
+
+class WeatherAlertsSensor(_BaseWeatherSensor):
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:alert-circle-outline"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_weather_alerts"
+
+    @property
+    def name(self) -> str:
+        return "Weather Alerts"
+
+    @property
+    def native_value(self) -> int:
+        return len(self.coordinator.data.get("weather_alerts", []))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        alerts = self.coordinator.data.get("weather_alerts", [])
+        severities = [a.get("severity", "") for a in alerts if a.get("severity")]
+        _order = {"MINOR": 1, "MODERATE": 2, "SEVERE": 3, "EXTREME": 4}
+        highest = max(severities, key=lambda s: _order.get(s, 0), default=None) if severities else None
+        return {
+            "alerts": alerts,
+            "highest_severity": highest,
+            "active_event_types": list({a.get("event_type") for a in alerts if a.get("event_type")}),
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class ThunderstormProbabilitySensor(_BaseWeatherSensor):
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:weather-lightning"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_thunderstorm_probability"
+
+    @property
+    def name(self) -> str:
+        return "Thunderstorm Probability"
+
+    @property
+    def native_value(self) -> int | None:
+        return self.coordinator.data.get("weather_current", {}).get("thunderstorm_probability")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION}
+
+
+class HeatIndexSensor(_BaseWeatherSensor):
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_heat_index"
+
+    @property
+    def name(self) -> str:
+        return "Heat Index"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.get("weather_current", {}).get("heat_index")
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return (
+            UnitOfTemperature.CELSIUS
+            if self.coordinator.weather_units == "METRIC"
+            else UnitOfTemperature.FAHRENHEIT
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION}
+
+
+class WindChillSensor(_BaseWeatherSensor):
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_wind_chill"
+
+    @property
+    def name(self) -> str:
+        return "Wind Chill"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.get("weather_current", {}).get("wind_chill")
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return (
+            UnitOfTemperature.CELSIUS
+            if self.coordinator.weather_units == "METRIC"
+            else UnitOfTemperature.FAHRENHEIT
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION}
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic sensors
+# ---------------------------------------------------------------------------
+
 class LastApiUpdateSensor(_BaseDiagnosticSensor):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:clock-check-outline"
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry_id}_last_api_update"
 
@@ -449,6 +681,9 @@ class LastApiUpdateSensor(_BaseDiagnosticSensor):
     def native_value(self) -> _datetime | None:
         dt_str = self.coordinator.data.get("aqi", {}).get("datetime")
         if not dt_str:
+            # Fall back to weather timestamp if AQ not enabled
+            dt_str = self.coordinator.data.get("weather_current", {}).get("datetime")
+        if not dt_str:
             return None
         try:
             return _datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
@@ -456,30 +691,28 @@ class LastApiUpdateSensor(_BaseDiagnosticSensor):
             return None
 
 
-def _billing_projection_attrs(
-    calls: int,
-    limit: int,
-    period_start: str,
-    reset_day: int,
-) -> dict[str, Any]:
-    today = _date.today()
-    start = _date.fromisoformat(period_start)
-    days_elapsed = max(1, (today - start).days + 1)
-    if start.month == 12:
-        next_year, next_month = start.year + 1, 1
-    else:
-        next_year, next_month = start.year, start.month + 1
-    days_next = _calendar.monthrange(next_year, next_month)[1]
-    next_period = _date(next_year, next_month, min(reset_day, days_next))
-    days_in_period = (next_period - start).days
-    projected = round(calls * days_in_period / days_elapsed) if days_elapsed > 0 else 0
-    pct_used = round(calls / limit * 100, 1) if limit > 0 else 0.0
-    pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
-    if pct_projected >= 95:
-        status = "critical"
-    elif pct_projected >= 80:
-        status = "warning"
-    else:
+def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict[str, Any]:
+    """Compute billing projection from Pacific Time monthly period."""
+    try:
+        year = int(period_month[:4])
+        month = int(period_month[5:7])
+        period_start = _date(year, month, 1)
+        today_pacific = _datetime.now(_PACIFIC_TZ).date()
+        days_elapsed = max(1, (today_pacific - period_start).days + 1)
+        days_in_month = _calendar.monthrange(year, month)[1]
+        projected = round(calls * days_in_month / days_elapsed)
+        pct_used = round(calls / limit * 100, 1) if limit > 0 else 0.0
+        pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
+        if pct_projected >= 95:
+            status = "critical"
+        elif pct_projected >= 80:
+            status = "warning"
+        else:
+            status = "ok"
+    except (ValueError, TypeError, ZeroDivisionError):
+        projected = 0
+        pct_used = 0.0
+        pct_projected = 0.0
         status = "ok"
     return {
         "monthly_limit": limit,
@@ -487,8 +720,16 @@ def _billing_projection_attrs(
         "pct_of_limit": pct_used,
         "pct_projected": pct_projected,
         "status": status,
-        "tracking_period_start": period_start,
+        "billing_period": period_month,
     }
+
+
+def _locations_sharing_key(coordinator: ParticleManCoordinator) -> int:
+    """Count config entries using the same API key."""
+    return sum(
+        1 for e in coordinator.hass.config_entries.async_entries(DOMAIN)
+        if e.data.get(CONF_API_KEY) == coordinator.api_key
+    )
 
 
 class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
@@ -497,7 +738,7 @@ class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
     _attr_icon = "mdi:api"
     _attr_native_unit_of_measurement = "calls"
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry_id}_monthly_aq_calls"
 
@@ -507,14 +748,19 @@ class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
 
     @property
     def native_value(self) -> int:
-        return self.coordinator._monthly_aq_calls
+        return self.coordinator._cached_tracking.get("aq_calls", 0)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self.coordinator
+        tracking = c._cached_tracking
         attrs = _billing_projection_attrs(
-            c._monthly_aq_calls, c.aq_monthly_limit, c._tracking_period_start, c.reset_day
+            tracking.get("aq_calls", 0),
+            c.aq_monthly_limit,
+            tracking.get("period_month", ""),
         )
+        attrs["shared_total_calls"] = tracking.get("aq_calls", 0)
+        attrs["locations_sharing_key"] = _locations_sharing_key(c)
         attrs[ATTR_ATTRIBUTION] = ATTRIBUTION
         return attrs
 
@@ -525,7 +771,7 @@ class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
     _attr_icon = "mdi:flower-pollen-outline"
     _attr_native_unit_of_measurement = "calls"
 
-    def __init__(self, coordinator: GoogleAirQualityCoordinator) -> None:
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry_id}_monthly_pollen_calls"
 
@@ -535,13 +781,51 @@ class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
 
     @property
     def native_value(self) -> int:
-        return self.coordinator._monthly_pollen_calls
+        return self.coordinator._cached_tracking.get("pollen_calls", 0)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         c = self.coordinator
+        tracking = c._cached_tracking
         attrs = _billing_projection_attrs(
-            c._monthly_pollen_calls, c.pollen_monthly_limit, c._tracking_period_start, c.reset_day
+            tracking.get("pollen_calls", 0),
+            c.pollen_monthly_limit,
+            tracking.get("period_month", ""),
         )
-        attrs[ATTR_ATTRIBUTION] = ATTRIBUTION
+        attrs["shared_total_calls"] = tracking.get("pollen_calls", 0)
+        attrs["locations_sharing_key"] = _locations_sharing_key(c)
+        attrs[ATTR_ATTRIBUTION] = POLLEN_ATTRIBUTION
+        return attrs
+
+
+class MonthlyWeatherUsageSensor(_BaseDiagnosticSensor):
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:weather-partly-cloudy"
+    _attr_native_unit_of_measurement = "calls"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_monthly_weather_calls"
+
+    @property
+    def name(self) -> str:
+        return "Weather API Calls (Monthly)"
+
+    @property
+    def native_value(self) -> int:
+        return self.coordinator._cached_tracking.get("weather_calls", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        c = self.coordinator
+        tracking = c._cached_tracking
+        attrs = _billing_projection_attrs(
+            tracking.get("weather_calls", 0),
+            c.weather_monthly_limit,
+            tracking.get("period_month", ""),
+        )
+        attrs["shared_total_calls"] = tracking.get("weather_calls", 0)
+        attrs["locations_sharing_key"] = _locations_sharing_key(c)
+        attrs[ATTR_ATTRIBUTION] = WEATHER_ATTRIBUTION
         return attrs

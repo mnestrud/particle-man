@@ -6,8 +6,12 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .const import (
-    CONF_AQ_MONTHLY_LIMIT,
     CONF_API_KEY,
+    CONF_AQ_MONTHLY_LIMIT,
+    CONF_ENABLE_AIR_QUALITY,
+    CONF_ENABLE_POLLEN,
+    CONF_ENABLE_WEATHER,
+    CONF_ENABLE_WEATHER_ALERTS,
     CONF_ENFORCE_LIMITS,
     CONF_FORECAST_DAYS,
     CONF_HEALTH_RECS,
@@ -19,9 +23,17 @@ from .const import (
     CONF_PLANT_DESCRIPTIONS,
     CONF_PLANT_SENSORS,
     CONF_POLLEN_MONTHLY_LIMIT,
-    CONF_RESET_DAY,
+    CONF_QUIET_END,
+    CONF_QUIET_HOURS_ENABLED,
+    CONF_QUIET_START,
     CONF_UPDATE_INTERVAL,
+    CONF_WEATHER_MONTHLY_LIMIT,
+    CONF_WEATHER_UNITS,
     DEFAULT_AQ_MONTHLY_LIMIT,
+    DEFAULT_ENABLE_AIR_QUALITY,
+    DEFAULT_ENABLE_POLLEN,
+    DEFAULT_ENABLE_WEATHER,
+    DEFAULT_ENABLE_WEATHER_ALERTS,
     DEFAULT_ENFORCE_LIMITS,
     DEFAULT_FORECAST_DAYS,
     DEFAULT_HEALTH_RECS,
@@ -31,12 +43,16 @@ from .const import (
     DEFAULT_PLANT_DESCRIPTIONS,
     DEFAULT_PLANT_SENSORS,
     DEFAULT_POLLEN_MONTHLY_LIMIT,
-    DEFAULT_RESET_DAY,
+    DEFAULT_QUIET_END,
+    DEFAULT_QUIET_HOURS_ENABLED,
+    DEFAULT_QUIET_START,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_WEATHER_MONTHLY_LIMIT,
+    DEFAULT_WEATHER_UNITS,
 )
-from .coordinator import GoogleAirQualityCoordinator
+from .coordinator import ParticleManCoordinator
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.WEATHER]
 
 
 def _opt(entry: ConfigEntry, key: str, default):
@@ -46,7 +62,7 @@ def _opt(entry: ConfigEntry, key: str, default):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Particle Man from a config entry."""
-    coordinator = GoogleAirQualityCoordinator(
+    coordinator = ParticleManCoordinator(
         hass=hass,
         api_key=entry.data[CONF_API_KEY],
         latitude=_opt(entry, CONF_LATITUDE, entry.data[CONF_LATITUDE]),
@@ -61,8 +77,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         include_plant_descriptions=_opt(entry, CONF_PLANT_DESCRIPTIONS, DEFAULT_PLANT_DESCRIPTIONS),
         aq_monthly_limit=_opt(entry, CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT),
         pollen_monthly_limit=_opt(entry, CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT),
-        reset_day=_opt(entry, CONF_RESET_DAY, DEFAULT_RESET_DAY),
+        weather_monthly_limit=_opt(entry, CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT),
         enforce_limits=_opt(entry, CONF_ENFORCE_LIMITS, DEFAULT_ENFORCE_LIMITS),
+        enable_air_quality=_opt(entry, CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY),
+        enable_pollen=_opt(entry, CONF_ENABLE_POLLEN, DEFAULT_ENABLE_POLLEN),
+        enable_weather=_opt(entry, CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER),
+        enable_weather_alerts=_opt(entry, CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS),
+        weather_units=_opt(entry, CONF_WEATHER_UNITS, DEFAULT_WEATHER_UNITS),
+        quiet_hours_enabled=_opt(entry, CONF_QUIET_HOURS_ENABLED, DEFAULT_QUIET_HOURS_ENABLED),
+        quiet_start=_opt(entry, CONF_QUIET_START, DEFAULT_QUIET_START),
+        quiet_end=_opt(entry, CONF_QUIET_END, DEFAULT_QUIET_END),
         entry_id=entry.entry_id,
     )
     await coordinator.async_load_tracking()

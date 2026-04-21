@@ -1,4 +1,4 @@
-"""Tests for GoogleAirQualityCoordinator."""
+"""Tests for ParticleManCoordinator."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
@@ -6,7 +6,7 @@ import aiohttp
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.particle_man.coordinator import (
-    GoogleAirQualityCoordinator,
+    ParticleManCoordinator,
     _epa_category,
 )
 
@@ -19,6 +19,10 @@ from .conftest import (
     MOCK_POLLEN,
 )
 
+MOCK_WEATHER_CURRENT = {}
+MOCK_WEATHER_HOURLY = {}
+MOCK_WEATHER_DAILY = {}
+
 
 @pytest.fixture
 def coordinator(hass):
@@ -26,13 +30,38 @@ def coordinator(hass):
         "custom_components.particle_man.coordinator.async_get_clientsession",
         return_value=MagicMock(),
     ):
-        yield GoogleAirQualityCoordinator(
+        yield ParticleManCoordinator(
             hass=hass,
             api_key=MOCK_API_KEY,
             latitude=MOCK_LAT,
             longitude=MOCK_LON,
             entry_id="test_entry",
         )
+
+
+def _all_fetch_mocks(coordinator, *, aq_error=None, pollen_error=None, weather_error=None):
+    """Return context manager that mocks all fetch methods."""
+    return (
+        patch.object(
+            coordinator, "_fetch_current",
+            AsyncMock(side_effect=aq_error, return_value=None if aq_error else MOCK_AQ_CURRENT),
+        ),
+        patch.object(
+            coordinator, "_fetch_forecast",
+            AsyncMock(return_value=MOCK_AQ_FORECAST_HOURS),
+        ),
+        patch.object(
+            coordinator, "_fetch_pollen",
+            AsyncMock(side_effect=pollen_error, return_value=None if pollen_error else MOCK_POLLEN),
+        ),
+        patch.object(
+            coordinator, "_fetch_weather_current",
+            AsyncMock(side_effect=weather_error, return_value=None if weather_error else MOCK_WEATHER_CURRENT),
+        ),
+        patch.object(coordinator, "_fetch_weather_hourly", AsyncMock(return_value=MOCK_WEATHER_HOURLY)),
+        patch.object(coordinator, "_fetch_weather_daily", AsyncMock(return_value=MOCK_WEATHER_DAILY)),
+        patch.object(coordinator, "_save_tracking", AsyncMock()),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -43,10 +72,10 @@ async def test_coordinator_init(coordinator):
     assert coordinator.api_key == MOCK_API_KEY
     assert coordinator.latitude == MOCK_LAT
     assert coordinator.longitude == MOCK_LON
-    assert coordinator._monthly_aq_calls == 0
-    assert coordinator._monthly_pollen_calls == 0
+    assert coordinator._cached_tracking.get("aq_calls", 0) == 0
+    assert coordinator._cached_tracking.get("pollen_calls", 0) == 0
     assert coordinator.forecast_days == 5
-    assert coordinator.enforce_limits is False
+    assert coordinator.enforce_limits is True  # default is True (protects free tier)
 
 
 # ---------------------------------------------------------------------------
@@ -55,10 +84,7 @@ async def test_coordinator_init(coordinator):
 
 async def test_update_success(coordinator):
     with (
-        patch.object(coordinator, "_fetch_current", AsyncMock(return_value=MOCK_AQ_CURRENT)),
-        patch.object(coordinator, "_fetch_forecast", AsyncMock(return_value=MOCK_AQ_FORECAST_HOURS)),
-        patch.object(coordinator, "_fetch_pollen", AsyncMock(return_value=MOCK_POLLEN)),
-        patch.object(coordinator, "_save_tracking", AsyncMock()),
+        *_all_fetch_mocks(coordinator),
     ):
         data = await coordinator._async_update_data()
 
@@ -66,46 +92,39 @@ async def test_update_success(coordinator):
     assert data["aqi"]["value"] == 50
     assert data["aqi"]["category"] == "Good air quality"
     assert data["aqi"]["dominant_pollutant"] == "pm25"
-
     assert "pollutant_pm25" in data
     assert data["pollutant_pm25"]["value"] == 5.2
     assert data["pollutant_pm25"]["epa_category"] == "Good"
+    assert "pollen_type_grass" in data
+    assert "aq_advisory" in data
 
+
+async def test_aq_error_keeps_cached_data(coordinator):
+    """AQ fetch errors log a warning and preserve previously fetched data."""
+    coordinator.data = {"aqi": {"value": 42, "category": "Moderate"}}
+
+    err = aiohttp.ClientResponseError(None, (), status=403, message="Forbidden")
+    with (
+        *_all_fetch_mocks(coordinator, aq_error=err),
+    ):
+        data = await coordinator._async_update_data()
+
+    # Cached AQ data preserved; pollen was fetched successfully
+    assert data["aqi"]["value"] == 42
     assert "pollen_type_grass" in data
 
 
-async def test_update_increments_aq_call_counter(coordinator):
+async def test_all_apis_fail_no_cached_data_raises(coordinator):
+    """UpdateFailed raised only when all APIs fail and there is no cached data."""
     with (
-        patch.object(coordinator, "_fetch_current", AsyncMock(return_value=MOCK_AQ_CURRENT)),
-        patch.object(coordinator, "_fetch_forecast", AsyncMock(return_value=MOCK_AQ_FORECAST_HOURS)),
-        patch.object(coordinator, "_fetch_pollen", AsyncMock(return_value=MOCK_POLLEN)),
-        patch.object(coordinator, "_save_tracking", AsyncMock()),
+        *_all_fetch_mocks(
+            coordinator,
+            aq_error=Exception("aq down"),
+            pollen_error=Exception("pollen down"),
+            weather_error=Exception("weather down"),
+        ),
     ):
-        await coordinator._async_update_data()
-
-    # _fetch_current and _fetch_forecast each increment the counter inside their real impl;
-    # since those are patched, counter stays 0 here — that's expected: real counter
-    # increments live inside the fetch methods, not in _async_update_data itself.
-    # What we verify is the data structure is correct (covered by test_update_success).
-    assert coordinator._monthly_aq_calls == 0  # patched methods don't increment
-
-
-async def test_update_aq_api_error_raises_update_failed(coordinator):
-    err = aiohttp.ClientResponseError(None, (), status=403, message="Forbidden")
-    with (
-        patch.object(coordinator, "_fetch_current", AsyncMock(side_effect=err)),
-        patch.object(coordinator, "_fetch_forecast", AsyncMock(return_value=MOCK_AQ_FORECAST_HOURS)),
-    ):
-        with pytest.raises(UpdateFailed, match="403"):
-            await coordinator._async_update_data()
-
-
-async def test_update_network_error_raises_update_failed(coordinator):
-    with (
-        patch.object(coordinator, "_fetch_current", AsyncMock(side_effect=aiohttp.ClientError("timeout"))),
-        patch.object(coordinator, "_fetch_forecast", AsyncMock(return_value=MOCK_AQ_FORECAST_HOURS)),
-    ):
-        with pytest.raises(UpdateFailed, match="Error communicating"):
+        with pytest.raises(UpdateFailed, match="No data available"):
             await coordinator._async_update_data()
 
 
@@ -117,6 +136,9 @@ async def test_pollen_failure_preserves_previous_data(coordinator):
         patch.object(coordinator, "_fetch_current", AsyncMock(return_value=MOCK_AQ_CURRENT)),
         patch.object(coordinator, "_fetch_forecast", AsyncMock(return_value=MOCK_AQ_FORECAST_HOURS)),
         patch.object(coordinator, "_fetch_pollen", AsyncMock(side_effect=Exception("pollen down"))),
+        patch.object(coordinator, "_fetch_weather_current", AsyncMock(return_value=MOCK_WEATHER_CURRENT)),
+        patch.object(coordinator, "_fetch_weather_hourly", AsyncMock(return_value=MOCK_WEATHER_HOURLY)),
+        patch.object(coordinator, "_fetch_weather_daily", AsyncMock(return_value=MOCK_WEATHER_DAILY)),
         patch.object(coordinator, "_save_tracking", AsyncMock()),
     ):
         data = await coordinator._async_update_data()
@@ -125,37 +147,53 @@ async def test_pollen_failure_preserves_previous_data(coordinator):
 
 
 # ---------------------------------------------------------------------------
+# Quiet hours
+# ---------------------------------------------------------------------------
+
+async def test_quiet_hours_returns_cached(coordinator):
+    coordinator._quiet_hours_enabled = True
+    coordinator._quiet_start = "00:00:00"
+    coordinator._quiet_end = "23:59:59"
+    coordinator.data = {"aqi": {"value": 55}}
+
+    data = await coordinator._async_update_data()
+    assert data == {"aqi": {"value": 55}}
+
+
+# ---------------------------------------------------------------------------
 # API limit enforcement
 # ---------------------------------------------------------------------------
 
-async def test_aq_limit_enforced(coordinator):
+async def test_aq_limit_skips_fetch(coordinator):
+    """When AQ limit is reached, AQ fetch is skipped and cached data is preserved."""
     coordinator.enforce_limits = True
     coordinator.aq_monthly_limit = 10
-    coordinator._monthly_aq_calls = 10
+    coordinator._cached_tracking["aq_calls"] = 10
+    coordinator.data = {"aqi": {"value": 99, "category": "Hazardous"}}
 
-    with pytest.raises(UpdateFailed, match="AQ API limit"):
-        await coordinator._async_update_data()
+    with (
+        patch.object(coordinator, "_fetch_current", AsyncMock()) as mock_current,
+        patch.object(coordinator, "_fetch_forecast", AsyncMock()) as mock_forecast,
+        patch.object(coordinator, "_fetch_pollen", AsyncMock(return_value=MOCK_POLLEN)),
+        patch.object(coordinator, "_fetch_weather_current", AsyncMock(return_value=MOCK_WEATHER_CURRENT)),
+        patch.object(coordinator, "_fetch_weather_hourly", AsyncMock(return_value=MOCK_WEATHER_HOURLY)),
+        patch.object(coordinator, "_fetch_weather_daily", AsyncMock(return_value=MOCK_WEATHER_DAILY)),
+        patch.object(coordinator, "_save_tracking", AsyncMock()),
+    ):
+        data = await coordinator._async_update_data()
 
-
-async def test_pollen_limit_enforced(coordinator):
-    coordinator.enforce_limits = True
-    coordinator.pollen_monthly_limit = 5
-    coordinator._monthly_pollen_calls = 5
-
-    with pytest.raises(UpdateFailed, match="Pollen API limit"):
-        await coordinator._async_update_data()
+    mock_current.assert_not_called()
+    mock_forecast.assert_not_called()
+    assert data["aqi"]["value"] == 99
 
 
 async def test_limits_not_enforced_when_disabled(coordinator):
     coordinator.enforce_limits = False
     coordinator.aq_monthly_limit = 1
-    coordinator._monthly_aq_calls = 999
+    coordinator._cached_tracking["aq_calls"] = 999
 
     with (
-        patch.object(coordinator, "_fetch_current", AsyncMock(return_value=MOCK_AQ_CURRENT)),
-        patch.object(coordinator, "_fetch_forecast", AsyncMock(return_value=MOCK_AQ_FORECAST_HOURS)),
-        patch.object(coordinator, "_fetch_pollen", AsyncMock(return_value=MOCK_POLLEN)),
-        patch.object(coordinator, "_save_tracking", AsyncMock()),
+        *_all_fetch_mocks(coordinator),
     ):
         data = await coordinator._async_update_data()
 
@@ -188,34 +226,34 @@ def test_epa_category_none_value():
 
 def test_compute_hourly_trend_rising():
     values = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
-    assert GoogleAirQualityCoordinator._compute_hourly_trend(values) == "rising"
+    assert ParticleManCoordinator._compute_hourly_trend(values) == "rising"
 
 
 def test_compute_hourly_trend_falling():
     values = [15.0, 14.0, 13.0, 12.0, 11.0, 10.0]
-    assert GoogleAirQualityCoordinator._compute_hourly_trend(values) == "falling"
+    assert ParticleManCoordinator._compute_hourly_trend(values) == "falling"
 
 
 def test_compute_hourly_trend_stable():
     values = [50.0, 50.0, 50.0, 50.0, 50.0]
-    assert GoogleAirQualityCoordinator._compute_hourly_trend(values) == "stable"
+    assert ParticleManCoordinator._compute_hourly_trend(values) == "stable"
 
 
 def test_compute_hourly_trend_insufficient_data():
-    assert GoogleAirQualityCoordinator._compute_hourly_trend([50.0, 51.0]) == "stable"
+    assert ParticleManCoordinator._compute_hourly_trend([50.0, 51.0]) == "stable"
 
 
 def test_compute_pollen_trend_up():
-    assert GoogleAirQualityCoordinator._compute_trend(2, [{"index": 5}]) == "up"
+    assert ParticleManCoordinator._compute_trend(2, [{"index": 5}]) == "up"
 
 
 def test_compute_pollen_trend_down():
-    assert GoogleAirQualityCoordinator._compute_trend(5, [{"index": 2}]) == "down"
+    assert ParticleManCoordinator._compute_trend(5, [{"index": 2}]) == "down"
 
 
 def test_compute_pollen_trend_flat():
-    assert GoogleAirQualityCoordinator._compute_trend(3, [{"index": 3}]) == "flat"
+    assert ParticleManCoordinator._compute_trend(3, [{"index": 3}]) == "flat"
 
 
 def test_compute_pollen_trend_no_forecast():
-    assert GoogleAirQualityCoordinator._compute_trend(3, []) is None
+    assert ParticleManCoordinator._compute_trend(3, []) is None

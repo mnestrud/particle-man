@@ -3,92 +3,120 @@
     "step": {
       "user": {
         "title": "Particle Man",
-        "description": "Enter your Google Maps API key and location. Additional options (forecast days, pollen, local AQI) can be configured after setup via the Configure button.",
+        "description": "Particle Man uses Google's air quality, pollen, and weather data. You'll need a Google Maps Platform API key with the Air Quality, Pollen, and Weather APIs enabled. [Get an API key →](https://mnestrud.github.io/particle-man/)",
         "data": {
           "api_key": "API Key",
           "latitude": "Latitude",
-          "longitude": "Longitude",
-          "update_interval": "Update interval (minutes)"
+          "longitude": "Longitude"
+        },
+        "data_description": {
+          "api_key": "Paste your Google Maps Platform key here — it won't be visible after saving. [How to get a key](https://mnestrud.github.io/particle-man/)",
+          "latitude": "Decimal latitude of the location to monitor. Pre-filled from Home Assistant.",
+          "longitude": "Decimal longitude of the location to monitor. Pre-filled from Home Assistant."
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid API key or insufficient permissions",
-      "cannot_connect": "Cannot connect to Google Air Quality API",
-      "unknown": "Unexpected error"
+      "invalid_auth": "API key not recognized — make sure the Air Quality, Pollen, and Weather APIs are enabled in your Google Cloud project.",
+      "cannot_connect": "Couldn't reach Google. Check your internet connection and try again.",
+      "unknown": "Something went wrong. Check the Home Assistant logs for details."
     },
     "abort": {
-      "already_configured": "This location is already configured"
+      "already_configured": "A location at these coordinates is already configured."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Particle Man — Options",
-        "sections": {
-          "location": {
-            "name": "Location & Polling",
-            "data": {
-              "latitude": "Latitude",
-              "longitude": "Longitude",
-              "update_interval": "Update interval"
-            },
-            "data_description": {
-              "latitude": "Latitude of the location to monitor.",
-              "longitude": "Longitude of the location to monitor.",
-              "update_interval": "How often to poll both APIs (15–1440 minutes)."
-            }
-          },
-          "forecast": {
-            "name": "Forecast",
-            "data": {
-              "forecast_days": "Forecast days (1–5)",
-              "language_code": "Language code (BCP-47, e.g. en, es, fr)"
-            },
-            "data_description": {
-              "forecast_days": "Number of daily forecast entries on all sensors (1 = today only, 5 = maximum).",
-              "language_code": "Language for display names and health recommendations."
-            }
-          },
-          "air_quality": {
-            "name": "Air Quality",
-            "data": {
-              "enable_local_aqi": "Enable local / regional AQI index",
-              "local_aqi_code": "Local AQI index",
-              "include_health_recommendations": "Include health recommendations as attributes"
-            },
-            "data_description": {
-              "enable_local_aqi": "Adds a sensor for the regional AQI standard (e.g. US AQI for US locations).",
-              "local_aqi_code": "Preferred local AQI standard when overriding the regional default.",
-              "include_health_recommendations": "Adds per-population-group health guidance as an attribute on the AQI and pollen type sensors."
-            }
-          },
-          "pollen": {
-            "name": "Pollen",
-            "data": {
-              "include_plant_sensors": "Create individual plant species sensors",
-              "include_plant_descriptions": "Include plant descriptions (family, genus, cross-reactions)"
-            },
-            "data_description": {
-              "include_plant_sensors": "Creates a sensor for each individual plant species (e.g. Oak, Ragweed). Adds ~10–15 entities per location.",
-              "include_plant_descriptions": "Adds family, genus, seasonality, and cross-reaction attributes to plant sensors."
-            }
-          },
-          "api_limits": {
-            "name": "API Limits",
-            "data": {
-              "aq_monthly_limit": "Air Quality API monthly call limit",
-              "pollen_monthly_limit": "Pollen API monthly call limit",
-              "reset_day": "Billing period reset day",
-              "enforce_limits": "Enforce limits (suspend polling when limit is reached)"
-            },
-            "data_description": {
-              "aq_monthly_limit": "Monthly Air Quality API call limit for usage tracking. Defaults to the Google free tier (10,000 calls/month). Set to 0 to disable warnings.",
-              "pollen_monthly_limit": "Monthly Pollen API call limit for usage tracking. Defaults to the Google free tier (5,000 calls/month). Set to 0 to disable warnings.",
-              "reset_day": "Day of the month your billing period resets (1–28). Defaults to the 1st.",
-              "enforce_limits": "When enabled, polling stops when either API limit is reached. When disabled, limits are tracked but not enforced."
-            }
-          }
+        "title": "Polling & Limits",
+        "description": "Controls how often Particle Man checks for new data. {usage_summary}",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "update_interval": "Check every (minutes)",
+          "enforce_limits": "Stay within Google's free tier"
+        },
+        "data_description": {
+          "latitude": "Decimal latitude of the location to monitor.",
+          "longitude": "Decimal longitude of the location to monitor.",
+          "update_interval": "How often to fetch new data. More frequent checks are more responsive but use more of your monthly quota. [How call counts work](https://mnestrud.github.io/particle-man/api-usage/)",
+          "enforce_limits": "When on, each API pauses for the rest of the month once its free quota is reached. Turn off to set your own limits on the last page. [Free tier details](https://mnestrud.github.io/particle-man/api-usage/)"
+        }
+      },
+      "apis": {
+        "title": "Data Sources",
+        "description": "Choose which types of data to collect for this location. Each is independent. [See what each provides →](https://mnestrud.github.io/particle-man/sensors/)",
+        "data": {
+          "enable_air_quality": "Air Quality",
+          "enable_pollen": "Pollen",
+          "enable_weather": "Weather"
+        },
+        "data_description": {
+          "enable_air_quality": "Current AQI, pollutant levels (PM2.5, ozone, NO₂, and more), and multi-day forecasts.",
+          "enable_pollen": "Pollen index by type (grass, tree, weed) with forecasts and optional per-plant-species detail.",
+          "enable_weather": "Current conditions, hourly and daily forecasts, and active weather alerts."
+        }
+      },
+      "air_quality": {
+        "title": "Air Quality Options",
+        "description": "Customize what the air quality sensors report.",
+        "data": {
+          "forecast_days": "Forecast days",
+          "language_code": "Language",
+          "enable_local_aqi": "Add regional AQI sensor",
+          "local_aqi_code": "Regional AQI standard",
+          "include_health_recommendations": "Include health guidance"
+        },
+        "data_description": {
+          "forecast_days": "How many days of forecast data to include on each sensor (1 = today only, 5 = maximum).",
+          "language_code": "Language for pollutant names and health guidance — use a two-letter code like en, es, or fr.",
+          "enable_local_aqi": "Many regions use their own AQI scale alongside the universal one (e.g., US AQI). Enable this to get both.",
+          "local_aqi_code": "The AQI standard used in your area. US users should typically choose US AQI. [Regional standards reference](https://mnestrud.github.io/particle-man/configuration/)",
+          "include_health_recommendations": "Adds activity recommendations for different groups (general population, children, elderly, athletes) as attributes on AQI and pollen sensors."
+        }
+      },
+      "pollen": {
+        "title": "Pollen Options",
+        "description": "Customize pollen sensors for this location.",
+        "data": {
+          "include_plant_sensors": "Individual plant species sensors",
+          "include_plant_descriptions": "Plant details"
+        },
+        "data_description": {
+          "include_plant_sensors": "Creates a separate sensor for each plant species in your area (e.g., Oak, Ragweed, Timothy Grass). Adds roughly 10–15 entities — useful for targeted automations or allergy tracking.",
+          "include_plant_descriptions": "Adds botanical details (family, genus, typical season, known cross-reactions) as attributes on each plant sensor. Only relevant if individual plant sensors are enabled."
+        }
+      },
+      "weather": {
+        "title": "Weather Options",
+        "description": "Customize the weather entity for this location.",
+        "data": {
+          "weather_units": "Units",
+          "enable_weather_alerts": "Weather alerts sensor"
+        },
+        "data_description": {
+          "weather_units": "Temperature and wind speed units for raw sensor values. Home Assistant can convert units for display independently.",
+          "enable_weather_alerts": "Creates a sensor showing active weather warnings for this area — tornadoes, floods, winter storms, and similar. Shows 0 when no alerts are active."
+        }
+      },
+      "api_limits": {
+        "title": "Custom Limits & Quiet Hours",
+        "description": "{usage_summary} Each API pauses for the rest of the month when its limit is reached. [How to view current usage](https://mnestrud.github.io/particle-man/api-usage/)",
+        "data": {
+          "aq_monthly_limit": "Air Quality limit",
+          "pollen_monthly_limit": "Pollen limit",
+          "weather_monthly_limit": "Weather limit",
+          "quiet_hours_enabled": "Pause overnight",
+          "quiet_start": "Pause from",
+          "quiet_end": "Resume at"
+        },
+        "data_description": {
+          "aq_monthly_limit": "Maximum Air Quality checks per month. Google's free tier is 5,000 — set higher if you're on a paid plan. [Pricing details](https://mnestrud.github.io/particle-man/api-usage/)",
+          "pollen_monthly_limit": "Maximum Pollen checks per month. Google's free tier is 5,000.",
+          "weather_monthly_limit": "Maximum Weather checks per month. Google's free tier is 10,000.",
+          "quiet_hours_enabled": "Skip data checks during a set time window — useful overnight when the data isn't needed.",
+          "quiet_start": "Stop checking at this time each day.",
+          "quiet_end": "Resume checking at this time. If this is earlier than the start time, the pause spans midnight."
         }
       }
     }

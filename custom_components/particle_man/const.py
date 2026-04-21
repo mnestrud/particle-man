@@ -1,11 +1,14 @@
 """Constants for Particle Man integration."""
+from zoneinfo import ZoneInfo
 
 DOMAIN = "particle_man"
 
-# --- Config entry keys ---
+# --- Config entry keys (data — identity, never changes) ---
 CONF_API_KEY = "api_key"
 CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"
+
+# --- Options keys ---
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_FORECAST_DAYS = "forecast_days"
 CONF_LANGUAGE = "language_code"
@@ -14,6 +17,24 @@ CONF_LOCAL_AQI_CODE = "local_aqi_code"
 CONF_HEALTH_RECS = "include_health_recommendations"
 CONF_PLANT_SENSORS = "include_plant_sensors"
 CONF_PLANT_DESCRIPTIONS = "include_plant_descriptions"
+
+# API enable toggles
+CONF_ENABLE_AIR_QUALITY = "enable_air_quality"
+CONF_ENABLE_POLLEN = "enable_pollen"
+CONF_ENABLE_WEATHER = "enable_weather"
+CONF_ENABLE_WEATHER_ALERTS = "enable_weather_alerts"
+CONF_WEATHER_UNITS = "weather_units"  # "METRIC" | "IMPERIAL"
+
+# API limit options (custom limits mode only)
+CONF_AQ_MONTHLY_LIMIT = "aq_monthly_limit"
+CONF_POLLEN_MONTHLY_LIMIT = "pollen_monthly_limit"
+CONF_WEATHER_MONTHLY_LIMIT = "weather_monthly_limit"
+CONF_ENFORCE_LIMITS = "enforce_limits"
+
+# Quiet hours (custom limits mode only)
+CONF_QUIET_HOURS_ENABLED = "quiet_hours_enabled"
+CONF_QUIET_START = "quiet_start"
+CONF_QUIET_END = "quiet_end"
 
 # --- Defaults ---
 DEFAULT_UPDATE_INTERVAL = 60  # minutes
@@ -24,22 +45,77 @@ DEFAULT_LOCAL_AQI_CODE = "us_aqi"
 DEFAULT_HEALTH_RECS = False
 DEFAULT_PLANT_SENSORS = True
 DEFAULT_PLANT_DESCRIPTIONS = True
-DEFAULT_AQ_MONTHLY_LIMIT = 10000
+
+DEFAULT_ENABLE_AIR_QUALITY = True
+DEFAULT_ENABLE_POLLEN = True
+DEFAULT_ENABLE_WEATHER = True
+DEFAULT_ENABLE_WEATHER_ALERTS = False
+DEFAULT_WEATHER_UNITS = "METRIC"
+
+# Corrected free-tier limits (Google Maps Platform)
+DEFAULT_AQ_MONTHLY_LIMIT = 5000      # was incorrectly 10,000
 DEFAULT_POLLEN_MONTHLY_LIMIT = 5000
+DEFAULT_WEATHER_MONTHLY_LIMIT = 10000
 
-# --- Config keys for monthly API limits ---
-CONF_AQ_MONTHLY_LIMIT = "aq_monthly_limit"
-CONF_POLLEN_MONTHLY_LIMIT = "pollen_monthly_limit"
-CONF_RESET_DAY = "reset_day"
-DEFAULT_RESET_DAY = 1
-CONF_ENFORCE_LIMITS = "enforce_limits"
-DEFAULT_ENFORCE_LIMITS = False
+DEFAULT_ENFORCE_LIMITS = True        # default ON — protects free tier
+DEFAULT_QUIET_HOURS_ENABLED = False
+DEFAULT_QUIET_START = "22:00:00"
+DEFAULT_QUIET_END = "06:00:00"
 
-# --- API ---
+# --- API URLs ---
 BASE_URL = "https://airquality.googleapis.com/v1"
 POLLEN_API_URL = "https://pollen.googleapis.com/v1/forecast:lookup"
+WEATHER_API_URL = "https://weather.googleapis.com/v1"
+
+# --- Attributions ---
 ATTRIBUTION = "Data provided by Google Air Quality API"
 POLLEN_ATTRIBUTION = "Data provided by Google Pollen API"
+WEATHER_ATTRIBUTION = "Data provided by Google Weather API"
+
+# --- Billing period timezone ---
+# Google resets quotas at midnight Pacific Time on the 1st of each month
+_PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
+
+# --- Google Weather condition → HA condition mapping ---
+# CLEAR is handled at runtime (sunny vs clear-night based on isDaytime)
+CONDITION_MAP: dict[str, str] = {
+    "MOSTLY_CLEAR": "partlycloudy",
+    "PARTLY_CLOUDY": "partlycloudy",
+    "MOSTLY_CLOUDY": "cloudy",
+    "CLOUDY": "cloudy",
+    "OVERCAST": "cloudy",
+    "WINDY": "windy",
+    "BREEZY": "windy",
+    "DRIZZLE": "rainy",
+    "LIGHT_RAIN": "rainy",
+    "RAIN": "rainy",
+    "HEAVY_RAIN": "pouring",
+    "RAIN_SHOWERS": "rainy",
+    "HEAVY_RAIN_SHOWERS": "pouring",
+    "THUNDERSTORM": "lightning-rainy",
+    "THUNDERSTORM_WITH_RAIN": "lightning-rainy",
+    "SCATTERED_THUNDERSTORMS": "lightning-rainy",
+    "LIGHTNING": "lightning",
+    "LIGHT_SNOW": "snowy",
+    "SNOW": "snowy",
+    "HEAVY_SNOW": "snowy",
+    "SNOW_SHOWERS": "snowy",
+    "BLIZZARD": "snowy",
+    "SLEET": "hail",
+    "HAIL": "hail",
+    "FREEZING_RAIN": "hail",
+    "FREEZING_DRIZZLE": "hail",
+    "ICE_PELLETS": "hail",
+    "WINTRY_MIX": "hail",
+    "FOG": "fog",
+    "HAZE": "fog",
+    "SMOKE": "fog",
+    "DUST": "exceptional",
+    "SAND": "exceptional",
+    "TORNADO": "exceptional",
+    "HURRICANE": "exceptional",
+    "TROPICAL_STORM": "exceptional",
+}
 
 # Extra computations always requested for current conditions
 CURRENT_EXTRA_COMPUTATIONS_BASE = [
