@@ -20,13 +20,16 @@ theme:
     - content.action.edit
 
 nav:
-  - Getting Started: index.md
-  - What's Included: sensors.md
-  - Dashboard Examples: dashboard.md
-  - Automations & Blueprints: automations.md
-  - API Usage & Free Tier: api-usage.md
-  - Troubleshooting: troubleshooting.md
-  - Configuration Reference: configuration.md
+  - Using Particle Man:
+    - Getting Started: index.md
+    - What's Included: sensors.md
+    - Weather: weather.md
+    - Dashboard Examples: dashboard.md
+    - Automations & Blueprints: automations.md
+  - Reference:
+    - API Usage & Free Tier: api-usage.md
+    - Configuration Reference: configuration.md
+    - Troubleshooting: troubleshooting.md
 
 markdown_extensions:
   - admonition

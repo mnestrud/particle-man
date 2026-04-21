@@ -4,63 +4,66 @@
 
 ## Initial Setup
 
-Prompted when you first add the integration.
+Shown when you first add the integration. These fields become the integration's identity and don't change unless you remove and re-add.
 
 | Field | Description |
 |---|---|
-| API Key | Your Google Cloud API key with Air Quality and Pollen APIs enabled |
-| Latitude | Location latitude (defaults to your HA home location) |
-| Longitude | Location longitude (defaults to your HA home location) |
-| Update interval | How often to poll the API in minutes (default: 60) |
+| API Key | Your Google Cloud API key with Air Quality, Pollen, and Weather APIs enabled |
+| Latitude | Location latitude (pre-filled from your HA home address) |
+| Longitude | Location longitude (pre-filled from your HA home address) |
 
 ---
 
 ## Options (Configure)
 
-Accessed via the **Configure** button on the integration card after setup. Settings are organized into sections.
+Accessed via the **Configure** button on the integration card after setup. Settings span up to six pages depending on which APIs you have enabled and whether enforce mode is on.
 
-### Location & Polling
-
-| Option | Default | Description |
-|---|---|---|
-| Latitude | (from setup) | Location latitude |
-| Longitude | (from setup) | Location longitude |
-| Update interval | 60 min | How often to poll both APIs (15–1440 minutes) |
-
-### Forecast
-
-| Option | Default | Description |
-|---|---|---|
-| Forecast days | 5 | Days of daily forecast data (1–5) |
-| Language | en | BCP-47 language code for health recommendations and display names |
-
-### Air Quality
-
-| Option | Default | Description |
-|---|---|---|
-| Local AQI index | disabled | Show a regional AQI index in addition to Universal AQI |
-| Local AQI index code | us_aqi | Which regional index to use when Local AQI is enabled |
-| Health recommendations | disabled | Include per-population health recommendation text in sensor attributes |
-
-### Pollen
-
-| Option | Default | Description |
-|---|---|---|
-| Plant sensors | enabled | Create individual sensors for each pollen plant species |
-| Plant descriptions | enabled | Include plant family, genus, and cross-reaction info in plant sensor attributes |
-
-### API Limits
-
-| Option | Default | Description |
-|---|---|---|
-| AQ API monthly limit | 10,000 | Monthly call limit for usage tracking and warnings |
-| Pollen API monthly limit | 5,000 | Monthly call limit for usage tracking and warnings |
-| Billing period reset day | 1 | Day of the month tracking resets (1–28) |
-| Enforce limits | disabled | When enabled, polling stops when a limit is reached |
+Saving options automatically reloads the integration with the new settings. API call counters are not reset on reload.
 
 ---
 
-## Local AQI Index Codes
+### Page 1 — Polling & Limits
+
+Controls how often data is fetched and whether free-tier limits are enforced.
+
+| Option | Default | Description |
+|---|---|---|
+| Latitude | (from setup) | Location to monitor — can be changed here to move the integration without re-adding it |
+| Longitude | (from setup) | Same as above |
+| Check every (minutes) | 60 | How often to fetch new data. 60 min works well for all three APIs within the free tier |
+| Stay within Google's free tier | On | When on, each API pauses automatically when its free monthly quota is reached. Turn off if you're on a paid plan or want to set your own limits on the last page |
+
+The page shows a projected monthly usage summary before you save, so you can see the impact of your chosen interval. A suggested minimum interval is calculated to keep all enabled APIs within their free quotas.
+
+---
+
+### Page 2 — Data Sources
+
+Choose which types of data to collect.
+
+| Option | Default | Description |
+|---|---|---|
+| Air Quality | On | AQI, pollutant levels, and forecasts |
+| Pollen | On | Pollen index by type with forecasts and optional per-species detail |
+| Weather | On | Current conditions, hourly and daily forecasts |
+
+Disabling an API removes its sensors from HA on the next reload and stops counting calls for that service.
+
+---
+
+### Page 3 — Air Quality Options
+
+*(Only shown if Air Quality is enabled)*
+
+| Option | Default | Description |
+|---|---|---|
+| Forecast days | 5 | Days of forecast data (1 = today only, 5 = maximum) |
+| Language | en | Language for pollutant names and health guidance (two-letter code: en, es, fr, etc.) |
+| Add regional AQI sensor | Off | Show a country-specific AQI (e.g. US AQI) alongside the Universal AQI |
+| Regional AQI standard | us_aqi | Which country's standard to use when the regional sensor is enabled |
+| Include health guidance | Off | Adds per-population-group activity recommendations as attributes on AQI and pollen sensors |
+
+**Supported regional AQI standards:**
 
 | Code | Index |
 |---|---|
@@ -80,13 +83,55 @@ Accessed via the **Configure** button on the integration card after setup. Setti
 
 ---
 
+### Page 4 — Pollen Options
+
+*(Only shown if Pollen is enabled)*
+
+| Option | Default | Description |
+|---|---|---|
+| Individual plant species sensors | On | Creates a separate sensor for each plant in your area (Oak, Ragweed, etc.) — adds ~10–15 entities |
+| Plant details | On | Adds family, genus, typical season, and cross-reactions as attributes on plant sensors |
+
+---
+
+### Page 5 — Weather Options
+
+*(Only shown if Weather is enabled)*
+
+| Option | Default | Description |
+|---|---|---|
+| Units | Metric | Units for temperature and wind in raw sensor values (Metric or Imperial). HA can convert for display independently |
+| Weather alerts sensor | Off | Creates a sensor showing active weather warnings for your area. Shows 0 when no alerts are active |
+
+---
+
+### Page 6 — Custom Limits & Quiet Hours
+
+*(Only shown when "Stay within Google's free tier" is turned OFF on Page 1)*
+
+When enforce mode is off, you can set your own monthly limits and configure quiet hours. The page shows projected usage at your chosen interval to help you set sensible limits.
+
+| Option | Default | Description |
+|---|---|---|
+| Air Quality limit | 5,000 | Maximum AQ checks per month before the API pauses |
+| Pollen limit | 5,000 | Maximum Pollen checks per month |
+| Weather limit | 10,000 | Maximum Weather checks per month |
+| Pause overnight | Off | Skip all API fetches during a configured window |
+| Pause from | 22:00 | Time to stop fetching data each day |
+| Resume at | 06:00 | Time to resume. If earlier than "Pause from", the window spans midnight |
+
+!!! tip
+    Quiet hours work even in standard enforce mode — you can enable them under Custom Limits mode and then turn enforce back on. The quiet hours setting is preserved.
+
+---
+
 ## Sensor Attributes
 
 ### AQI and Pollutant sensors
 
 | Attribute | Description |
 |---|---|
-| `daily_forecast` | List of daily peak values up to 5 days. Each entry: `datetime`, `aqi` or `max`, `category`, `epa_category` |
+| `daily_forecast` | List of daily peak values up to configured forecast days. Each entry: `datetime`, `aqi` or `max`, `category` |
 | `hourly_forecast` | List of hourly values up to 96 hours. Each entry: `datetime`, `aqi` or `value`, `category`, `epa_category` |
 | `trend` | Direction based on hourly slope: `rising`, `falling`, or `stable` |
 
@@ -97,3 +142,16 @@ Accessed via the **Configure** button on the integration card after setup. Setti
 | `daily_forecast` | List of daily forecast entries. Each entry: `datetime`, `index`, `category`, `color_hex` |
 | `trend` | Direction based on today vs tomorrow: `up`, `down`, or `flat` |
 | `expected_peak` | Forecast entry with the highest index value |
+
+### Diagnostic sensors
+
+| Attribute | Description |
+|---|---|
+| `monthly_limit` | Your configured limit for this API |
+| `projected_monthly` | Estimated calls by end of billing period at current rate |
+| `pct_of_limit` | Percentage of limit used so far |
+| `pct_projected` | Percentage of limit the projection will reach |
+| `status` | `ok` / `warning` (≥80% projected) / `critical` (≥95% projected) |
+| `billing_period` | Current period in YYYY-MM format (Pacific Time) |
+| `shared_total_calls` | Total across all entries using this API key this month |
+| `locations_sharing_key` | Count of config entries using this API key |

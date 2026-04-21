@@ -3,7 +3,7 @@
 
   # PARTICLE MAN HELPS YOU FIGHT BAD AIR QUALITY
 
-  A Home Assistant custom integration that pulls air quality and pollen data from the [Google Air Quality API](https://developers.google.com/maps/documentation/air-quality) and [Google Pollen API](https://developers.google.com/maps/documentation/pollen).
+  A Home Assistant custom integration that brings hyper-local air quality, pollen, and weather data into Home Assistant using Google's APIs — the same data behind health apps and smart HVAC automation worldwide.
 
   [📖 Documentation](https://mnestrud.github.io/particle-man/)
 </div>
@@ -24,27 +24,32 @@ Just Breathe.
 
 ## Features
 
-### Current Conditions
+### Air Quality
 
 - **Universal AQI (UAQI)** with health category, dominant pollutant, and trend
+- **Air Quality Advisory** — simplified `None` / `Caution` / `Warning` / `Alert` for easy automations
 - **Pollutant sensors** — PM2.5, PM10, O3, NO2, CO, SO2 with concentration, EPA health category, and trend; additional pollutants vary by region
+- **Hourly AQI forecast** up to 96 hours; **daily AQI forecast** up to 5 days
+
+### Pollen
+
+- **Pollen Advisory** — worst in-season level across all pollen types for easy automations
 - **Pollen sensors** by type (Grass, Tree, Weed) with index, color, and trend
-- **API usage tracking** — billing-period call counts with projected usage and free-tier warnings
-
-### Forecast
-
-- **Hourly AQI forecast** up to 96 hours
-- **Daily AQI forecast** up to 5 days — peak AQI per day
-- **Hourly and daily pollutant forecasts** — per-pollutant projections
 - **Daily pollen forecast** up to 5 days with trend and expected peak
+- **Per-plant pollen sensors** — individual species (Oak, Ragweed, etc.) with index, trend, and peak (optional)
 
-### Optional
+### Weather
 
-- **Regional AQI index** — US AQI and 12 other country-specific indices
-- **Health recommendations** — text guidance included as sensor attributes
-- **Per-plant pollen sensors** — individual species (Oak, Ragweed, etc.) with index, trend, and peak
-- **Plant descriptions** — family, genus, and cross-reaction info added to plant sensor attributes
-- **Enforce API limits** — suspend polling when a monthly call limit is reached
+- **Native weather entity** — current conditions with hourly (24h), daily (5-day), and twice-daily forecasts; works with all HA weather cards
+- **Weather Alerts sensor** — count of active weather warnings with severity, event types, and full alert details (optional)
+- **Extra sensors** — Thunderstorm Probability, Heat Index, Wind Chill
+
+### API Management
+
+- **Free-tier enforce mode** — each API pauses automatically when its monthly quota is reached
+- **Multi-location support** — shared quota tracking across all locations using the same API key
+- **Quiet hours** — skip fetches during a configured overnight window to stretch your monthly budget
+- **API usage sensors** — billing-period call counts with projected usage and status (`ok` / `warning` / `critical`)
 
 → [Full sensor details](https://mnestrud.github.io/particle-man/sensors/)
 
@@ -52,7 +57,7 @@ Just Breathe.
 
 ## Quick Start
 
-1. Get a free Google Cloud API key with the **Air Quality API** and **Pollen API** enabled
+1. Get a free Google Cloud API key with the **Air Quality API**, **Pollen API**, and **Weather API** enabled
 2. Install via HACS (custom repository: `https://github.com/mnestrud/particle-man`) and restart Home Assistant
 3. Go to **Settings → Devices & Services → Add Integration** and search for **Particle Man**
 4. Enter your API key — location defaults to your HA home address
@@ -67,8 +72,9 @@ Just Breathe.
 |---|---|
 | [Getting Started](https://mnestrud.github.io/particle-man/) | Step-by-step setup for new users |
 | [What's Included](https://mnestrud.github.io/particle-man/sensors/) | Every sensor explained in plain language |
+| [Weather](https://mnestrud.github.io/particle-man/weather/) | Weather entity, extra sensors, and alerts |
 | [Dashboard Examples](https://mnestrud.github.io/particle-man/dashboard/) | Copy-paste card YAML for charts and gauges |
-| [Automations & Blueprints](https://mnestrud.github.io/particle-man/automations/) | AQI alerts, HVAC control, pollen notifications |
+| [Automations & Blueprints](https://mnestrud.github.io/particle-man/automations/) | AQI alerts, HVAC control, pollen and weather notifications |
 | [API Usage & Free Tier](https://mnestrud.github.io/particle-man/api-usage/) | How to stay within Google's free limits |
 | [Troubleshooting](https://mnestrud.github.io/particle-man/troubleshooting/) | Common issues and fixes |
 | [Configuration Reference](https://mnestrud.github.io/particle-man/configuration/) | Full options reference |
@@ -79,10 +85,7 @@ Just Breathe.
 
 ### Features
 
-- Multiple locations
 - Google Solar API integration
-- Alert binary sensors
-- Weather entity parity
 - HACS default catalog
 
 ### HACS Default Catalog Submission

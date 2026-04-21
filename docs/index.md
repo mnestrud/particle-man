@@ -1,17 +1,18 @@
 # Getting Started
 
-Particle Man brings hyper-local air quality and pollen data into Home Assistant using Google's APIs — the same data behind health apps and HVAC automation worldwide.
+Particle Man brings hyper-local air quality, pollen, and weather data into Home Assistant using Google's APIs — the same data behind health apps and smart HVAC automation worldwide.
 
-Once set up, you'll have sensors for current AQI, individual pollutants, pollen levels by type and plant species, up to 96 hours of hourly forecasts, and API usage tracking so you can stay within Google's free tier.
+Once set up, you'll have sensors for current AQI, individual pollutants, pollen levels by type and plant species, full weather conditions with hourly and daily forecasts, and API usage tracking so you can stay within Google's free tier.
 
 ---
 
 ## What you need
 
 - A [Google Cloud account](https://console.cloud.google.com/) (free)
-- A Google Cloud API key with two APIs enabled:
+- A Google Cloud API key with three APIs enabled:
     - **Air Quality API**
     - **Pollen API**
+    - **Weather API**
 - Home Assistant 2025.1.0 or later
 
 ---
@@ -21,14 +22,13 @@ Once set up, you'll have sensors for current AQI, individual pollutants, pollen 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project (or select an existing one)
 3. In the left menu, go to **APIs & Services → Library**
-4. Search for **Air Quality API** and click **Enable**
-5. Search for **Pollen API** and click **Enable**
-6. Go to **APIs & Services → Credentials**
-7. Click **Create Credentials → API key**
-8. Copy the key — you'll need it in the next step
+4. Search for and enable each of: **Air Quality API**, **Pollen API**, **Weather API**
+5. Go to **APIs & Services → Credentials**
+6. Click **Create Credentials → API key**
+7. Copy the key — you'll need it in the next step
 
 !!! tip
-    You don't need to restrict the key unless you want to. For home use, an unrestricted key is fine.
+    You don't need to restrict the key for home use. An unrestricted key is fine.
 
 ---
 
@@ -55,24 +55,22 @@ Once set up, you'll have sensors for current AQI, individual pollutants, pollen 
 1. Go to **Settings → Devices & Services**
 2. Click **Add Integration**
 3. Search for **Particle Man**
-4. Enter your Google API key
-5. Confirm your location (latitude and longitude default to your Home Assistant home address)
-6. Set an update interval (default is 60 minutes, which works well within Google's free tier)
-7. Click **Submit**
+4. Enter your Google API key, confirm your location, and click **Submit**
 
-That's it. Particle Man will create three devices and begin populating sensors within a minute.
+That's it. All other settings (which data to collect, polling interval, API limits) are available any time via the **Configure** button and can be adjusted without re-adding the integration.
 
 ---
 
 ## What happens next
 
-After setup you'll find three new devices under **Settings → Devices & Services → Particle Man**:
+After setup you'll find four new devices under **Settings → Devices & Services → Particle Man**:
 
-- **Particle Man Pollution** — AQI and pollutant sensors
-- **Particle Man Pollen** — pollen type and plant sensors
-- **Particle Man Diagnostics** — API call tracking
+- **Particle Man Pollution** — AQI, pollutant sensors, and air quality advisory
+- **Particle Man Pollen** — pollen type, plant species, and pollen advisory
+- **Particle Man Weather** — weather entity, extra weather sensors, and alerts
+- **Particle Man Diagnostics** — API call tracking for all three services
 
-Head to [What's Included](sensors.md) for a plain-language guide to every sensor, or jump to [Dashboard Examples](dashboard.md) to start visualizing the data.
+Head to [What's Included](sensors.md) for a full guide to every sensor, or [Weather](weather.md) for the weather entity and forecasts.
 
 ---
 

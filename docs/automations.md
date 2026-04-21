@@ -7,13 +7,147 @@ Common automation patterns using Particle Man sensors. These can be added direct
 
 ---
 
-## Alert when AQI crosses a threshold
+## Advisory Sensors — the easy way to automate
 
-Sends a notification when air quality becomes Unhealthy (AQI > 150) and again when it recovers.
+For most automations, the advisory sensors are simpler to use than the raw numeric values:
+
+- **Air Quality Advisory** — `None` / `Caution` / `Warning` / `Alert`
+- **Pollen Advisory** — `None` / `Very Low` / `Low` / `Moderate` / `High` / `Very High`
+- **Weather Alerts** — integer count of active alerts
+
+These update whenever the underlying data changes, so you don't need to set numeric thresholds.
+
+---
+
+## Alert when air quality gets bad
 
 ```yaml
-alias: Alert — Air Quality Unhealthy
-description: Notify when AQI rises above 150 or recovers below 100
+alias: Alert — Air Quality Advisory
+trigger:
+  - platform: state
+    entity_id: sensor.air_quality_advisory
+    to:
+      - Caution
+      - Warning
+      - Alert
+  - platform: state
+    entity_id: sensor.air_quality_advisory
+    to: None
+    id: cleared
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: cleared
+        sequence:
+          - service: notify.mobile_app_your_phone
+            data:
+              title: "✅ Air Quality Clear"
+              message: "AQI is back to {{ state_attr('sensor.air_quality_advisory', 'aqi') }}."
+      - conditions: []
+        sequence:
+          - service: notify.mobile_app_your_phone
+            data:
+              title: "⚠️ Air Quality {{ states('sensor.air_quality_advisory') }}"
+              message: >
+                AQI {{ state_attr('sensor.air_quality_advisory', 'aqi') }} —
+                {{ state_attr('sensor.air_quality_advisory', 'category') }}.
+                Dominant pollutant: {{ state_attr('sensor.air_quality_advisory', 'dominant_pollutant') }}.
+```
+
+---
+
+## Alert when pollen is high
+
+```yaml
+alias: Alert — High Pollen Morning
+trigger:
+  - platform: time
+    at: "07:00:00"
+condition:
+  - condition: state
+    entity_id: sensor.pollen_advisory
+    state:
+      - High
+      - Very High
+action:
+  - service: notify.mobile_app_your_phone
+    data:
+      title: "🌿 {{ states('sensor.pollen_advisory') }} Pollen Today"
+      message: >
+        Dominant type: {{ state_attr('sensor.pollen_advisory', 'dominant_type') }}
+        (index: {{ state_attr('sensor.pollen_advisory', 'dominant_index') }}).
+        In season: {{ state_attr('sensor.pollen_advisory', 'in_season_types') | join(', ') }}.
+```
+
+---
+
+## Alert on active weather warnings
+
+```yaml
+alias: Alert — Weather Warning
+trigger:
+  - platform: numeric_state
+    entity_id: sensor.weather_alerts
+    above: 0
+  - platform: numeric_state
+    entity_id: sensor.weather_alerts
+    below: 1
+    id: cleared
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: cleared
+        sequence:
+          - service: notify.mobile_app_your_phone
+            data:
+              title: "✅ Weather Alert Expired"
+              message: "No active weather warnings."
+      - conditions: []
+        sequence:
+          - service: notify.mobile_app_your_phone
+            data:
+              title: >
+                ⛈️ {{ states('sensor.weather_alerts') }} Active Weather Warning(s)
+              message: >
+                Highest severity: {{ state_attr('sensor.weather_alerts', 'highest_severity') }}.
+                Types: {{ state_attr('sensor.weather_alerts', 'active_event_types') | join(', ') }}.
+```
+
+---
+
+## Close HVAC fresh-air intake on poor air quality
+
+```yaml
+alias: HVAC — Suspend fresh-air intake on bad AQI
+trigger:
+  - platform: state
+    entity_id: sensor.air_quality_advisory
+    to:
+      - Warning
+      - Alert
+  - platform: state
+    entity_id: sensor.air_quality_advisory
+    to:
+      - None
+      - Caution
+    id: ok
+action:
+  - service: >
+      {{ 'input_boolean.turn_on' if trigger.id != 'ok' else 'input_boolean.turn_off' }}
+    target:
+      entity_id: input_boolean.hvac_fresh_air_suspended
+```
+
+---
+
+## Alert when AQI crosses a numeric threshold
+
+Use the numeric sensor when you need a specific threshold not covered by the advisory levels.
+
+```yaml
+alias: Alert — AQI Threshold
 trigger:
   - platform: numeric_state
     entity_id: sensor.universal_aqi
@@ -31,11 +165,10 @@ action:
         sequence:
           - service: notify.mobile_app_your_phone
             data:
-              title: "⚠️ Air Quality Alert"
+              title: "⚠️ Air Quality Unhealthy"
               message: >
                 AQI is {{ states('sensor.universal_aqi') }} —
                 {{ state_attr('sensor.universal_aqi', 'category') }}.
-                Limit outdoor activity.
       - conditions:
           - condition: trigger
             id: recovered
@@ -43,102 +176,26 @@ action:
           - service: notify.mobile_app_your_phone
             data:
               title: "✅ Air Quality Improved"
-              message: >
-                AQI is back to {{ states('sensor.universal_aqi') }} —
-                {{ state_attr('sensor.universal_aqi', 'category') }}.
-```
-
----
-
-## Close HVAC fresh-air intake on poor air quality
-
-Triggers an input boolean (or switch) that your HVAC automation can act on.
-
-```yaml
-alias: HVAC — Close fresh-air intake on bad AQI
-trigger:
-  - platform: numeric_state
-    entity_id: sensor.universal_aqi
-    above: 100
-    for:
-      minutes: 15
-  - platform: numeric_state
-    entity_id: sensor.universal_aqi
-    below: 75
-    for:
-      minutes: 15
-action:
-  - service: >
-      {% if trigger.to_state.state | int > 100 %}
-        input_boolean.turn_on
-      {% else %}
-        input_boolean.turn_off
-      {% endif %}
-    target:
-      entity_id: input_boolean.hvac_fresh_air_suspended
-```
-
----
-
-## Morning pollen warning
-
-Sends a notification each morning when pollen is forecast to be High or above.
-
-```yaml
-alias: Alert — High pollen morning warning
-trigger:
-  - platform: time
-    at: "07:00:00"
-condition:
-  - condition: or
-    conditions:
-      - condition: state
-        entity_id: sensor.grass_pollen_level
-        state: High
-      - condition: state
-        entity_id: sensor.tree_pollen_level
-        state: High
-      - condition: state
-        entity_id: sensor.weed_pollen_level
-        state: High
-      - condition: state
-        entity_id: sensor.grass_pollen_level
-        state: Very High
-      - condition: state
-        entity_id: sensor.tree_pollen_level
-        state: Very High
-      - condition: state
-        entity_id: sensor.weed_pollen_level
-        state: Very High
-action:
-  - service: notify.mobile_app_your_phone
-    data:
-      title: "🌿 High Pollen Today"
-      message: >
-        Grass: {{ states('sensor.grass_pollen_level') }},
-        Tree: {{ states('sensor.tree_pollen_level') }},
-        Weed: {{ states('sensor.weed_pollen_level') }}.
-        Consider taking allergy medication before going out.
+              message: "AQI is back to {{ states('sensor.universal_aqi') }}."
 ```
 
 ---
 
 ## API usage warning
 
-Notifies you if projected monthly API usage exceeds 80% of your configured limit.
-
 ```yaml
-alias: Alert — Particle Man API usage warning
+alias: Alert — Particle Man API Usage Warning
 trigger:
   - platform: template
     value_template: >
-      {{ state_attr('sensor.aq_api_calls_monthly', 'status') in ['warning', 'critical'] }}
+      {{ state_attr('sensor.aq_api_calls_monthly', 'status') in ['warning', 'critical']
+         or state_attr('sensor.weather_api_calls_monthly', 'status') in ['warning', 'critical'] }}
 action:
   - service: notify.mobile_app_your_phone
     data:
       title: "📊 Particle Man API Usage"
       message: >
-        AQ API projected usage:
-        {{ state_attr('sensor.aq_api_calls_monthly', 'pct_projected') }}% of monthly limit.
+        AQ: {{ state_attr('sensor.aq_api_calls_monthly', 'pct_projected') }}% of limit.
+        Weather: {{ state_attr('sensor.weather_api_calls_monthly', 'pct_projected') }}% of limit.
         Consider increasing your update interval.
 ```

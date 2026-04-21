@@ -1,6 +1,6 @@
 # What's Included
 
-Particle Man creates three devices, each grouping related sensors.
+Particle Man creates four devices, each grouping related sensors.
 
 ---
 
@@ -25,9 +25,22 @@ The sensor also includes a **trend** (`rising`, `falling`, `stable`) calculated 
 
 The same data as Universal AQI but expressed as the category text (`Good`, `Moderate`, etc.) rather than a number. Useful for display cards and condition-based automations.
 
+### Air Quality Advisory
+
+A simplified advisory level for easy automation. Maps the Universal AQI category to four levels:
+
+| Advisory | AQI Categories |
+|---|---|
+| None | Good, Moderate |
+| Caution | Unhealthy for Sensitive Groups |
+| Warning | Unhealthy |
+| Alert | Very Unhealthy, Hazardous |
+
+**Attributes:** AQI value, full category, dominant pollutant, elevated pollutants (list of pollutants above Good threshold), trend, and health recommendations (if enabled).
+
 ### Local AQI *(optional)*
 
-A country-specific index in addition to the Universal AQI — for example, the US AQI, UK DEFRA index, or German UBA index. Enable this in **Configure** after setup. Supports 13 regional indices.
+A country-specific index in addition to the Universal AQI — for example, the US AQI, UK DEFRA index, or German UBA index. Enable this in **Configure → Air Quality Options**. Supports 13 regional indices.
 
 ### Pollutant Sensors
 
@@ -50,6 +63,12 @@ A matching **Level sensor** (e.g. "PM2.5 Level") shows the plain-language EPA ca
 
 ## Particle Man Pollen
 
+### Pollen Advisory
+
+A simplified pollen level for easy automation — shows the **worst level across all in-season pollen types**. Levels: `None`, `Very Low`, `Low`, `Moderate`, `High`, `Very High`.
+
+**Attributes:** dominant type (whichever type is worst), dominant index value, in-season types list, all levels by type, and health recommendations (if enabled).
+
 ### Pollen Type Sensors
 
 Three sensors covering the main pollen categories: **Grass**, **Tree**, and **Weed**. Each shows a 0–5 index value and a category (`None` through `Very High`), plus a trend and a 5-day daily forecast.
@@ -63,18 +82,46 @@ Individual sensors for specific plant species — Oak, Ragweed, Birch, and other
 
 ---
 
+## Particle Man Weather
+
+The weather device includes the native Home Assistant weather entity plus several extra sensors. See [Weather](weather.md) for full details.
+
+### Weather Entity
+
+Shows current conditions and provides hourly (24h), daily (5-day), and twice-daily (5-day day+night) forecasts. Works with all native HA weather cards and the `weather.get_forecasts` action.
+
+### Extra Sensors
+
+| Sensor | What it shows |
+|---|---|
+| Thunderstorm Probability | Probability (%) of a thunderstorm this hour |
+| Heat Index | "Feels like" temperature in hot and humid conditions |
+| Wind Chill | "Feels like" temperature in cold and windy conditions |
+
+### Weather Alerts *(optional)*
+
+When enabled, shows the count of currently active weather warnings (0 = no alerts). Attributes include the full alert list with severity, event type, area, and instructions. Enable in **Configure → Weather Options**.
+
+---
+
 ## Particle Man Diagnostics
 
 ### Last API Update
 
-A timestamp showing when Google last refreshed the data for your location. Useful for confirming the integration is working.
+A timestamp showing when Google last refreshed the data for your location.
 
 ### AQ API Calls (Monthly)
 
 Tracks how many Air Quality API calls have been made in the current billing period. Includes projected usage through end of period and a status (`ok` / `warning` / `critical`) based on your configured limit.
 
+**Attributes:** `monthly_limit`, `projected_monthly`, `pct_of_limit`, `pct_projected`, `status`, `billing_period`, `shared_total_calls`, `locations_sharing_key`
+
 ### Pollen API Calls (Monthly)
 
 Same as above, but for Pollen API calls.
+
+### Weather API Calls (Monthly)
+
+Same as above, but for Weather API calls.
 
 See [API Usage & Free Tier](api-usage.md) for details on staying within Google's free limits.
