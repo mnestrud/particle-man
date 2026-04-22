@@ -10,8 +10,16 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 from custom_components.particle_man.const import (
     CONF_API_KEY,
+    CONF_AUTOMAGIC_MODE,
     CONF_LATITUDE,
+    CONF_LOCAL_AQI,
+    CONF_LOCAL_AQI_CODE,
+    CONF_LOCATION_NAME,
+    CONF_LOCATIONS,
     CONF_LONGITUDE,
+    CONF_QUIET_END,
+    CONF_QUIET_HOURS_ENABLED,
+    CONF_QUIET_START,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
 )
@@ -106,11 +114,21 @@ MOCK_POLLEN = {
 def mock_config_entry():
     return MockConfigEntry(
         domain=DOMAIN,
-        data={
-            CONF_API_KEY: MOCK_API_KEY,
-            CONF_LATITUDE: MOCK_LAT,
-            CONF_LONGITUDE: MOCK_LON,
-            CONF_UPDATE_INTERVAL: 60,
+        data={CONF_API_KEY: MOCK_API_KEY},
+        options={
+            CONF_AUTOMAGIC_MODE: True,
+            CONF_QUIET_HOURS_ENABLED: False,
+            CONF_QUIET_START: "22:00:00",
+            CONF_QUIET_END: "06:00:00",
+            CONF_LOCATIONS: [
+                {
+                    CONF_LOCATION_NAME: "Home",
+                    CONF_LATITUDE: MOCK_LAT,
+                    CONF_LONGITUDE: MOCK_LON,
+                    CONF_LOCAL_AQI: False,
+                    CONF_LOCAL_AQI_CODE: "us_aqi",
+                }
+            ],
         },
         entry_id="test_entry_id",
     )

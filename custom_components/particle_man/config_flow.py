@@ -17,6 +17,7 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -68,7 +69,6 @@ from .const import (
     DEFAULT_QUIET_START,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
-    DEFAULT_WEATHER_UNITS,
     DOMAIN,
     LOCAL_AQI_CODES,
     POLLEN_API_URL,
@@ -173,7 +173,7 @@ async def _check_api_coverage(
             return "cannot_connect", []
 
     async def _check_pollen() -> str:
-        params = {
+        params: dict[str, str | int] = {
             "key": api_key,
             "location.latitude": f"{lat:.6f}",
             "location.longitude": f"{lon:.6f}",
@@ -294,7 +294,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(key_hash)
                 self._abort_if_unique_id_configured()
 
-                locale_units = "METRIC" if self.hass.config.units.name == "metric" else "IMPERIAL"
+                locale_units = "METRIC" if self.hass.config.units._name == "metric" else "IMPERIAL"  # type: ignore[attr-defined]
                 seeded_options = {
                     CONF_AUTOMAGIC_MODE: DEFAULT_AUTOMAGIC_MODE,
                     CONF_QUIET_HOURS_ENABLED: DEFAULT_QUIET_HOURS_ENABLED,
@@ -321,7 +321,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     }],
                 }
                 return self.async_create_entry(
-                    title=f"Particle Man",
+                    title="Particle Man",
                     data={CONF_API_KEY: api_key},
                     options=seeded_options,
                 )
@@ -480,10 +480,10 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_quiet_hours()
 
         has_locations = bool(self._locations)
-        action_options = [{"value": _ACTION_ADD, "label": "Add a location"}]
+        action_options: list[SelectOptionDict] = [SelectOptionDict(value=_ACTION_ADD, label="Add a location")]
         if has_locations:
-            action_options.append({"value": _ACTION_REMOVE, "label": "Remove a location"})
-            action_options.append({"value": _ACTION_CONTINUE, "label": "Continue →"})
+            action_options.append(SelectOptionDict(value=_ACTION_REMOVE, label="Remove a location"))
+            action_options.append(SelectOptionDict(value=_ACTION_CONTINUE, label="Continue →"))
 
         schema = vol.Schema({
             vol.Required(_ACTION, default=_ACTION_ADD if not has_locations else _ACTION_CONTINUE): SelectSelector(
@@ -510,8 +510,6 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             loc_name = (user_input.get(CONF_LOCATION_NAME) or "").strip()
-            lat = user_input.get(CONF_LATITUDE)
-            lon = user_input.get(CONF_LONGITUDE)
 
             if not loc_name:
                 errors[CONF_LOCATION_NAME] = "location_name_required"
@@ -525,6 +523,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
 
             if not errors:
                 api_key = self.config_entry.data[CONF_API_KEY]
+                lat = user_input[CONF_LATITUDE]
+                lon = user_input[CONF_LONGITUDE]
                 try:
                     statuses, codes = await _check_api_coverage(self.hass, api_key, lat, lon)
                     self._availability = statuses

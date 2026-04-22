@@ -448,12 +448,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
                     results = await asyncio.gather(*weather_tasks, return_exceptions=True)
 
-                    w_current = results[0] if not isinstance(results[0], Exception) else {}
-                    w_hourly = results[1] if not isinstance(results[1], Exception) else {}
-                    w_daily = results[2] if not isinstance(results[2], Exception) else {}
-                    w_alerts: dict | None = None
+                    w_current: dict[Any, Any] = results[0] if not isinstance(results[0], Exception) else {}  # type: ignore[assignment]
+                    w_hourly: dict[Any, Any] = results[1] if not isinstance(results[1], Exception) else {}  # type: ignore[assignment]
+                    w_daily: dict[Any, Any] = results[2] if not isinstance(results[2], Exception) else {}  # type: ignore[assignment]
+                    w_alerts: dict[Any, Any] | None = None
                     if self.enable_weather_alerts and len(results) > 3:
-                        w_alerts = results[3] if not isinstance(results[3], Exception) else {}
+                        w_alerts = results[3] if not isinstance(results[3], Exception) else None  # type: ignore[assignment]
 
                     any_failed = False
                     for i, res in enumerate(results):

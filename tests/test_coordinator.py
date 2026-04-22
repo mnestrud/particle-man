@@ -1,4 +1,6 @@
 """Tests for ParticleManCoordinator."""
+from contextlib import ExitStack
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
@@ -40,7 +42,7 @@ def coordinator(hass):
 
 
 def _all_fetch_mocks(coordinator, *, aq_error=None, pollen_error=None, weather_error=None):
-    """Return context manager that mocks all fetch methods."""
+    """Return tuple of patch context managers that mock all fetch methods."""
     return (
         patch.object(
             coordinator, "_fetch_current",
@@ -75,7 +77,7 @@ async def test_coordinator_init(coordinator):
     assert coordinator._cached_tracking.get("aq_calls", 0) == 0
     assert coordinator._cached_tracking.get("pollen_calls", 0) == 0
     assert coordinator.forecast_days == 5
-    assert coordinator.enforce_limits is True  # default is True (protects free tier)
+    assert coordinator.automagic_mode is True  # default is True (protects free tier)
 
 
 # ---------------------------------------------------------------------------
@@ -83,9 +85,9 @@ async def test_coordinator_init(coordinator):
 # ---------------------------------------------------------------------------
 
 async def test_update_success(coordinator):
-    with (
-        *_all_fetch_mocks(coordinator),
-    ):
+    with ExitStack() as stack:
+        for mock in _all_fetch_mocks(coordinator):
+            stack.enter_context(mock)
         data = await coordinator._async_update_data()
 
     assert "aqi" in data
@@ -104,9 +106,9 @@ async def test_aq_error_keeps_cached_data(coordinator):
     coordinator.data = {"aqi": {"value": 42, "category": "Moderate"}}
 
     err = aiohttp.ClientResponseError(None, (), status=403, message="Forbidden")
-    with (
-        *_all_fetch_mocks(coordinator, aq_error=err),
-    ):
+    with ExitStack() as stack:
+        for mock in _all_fetch_mocks(coordinator, aq_error=err):
+            stack.enter_context(mock)
         data = await coordinator._async_update_data()
 
     # Cached AQ data preserved; pollen was fetched successfully
@@ -116,14 +118,14 @@ async def test_aq_error_keeps_cached_data(coordinator):
 
 async def test_all_apis_fail_no_cached_data_raises(coordinator):
     """UpdateFailed raised only when all APIs fail and there is no cached data."""
-    with (
-        *_all_fetch_mocks(
+    with ExitStack() as stack:
+        for mock in _all_fetch_mocks(
             coordinator,
             aq_error=Exception("aq down"),
             pollen_error=Exception("pollen down"),
             weather_error=Exception("weather down"),
-        ),
-    ):
+        ):
+            stack.enter_context(mock)
         with pytest.raises(UpdateFailed, match="No data available"):
             await coordinator._async_update_data()
 
@@ -166,7 +168,7 @@ async def test_quiet_hours_returns_cached(coordinator):
 
 async def test_aq_limit_skips_fetch(coordinator):
     """When AQ limit is reached, AQ fetch is skipped and cached data is preserved."""
-    coordinator.enforce_limits = True
+    coordinator.automagic_mode = True
     coordinator.aq_monthly_limit = 10
     coordinator._cached_tracking["aq_calls"] = 10
     coordinator.data = {"aqi": {"value": 99, "category": "Hazardous"}}
@@ -188,13 +190,13 @@ async def test_aq_limit_skips_fetch(coordinator):
 
 
 async def test_limits_not_enforced_when_disabled(coordinator):
-    coordinator.enforce_limits = False
+    coordinator.automagic_mode = False
     coordinator.aq_monthly_limit = 1
     coordinator._cached_tracking["aq_calls"] = 999
 
-    with (
-        *_all_fetch_mocks(coordinator),
-    ):
+    with ExitStack() as stack:
+        for mock in _all_fetch_mocks(coordinator):
+            stack.enter_context(mock)
         data = await coordinator._async_update_data()
 
     assert "aqi" in data
