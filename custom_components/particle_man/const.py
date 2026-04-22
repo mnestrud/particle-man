@@ -1,14 +1,23 @@
 """Constants for Particle Man integration."""
+import math
 from zoneinfo import ZoneInfo
 
 DOMAIN = "particle_man"
 
 # --- Config entry keys (data — identity, never changes) ---
 CONF_API_KEY = "api_key"
+
+# --- Location list (stored in options) ---
+CONF_LOCATIONS = "locations"       # list of location dicts
+CONF_LOCATION_NAME = "name"        # key within a location dict
+
+# --- Legacy location keys (used in per-location dicts AND for migration from v1 data) ---
 CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"
 
 # --- Options keys ---
+CONF_AUTOMAGIC_MODE = "automagic_mode"   # replaces enforce_limits
+CONF_ENFORCE_LIMITS = "enforce_limits"   # migration read-only — do not use in new code
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_FORECAST_DAYS = "forecast_days"
 CONF_LANGUAGE = "language_code"
@@ -25,42 +34,64 @@ CONF_ENABLE_WEATHER = "enable_weather"
 CONF_ENABLE_WEATHER_ALERTS = "enable_weather_alerts"
 CONF_WEATHER_UNITS = "weather_units"  # "METRIC" | "IMPERIAL"
 
-# API limit options (custom limits mode only)
+# API limit options (manual mode only)
 CONF_AQ_MONTHLY_LIMIT = "aq_monthly_limit"
 CONF_POLLEN_MONTHLY_LIMIT = "pollen_monthly_limit"
 CONF_WEATHER_MONTHLY_LIMIT = "weather_monthly_limit"
-CONF_ENFORCE_LIMITS = "enforce_limits"
 
-# Quiet hours (custom limits mode only)
+# Quiet hours (always-visible)
 CONF_QUIET_HOURS_ENABLED = "quiet_hours_enabled"
 CONF_QUIET_START = "quiet_start"
 CONF_QUIET_END = "quiet_end"
 
 # --- Defaults ---
-DEFAULT_UPDATE_INTERVAL = 60  # minutes
+DEFAULT_AUTOMAGIC_MODE = True
+DEFAULT_UPDATE_INTERVAL = 20  # minutes
 DEFAULT_FORECAST_DAYS = 5
 DEFAULT_LANGUAGE = "en"
 DEFAULT_LOCAL_AQI = False
 DEFAULT_LOCAL_AQI_CODE = "us_aqi"
-DEFAULT_HEALTH_RECS = False
 DEFAULT_PLANT_SENSORS = True
-DEFAULT_PLANT_DESCRIPTIONS = True
 
 DEFAULT_ENABLE_AIR_QUALITY = True
 DEFAULT_ENABLE_POLLEN = True
 DEFAULT_ENABLE_WEATHER = True
-DEFAULT_ENABLE_WEATHER_ALERTS = False
+DEFAULT_ENABLE_WEATHER_ALERTS = True
 DEFAULT_WEATHER_UNITS = "METRIC"
 
 # Corrected free-tier limits (Google Maps Platform)
-DEFAULT_AQ_MONTHLY_LIMIT = 5000      # was incorrectly 10,000
+DEFAULT_AQ_MONTHLY_LIMIT = 10000
 DEFAULT_POLLEN_MONTHLY_LIMIT = 5000
 DEFAULT_WEATHER_MONTHLY_LIMIT = 10000
 
-DEFAULT_ENFORCE_LIMITS = True        # default ON — protects free tier
-DEFAULT_QUIET_HOURS_ENABLED = False
-DEFAULT_QUIET_START = "22:00:00"
-DEFAULT_QUIET_END = "06:00:00"
+DEFAULT_QUIET_HOURS_ENABLED = True
+DEFAULT_QUIET_START = "23:00:00"
+DEFAULT_QUIET_END = "05:00:00"
+
+# --- Polling rate constants ---
+_AQ_CALLS_PER_POLL = 2
+_POLLEN_CALLS_PER_POLL = 1
+_WEATHER_CALLS_PER_POLL = 3
+_MINUTES_PER_MONTH = 30 * 24 * 60  # 43,200
+
+# Google data refresh cadence — AQ updates hourly; pollen models update once daily.
+# Both are fetched at the same 60-min interval to match the AQ refresh rate.
+_AQ_FETCH_INTERVAL_MINUTES = 60
+_POLLEN_FETCH_INTERVAL_MINUTES = 60
+
+
+def safe_interval_minutes(
+    num_locations: int,
+    enabled_apis: dict[str, tuple[int, int]],  # api → (calls_per_poll, monthly_limit)
+) -> int:
+    """Minimum safe polling interval to stay within free tier."""
+    intervals = [
+        math.ceil(_MINUTES_PER_MONTH * calls * num_locations / limit)
+        for calls, limit in enabled_apis.values()
+        if limit > 0
+    ]
+    return max(15, max(intervals)) if intervals else 15
+
 
 # --- API URLs ---
 BASE_URL = "https://airquality.googleapis.com/v1"

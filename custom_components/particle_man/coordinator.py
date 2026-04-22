@@ -1,6 +1,7 @@
 """Particle Man data coordinator."""
 import asyncio
 import hashlib
+import re
 from collections import defaultdict
 from datetime import datetime, time as _time, timedelta, timezone
 from typing import Any
@@ -22,7 +23,7 @@ from .const import (
     DEFAULT_ENABLE_POLLEN,
     DEFAULT_ENABLE_WEATHER,
     DEFAULT_ENABLE_WEATHER_ALERTS,
-    DEFAULT_ENFORCE_LIMITS,
+    DEFAULT_AUTOMAGIC_MODE,
     DEFAULT_FORECAST_DAYS,
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
@@ -50,14 +51,37 @@ _LOGGER = logging.getLogger(__name__)
 _STORAGE_VERSION = 1
 _STORAGE_KEY = "particle_man"
 
-_AQ_CATEGORY_TO_ADVISORY: dict[str, str] = {
-    "Good": "None",
-    "Moderate": "None",
-    "Unhealthy for Sensitive Groups": "Caution",
-    "Unhealthy": "Warning",
-    "Very Unhealthy": "Alert",
-    "Hazardous": "Alert",
-}
+# Google AQ data refreshes every hour; pollen models update daily but we match AQ cadence.
+_AQ_FETCH_INTERVAL = timedelta(hours=1)
+_POLLEN_FETCH_INTERVAL = timedelta(hours=1)
+
+
+class ParticleManGlobalState:
+    """Shared state across all location coordinators for the same config entry."""
+
+    def __init__(self) -> None:
+        self._quiet_hours_runtime_override: bool | None = None
+
+    def set_quiet_hours_runtime(self, enabled: bool | None) -> None:
+        """Override quiet hours at runtime. Pass None to revert to config default."""
+        self._quiet_hours_runtime_override = enabled
+
+    def quiet_hours_active(self, config_enabled: bool) -> bool:
+        """Return effective quiet-hours enabled state (runtime override or config default)."""
+        if self._quiet_hours_runtime_override is not None:
+            return self._quiet_hours_runtime_override
+        return config_enabled
+
+
+def _aq_advisory_level(category: str) -> str:
+    cat = (category or "").lower()
+    if "hazardous" in cat or "very unhealthy" in cat:
+        return "Alert"
+    if "unhealthy" in cat and "sensitive" not in cat:
+        return "Warning"
+    if "sensitive" in cat:
+        return "Caution"
+    return "None"
 
 _POLLEN_LEVEL_ORDER = ["None", "Very Low", "Low", "Moderate", "High", "Very High"]
 
@@ -169,18 +193,19 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         api_key: str,
         latitude: float,
         longitude: float,
+        location_name: str = "Location",
+        global_state: ParticleManGlobalState | None = None,
+        automagic_mode: bool = DEFAULT_AUTOMAGIC_MODE,
+        num_locations: int = 1,
         update_interval_minutes: int = DEFAULT_UPDATE_INTERVAL,
         forecast_days: int = DEFAULT_FORECAST_DAYS,
         language_code: str = DEFAULT_LANGUAGE,
         enable_local_aqi: bool = DEFAULT_LOCAL_AQI,
         local_aqi_code: str = DEFAULT_LOCAL_AQI_CODE,
-        include_health_recs: bool = False,
         include_plant_sensors: bool = True,
-        include_plant_descriptions: bool = True,
         aq_monthly_limit: int = DEFAULT_AQ_MONTHLY_LIMIT,
         pollen_monthly_limit: int = DEFAULT_POLLEN_MONTHLY_LIMIT,
         weather_monthly_limit: int = DEFAULT_WEATHER_MONTHLY_LIMIT,
-        enforce_limits: bool = DEFAULT_ENFORCE_LIMITS,
         enable_air_quality: bool = DEFAULT_ENABLE_AIR_QUALITY,
         enable_pollen: bool = DEFAULT_ENABLE_POLLEN,
         enable_weather: bool = DEFAULT_ENABLE_WEATHER,
@@ -194,17 +219,21 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self.api_key = api_key
         self.latitude = latitude
         self.longitude = longitude
+        self.location_name = location_name
+        self.location_slug = re.sub(r"[^a-z0-9]+", "_", location_name.lower()).strip("_") or "location"
+        self._global_state = global_state
+        self.automagic_mode = automagic_mode
+        self.num_locations = num_locations
         self.forecast_days = max(1, min(5, forecast_days))
         self.language_code = language_code.strip() if language_code else DEFAULT_LANGUAGE
         self.enable_local_aqi = enable_local_aqi
         self.local_aqi_code = local_aqi_code
-        self.include_health_recs = include_health_recs
+        self.include_health_recs = True
         self.include_plant_sensors = include_plant_sensors
-        self.include_plant_descriptions = include_plant_descriptions
+        self.include_plant_descriptions = True
         self.aq_monthly_limit = int(aq_monthly_limit)
         self.pollen_monthly_limit = int(pollen_monthly_limit)
         self.weather_monthly_limit = int(weather_monthly_limit)
-        self.enforce_limits = enforce_limits
         self.enable_air_quality = enable_air_quality
         self.enable_pollen = enable_pollen
         self.enable_weather = enable_weather
@@ -225,19 +254,28 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             shared_state.setdefault("locks", {}).setdefault(key_hash, asyncio.Lock())
         )
         self._cached_tracking: dict[str, Any] = _empty_shared_tracking()
+        self._api_backoff: dict[str, Any] = {}
+        self._api_failures: dict[str, int] = {}
+        self._last_aq_fetch: datetime | None = None
+        self._last_pollen_fetch: datetime | None = None
 
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN}_{self.location_slug}",
             update_interval=timedelta(minutes=update_interval_minutes),
         )
 
     def _current_billing_month(self) -> str:
         return datetime.now(_PACIFIC_TZ).strftime("%Y-%m")
 
+    def _effective_quiet_hours_enabled(self) -> bool:
+        if self._global_state is not None:
+            return self._global_state.quiet_hours_active(self._quiet_hours_enabled)
+        return self._quiet_hours_enabled
+
     def _is_quiet_hours(self) -> bool:
-        if not self._quiet_hours_enabled:
+        if not self._effective_quiet_hours_enabled():
             return False
         now = datetime.now().time()
         try:
@@ -245,9 +283,54 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             end = _time.fromisoformat(self._quiet_end)
         except (ValueError, TypeError):
             return False
-        if start > end:  # spans midnight (e.g. 22:00–06:00)
+        if start > end:  # spans midnight (e.g. 23:00–05:00)
             return now >= start or now < end
         return start <= now < end
+
+    def _is_backed_off(self, api: str) -> bool:
+        until = self._api_backoff.get(api)
+        if until is None:
+            return False
+        if datetime.now(timezone.utc) < until:
+            return True
+        del self._api_backoff[api]
+        return False
+
+    def _record_api_error(self, api: str, status: int | None = None) -> None:
+        failures = self._api_failures.get(api, 0) + 1
+        self._api_failures[api] = failures
+        now = datetime.now(timezone.utc)
+        if status == 429:
+            hours = min(8, 2 ** (failures - 1))
+            self._api_backoff[api] = now + timedelta(hours=hours)
+            _LOGGER.error(
+                "Particle Man %s API rate-limited (429). Backing off %dh.", api.upper(), hours
+            )
+        elif status is not None and 500 <= status < 600:
+            if failures < 3:
+                _LOGGER.warning(
+                    "Particle Man %s API server error %s (failure %d before backoff).",
+                    api.upper(), status, failures,
+                )
+            else:
+                hours = min(8, 2 ** (failures - 2))
+                self._api_backoff[api] = now + timedelta(hours=hours)
+                _LOGGER.warning(
+                    "Particle Man %s API persistent errors. Backing off %dh.", api.upper(), hours
+                )
+        elif status is not None:
+            _LOGGER.error("Particle Man %s API permanent error %s.", api.upper(), status)
+        else:
+            if failures == 1:
+                _LOGGER.warning("Particle Man %s fetch failed (transient).", api.upper())
+            else:
+                _LOGGER.debug(
+                    "Particle Man %s fetch still failing (failure %d).", api.upper(), failures
+                )
+
+    def _clear_api_error(self, api: str) -> None:
+        self._api_failures.pop(api, None)
+        self._api_backoff.pop(api, None)
 
     async def async_load_tracking(self) -> None:
         """Load persistent API call counts from shared storage."""
@@ -280,7 +363,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from enabled APIs, respecting quiet hours and monthly limits."""
         if self._is_quiet_hours():
-            _LOGGER.debug("Particle Man: quiet hours active, skipping update")
+            _LOGGER.debug("Particle Man [%s]: quiet hours active, skipping update", self.location_name)
             return self.data or {}
 
         # Roll over month counter if needed
@@ -292,45 +375,56 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 self._cached_tracking = new_tracking
                 await self._shared_store.async_save(new_tracking)
 
+        now = dt_util.utcnow()
         data = dict(self.data) if self.data else {}
         session = async_get_clientsession(self.hass)
         aq_inc = 0
         pollen_inc = 0
         weather_inc = 0
 
-        # --- Air Quality ---
+        # --- Air Quality (fetched at most once per hour — Google updates hourly) ---
         if self.enable_air_quality:
-            aq_blocked = (
-                self.enforce_limits
-                and self.aq_monthly_limit > 0
-                and self._cached_tracking.get("aq_calls", 0) >= self.aq_monthly_limit
-            )
-            if aq_blocked:
+            aq_due = self._last_aq_fetch is None or (now - self._last_aq_fetch) >= _AQ_FETCH_INTERVAL
+            if not aq_due:
                 _LOGGER.debug(
-                    "AQ monthly limit reached (%d/%d), skipping",
-                    self._cached_tracking.get("aq_calls", 0),
-                    self.aq_monthly_limit,
+                    "Particle Man [%s]: AQ not due yet (last: %s), skipping",
+                    self.location_name, self._last_aq_fetch,
                 )
             else:
-                try:
-                    current, forecast_hours = await asyncio.gather(
-                        self._fetch_current(session),
-                        self._fetch_forecast(session),
+                aq_blocked = (
+                    self.automagic_mode
+                    and self.aq_monthly_limit > 0
+                    and self._cached_tracking.get("aq_calls", 0) >= self.aq_monthly_limit
+                )
+                if aq_blocked:
+                    _LOGGER.debug(
+                        "AQ monthly limit reached (%d/%d), skipping",
+                        self._cached_tracking.get("aq_calls", 0),
+                        self.aq_monthly_limit,
                     )
-                    aq_data = self._build_data(current, forecast_hours)
-                    data.update(aq_data)
-                    aq_inc += 2
-                except aiohttp.ClientResponseError as err:
-                    _LOGGER.warning(
-                        "Google Air Quality API error %s: %s", err.status, err.message
-                    )
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.warning("Air Quality fetch failed, keeping last data: %s", err)
+                elif self._is_backed_off("aq"):
+                    _LOGGER.debug("AQ API backed off until %s, skipping", self._api_backoff.get("aq"))
+                else:
+                    try:
+                        current, forecast_hours = await asyncio.gather(
+                            self._fetch_current(session),
+                            self._fetch_forecast(session),
+                        )
+                        aq_data = self._build_data(current, forecast_hours)
+                        data.update(aq_data)
+                        aq_inc += 2
+                        self._last_aq_fetch = now
+                        self._clear_api_error("aq")
+                    except aiohttp.ClientResponseError as err:
+                        self._record_api_error("aq", err.status)
+                    except Exception as err:  # noqa: BLE001
+                        self._record_api_error("aq")
+                        _LOGGER.debug("Air Quality fetch exception: %s", err)
 
         # --- Weather ---
         if self.enable_weather:
             weather_blocked = (
-                self.enforce_limits
+                self.automagic_mode
                 and self.weather_monthly_limit > 0
                 and self._cached_tracking.get("weather_calls", 0) >= self.weather_monthly_limit
             )
@@ -340,6 +434,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     self._cached_tracking.get("weather_calls", 0),
                     self.weather_monthly_limit,
                 )
+            elif self._is_backed_off("weather"):
+                _LOGGER.debug("Weather API backed off until %s, skipping", self._api_backoff.get("weather"))
             else:
                 try:
                     weather_tasks: list = [
@@ -359,42 +455,68 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     if self.enable_weather_alerts and len(results) > 3:
                         w_alerts = results[3] if not isinstance(results[3], Exception) else {}
 
+                    any_failed = False
                     for i, res in enumerate(results):
                         if isinstance(res, Exception):
-                            _LOGGER.warning("Weather fetch task %d failed: %s", i, res)
+                            any_failed = True
+                            _LOGGER.debug("Weather fetch task %d failed: %s", i, res)
                         else:
                             weather_inc += 1
 
                     weather_data = self._build_weather_data(w_current, w_hourly, w_daily, w_alerts)
                     data.update(weather_data)
+                    if not any_failed:
+                        self._clear_api_error("weather")
+                except aiohttp.ClientResponseError as err:
+                    self._record_api_error("weather", err.status)
                 except Exception as err:  # noqa: BLE001
-                    _LOGGER.warning("Weather fetch failed, keeping last data: %s", err)
+                    self._record_api_error("weather")
+                    _LOGGER.debug("Weather fetch exception: %s", err)
 
-        # --- Pollen ---
+        # --- Pollen (fetched at most once per hour — Google updates pollen models daily,
+        #     but we match the AQ cadence to keep sensor freshness consistent) ---
         if self.enable_pollen:
-            pollen_blocked = (
-                self.enforce_limits
-                and self.pollen_monthly_limit > 0
-                and self._cached_tracking.get("pollen_calls", 0) >= self.pollen_monthly_limit
-            )
-            if pollen_blocked:
+            pollen_due = self._last_pollen_fetch is None or (now - self._last_pollen_fetch) >= _POLLEN_FETCH_INTERVAL
+            if not pollen_due:
                 _LOGGER.debug(
-                    "Pollen monthly limit reached (%d/%d), skipping",
-                    self._cached_tracking.get("pollen_calls", 0),
-                    self.pollen_monthly_limit,
+                    "Particle Man [%s]: Pollen not due yet (last: %s), skipping",
+                    self.location_name, self._last_pollen_fetch,
                 )
             else:
-                try:
-                    pollen_response = await self._fetch_pollen(session)
-                    pollen_data = self._build_pollen_data(pollen_response)
-                    data.update(pollen_data)
-                    pollen_inc += 1
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.warning("Pollen fetch failed, keeping last data: %s", err)
-                    if self.data:
-                        for key, val in self.data.items():
-                            if key.startswith("pollen_"):
-                                data.setdefault(key, val)
+                pollen_blocked = (
+                    self.automagic_mode
+                    and self.pollen_monthly_limit > 0
+                    and self._cached_tracking.get("pollen_calls", 0) >= self.pollen_monthly_limit
+                )
+                if pollen_blocked:
+                    _LOGGER.debug(
+                        "Pollen monthly limit reached (%d/%d), skipping",
+                        self._cached_tracking.get("pollen_calls", 0),
+                        self.pollen_monthly_limit,
+                    )
+                elif self._is_backed_off("pollen"):
+                    _LOGGER.debug("Pollen API backed off until %s, skipping", self._api_backoff.get("pollen"))
+                else:
+                    try:
+                        pollen_response = await self._fetch_pollen(session)
+                        pollen_data = self._build_pollen_data(pollen_response)
+                        data.update(pollen_data)
+                        pollen_inc += 1
+                        self._last_pollen_fetch = now
+                        self._clear_api_error("pollen")
+                    except aiohttp.ClientResponseError as err:
+                        self._record_api_error("pollen", err.status)
+                        if self.data:
+                            for key, val in self.data.items():
+                                if key.startswith("pollen_"):
+                                    data.setdefault(key, val)
+                    except Exception as err:  # noqa: BLE001
+                        self._record_api_error("pollen")
+                        _LOGGER.debug("Pollen fetch exception: %s", err)
+                        if self.data:
+                            for key, val in self.data.items():
+                                if key.startswith("pollen_"):
+                                    data.setdefault(key, val)
 
         await self._save_tracking(
             aq_inc=aq_inc, pollen_inc=pollen_inc, weather_inc=weather_inc
@@ -543,7 +665,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             "key": self.api_key,
             "location.latitude": f"{self.latitude:.6f}",
             "location.longitude": f"{self.longitude:.6f}",
-            "days": 5,
+            "days": 10,
             "pageSize": 10,
             "unitsSystem": self.weather_units,
         }
@@ -617,7 +739,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
         if self.enable_local_aqi:
             local_idx = next(
-                (i for i in indexes if i.get("code") not in ("uaqi", None)), None
+                (i for i in indexes if i.get("code") == self.local_aqi_code), None
             )
             if local_idx:
                 local_trend = self._compute_hourly_trend(
@@ -667,7 +789,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             if k.startswith("pollutant_") and v.get("epa_category") not in ("Good", None)
         ]
         new_data["aq_advisory"] = {
-            "value": _AQ_CATEGORY_TO_ADVISORY.get(category, "None"),
+            "value": _aq_advisory_level(category),
             "aqi": (new_data.get("aqi") or {}).get("value"),
             "category": category,
             "dominant_pollutant": dominant_code or None,
@@ -1021,15 +1143,15 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             cloud_val = cloud.get("percent") if isinstance(cloud, dict) else cloud
 
             entry = {
-                "datetime": h.get("displayDateTime") or (h.get("interval") or {}).get("startTime"),
+                "datetime": (h.get("interval") or {}).get("startTime") or h.get("displayDateTime"),
                 "condition": _w_condition(h.get("weatherCondition"), is_daytime),
-                "temperature": _w_degrees(h.get("temperature")),
+                "native_temperature": _w_degrees(h.get("temperature")),
                 "humidity": h.get("relativeHumidity"),
-                "wind_speed": ((wind.get("speed") or {}).get("value")),
+                "native_wind_speed": ((wind.get("speed") or {}).get("value")),
                 "wind_bearing": ((wind.get("direction") or {}).get("degrees")),
-                "wind_gust_speed": ((wind.get("gust") or {}).get("value")),
+                "native_wind_gust_speed": ((wind.get("gust") or {}).get("value")),
                 "precipitation_probability": prob,
-                "pressure": (h.get("airPressure") or {}).get("meanSeaLevelMillibars"),
+                "native_pressure": (h.get("airPressure") or {}).get("meanSeaLevelMillibars"),
                 "cloud_coverage": cloud_val,
                 "uv_index": h.get("uvIndex"),
             }
@@ -1067,10 +1189,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 wind = fc.get("wind") or {}
                 precip = fc.get("precipitation") or {}
                 prob = (precip.get("probability") or {}).get("percent")
-                humidity = fc.get("relativeHumidity") or {}
-                humidity_val = (
-                    humidity.get("max") if isinstance(humidity, dict) else humidity
-                )
+                humidity_val = fc.get("relativeHumidity")
                 cloud = fc.get("cloudCover")
                 cloud_val = (
                     cloud.get("percent") if isinstance(cloud, dict) else cloud
@@ -1079,12 +1198,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     "datetime": dt_str,
                     "is_daytime": is_daytime,
                     "condition": _w_condition(fc.get("weatherCondition"), is_daytime),
-                    "temperature": temp,
-                    "templow": templow,
+                    "native_temperature": temp,
+                    "native_templow": templow,
                     "precipitation_probability": prob,
-                    "wind_speed": ((wind.get("speed") or {}).get("value")),
+                    "native_wind_speed": ((wind.get("speed") or {}).get("value")),
                     "wind_bearing": ((wind.get("direction") or {}).get("degrees")),
-                    "wind_gust_speed": ((wind.get("gust") or {}).get("value")),
+                    "native_wind_gust_speed": ((wind.get("gust") or {}).get("value")),
                     "humidity": humidity_val,
                     "cloud_coverage": cloud_val,
                     "uv_index": fc.get("uvIndex"),
@@ -1119,7 +1238,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         return result
 
     # -------------------------------------------------------------------------
-    # Trend / peak helpers (unchanged)
+    # Trend / peak helpers
     # -------------------------------------------------------------------------
 
     @staticmethod
