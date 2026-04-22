@@ -294,7 +294,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(key_hash)
                 self._abort_if_unique_id_configured()
 
-                locale_units = "METRIC" if self.hass.config.units.is_metric else "IMPERIAL"
+                locale_units = "METRIC" if self.hass.config.units.name == "metric" else "IMPERIAL"
                 seeded_options = {
                     CONF_AUTOMAGIC_MODE: DEFAULT_AUTOMAGIC_MODE,
                     CONF_QUIET_HOURS_ENABLED: DEFAULT_QUIET_HOURS_ENABLED,
@@ -409,12 +409,14 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
 
     def _next_step(self, after: str) -> str | None:
         """Return next step ID after `after`, or None to create entry."""
+        automagic = self._automagic()
         order = ["apis", "air_quality", "pollen", "weather", "api_limits"]
+        # Detail steps and api_limits only shown in manual mode
         enable_map = {
-            "air_quality": self._options.get(CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY),
-            "pollen": self._options.get(CONF_ENABLE_POLLEN, DEFAULT_ENABLE_POLLEN),
-            "weather": self._options.get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER),
-            "api_limits": not self._automagic(),  # skip api_limits in automagic mode
+            "air_quality": (not automagic) and self._options.get(CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY),
+            "pollen": (not automagic) and self._options.get(CONF_ENABLE_POLLEN, DEFAULT_ENABLE_POLLEN),
+            "weather": (not automagic) and self._options.get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER),
+            "api_limits": not automagic,
         }
         found = False
         for step in order:
@@ -793,7 +795,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             ),
             vol.Required(CONF_ENABLE_WEATHER_ALERTS): BooleanSelector(),
         })
-        locale_units = "METRIC" if self.hass.config.units.is_metric else "IMPERIAL"
+        locale_units = "METRIC" if self.hass.config.units.name == "metric" else "IMPERIAL"
         suggested = {
             CONF_WEATHER_UNITS: self._get(CONF_WEATHER_UNITS, locale_units),
             CONF_ENABLE_WEATHER_ALERTS: self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS),
