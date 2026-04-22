@@ -795,7 +795,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             ),
             vol.Required(CONF_ENABLE_WEATHER_ALERTS): BooleanSelector(),
         })
-        locale_units = "METRIC" if self.hass.config.units.name == "metric" else "IMPERIAL"
+        locale_units = "METRIC" if self.hass.config.units._name == "metric" else "IMPERIAL"  # type: ignore[attr-defined]
         suggested = {
             CONF_WEATHER_UNITS: self._get(CONF_WEATHER_UNITS, locale_units),
             CONF_ENABLE_WEATHER_ALERTS: self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS),

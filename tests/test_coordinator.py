@@ -171,6 +171,7 @@ async def test_aq_limit_skips_fetch(coordinator):
     coordinator.automagic_mode = True
     coordinator.aq_monthly_limit = 10
     coordinator._cached_tracking["aq_calls"] = 10
+    coordinator._cached_tracking["period_month"] = coordinator._current_billing_month()
     coordinator.data = {"aqi": {"value": 99, "category": "Hazardous"}}
 
     with (
