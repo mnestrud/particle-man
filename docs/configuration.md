@@ -22,30 +22,30 @@ Saving options automatically reloads the integration with the new settings. API 
 
 ---
 
-### Page 1 — Polling & Limits
+### Page 1 — Location & Limits
 
-Controls how often data is fetched and whether free-tier limits are enforced.
+Set the location to monitor and whether to stay within Google's free tier.
 
 | Option | Default | Description |
 |---|---|---|
 | Latitude | (from setup) | Location to monitor — can be changed here to move the integration without re-adding it |
 | Longitude | (from setup) | Same as above |
-| Check every (minutes) | 60 | How often to fetch new data. 60 min works well for all three APIs within the free tier |
 | Stay within Google's free tier | On | When on, each API pauses automatically when its free monthly quota is reached. Turn off if you're on a paid plan or want to set your own limits on the last page |
-
-The page shows a projected monthly usage summary before you save, so you can see the impact of your chosen interval. A suggested minimum interval is calculated to keep all enabled APIs within their free quotas.
 
 ---
 
 ### Page 2 — Data Sources
 
-Choose which types of data to collect.
+Choose which data to collect and how often to check for it.
 
 | Option | Default | Description |
 |---|---|---|
 | Air Quality | On | AQI, pollutant levels, and forecasts |
 | Pollen | On | Pollen index by type with forecasts and optional per-species detail |
 | Weather | On | Current conditions, hourly and daily forecasts |
+| Check every (minutes) | 60 | How often to fetch new data. 60 min works well for all three APIs within the free tier |
+
+The page shows a projected monthly usage summary based on your current settings, so you can see the impact of your chosen interval alongside which APIs are enabled. A suggested minimum interval is calculated to keep all enabled APIs within their free quotas.
 
 Disabling an API removes its sensors from HA on the next reload and stops counting calls for that service.
 
