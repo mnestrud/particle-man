@@ -3,9 +3,9 @@
   "name": "Particle Man",
   "codeowners": ["@mnestrud"],
   "config_flow": true,
-  "documentation": "https://github.com/mnestrud/particle-man",
+  "documentation": "https://mnestrud.github.io/particle-man/",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/mnestrud/particle-man/issues",
   "requirements": [],
-  "version": "1.1.0"
+  "version": "1.5.0"
 }

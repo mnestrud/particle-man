@@ -1,6 +1,6 @@
 # Weather
 
-Particle Man creates a native Home Assistant weather entity using Google's Weather API, along with several extra sensors for data that doesn't fit the standard weather card.
+Particle Man creates a native Home Assistant weather entity using the [Google Weather API](https://developers.google.com/maps/documentation/weather/overview), along with several extra sensors for data that doesn't fit the standard weather card.
 
 ---
 
@@ -40,7 +40,7 @@ Each forecast entry includes: condition, temperature, precipitation probability,
 
 ### Condition Mapping
 
-Google's weather conditions are mapped to Home Assistant standard conditions:
+Google's weather conditions are mapped to Home Assistant standard conditions. ([Google weather condition types](https://developers.google.com/maps/documentation/weather/weather-conditions))
 
 | Google Condition | HA Condition |
 |---|---|
@@ -95,13 +95,13 @@ When weather alerts are enabled (Configure → Weather Options), Particle Man cr
 A value of 0 with empty attributes means no alerts are currently active — the sensor is working normally.
 
 !!! note
-    Weather alerts are only available in regions covered by Google's public alerts service. Coverage includes most of the US and some international regions.
+    Weather alerts are only available in regions covered by Google's public alerts service, primarily the US and some international regions. ([Weather API coverage](https://developers.google.com/maps/documentation/weather/coverage))
 
 ---
 
 ## Units
 
-The weather entity and extra sensors use the units you select in Configure → Weather Options:
+The weather entity and extra sensors use the units selected in **Configure → Weather Options**:
 
 | Setting | Temperature | Wind | Precipitation | Visibility |
 |---|---|---|---|---|
@@ -118,9 +118,9 @@ The weather data is fetched from three Google Weather API endpoints per poll cyc
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /currentConditions` | Current state, extra sensors |
-| `GET /forecast/hours` | 24-hour hourly forecast |
-| `GET /forecast/days` | 5-day daily + twice-daily forecast |
-| `GET /publicAlerts` | Active weather alerts (only if enabled) |
+| [`GET /currentConditions`](https://developers.google.com/maps/documentation/weather/reference/rest/v1/currentConditions/lookup) | Current state, extra sensors |
+| [`GET /forecast/hours`](https://developers.google.com/maps/documentation/weather/reference/rest/v1/forecast.hours/lookup) | 24-hour hourly forecast |
+| [`GET /forecast/days`](https://developers.google.com/maps/documentation/weather/reference/rest/v1/forecast.days/lookup) | 5-day daily + twice-daily forecast |
+| [`GET /publicAlerts`](https://developers.google.com/maps/documentation/weather/reference/rest/v1/publicAlerts/lookup) | Active weather alerts (only if enabled) |
 
-This totals **3 calls per poll** (4 with alerts enabled). At 60-minute polling, that's about 2,160 calls/month — well within Google's 10,000/month free tier. See [API Usage](api-usage.md) for details.
+This totals **3 calls per poll** (4 with alerts enabled). At 60-minute polling: ~2,160 calls/month — well within Google's 10,000/month free tier. See [Reference — How data updates](reference.md#how-data-updates) for full quota math.
