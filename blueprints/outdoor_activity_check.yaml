@@ -1,0 +1,44 @@
+blueprint:
+  name: "Particle Man: Outdoor Activity Check"
+  description: >-
+    Runs a configured action at a set time each morning — intended for
+    a notification combining AQI advisory and weather conditions to help
+    plan outdoor activities.
+  domain: automation
+  source_url: https://github.com/mnestrud/particle-man/blob/main/blueprints/outdoor_activity_check.yaml
+  input:
+    aqi_advisory:
+      name: Air Quality Advisory sensor
+      description: >-
+        Select your Particle Man Air Quality Advisory sensor
+        (Pollution device → Air Quality Advisory).
+      selector:
+        entity:
+          domain: sensor
+    weather_entity:
+      name: Weather entity
+      description: Select your Particle Man Weather entity.
+      selector:
+        entity:
+          domain: weather
+    check_time:
+      name: Check time
+      default: "07:30:00"
+      selector:
+        time: {}
+    notify_actions:
+      name: Notification actions
+      description: >-
+        Configure your notification here. Use these templates in your message:
+        {{ states(aqi_advisory) }} — AQI advisory level
+        {{ state_attr(aqi_advisory, 'aqi') }} — numeric AQI
+        {{ states(weather_entity) }} — weather condition
+        {{ state_attr(weather_entity, 'temperature') }} — temperature
+      selector:
+        action: {}
+
+triggers:
+  - trigger: time
+    at: !input check_time
+
+actions: !input notify_actions

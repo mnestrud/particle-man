@@ -1,84 +1,137 @@
-# Getting Started
+# Particle Man
 
-Particle Man brings hyper-local air quality and pollen data into Home Assistant using Google's APIs — the same data behind health apps and HVAC automation worldwide.
-
-Once set up, you'll have sensors for current AQI, individual pollutants, pollen levels by type and plant species, up to 96 hours of hourly forecasts, and API usage tracking so you can stay within Google's free tier.
+Real-time air quality, pollen, and weather for Home Assistant — powered by Google's environmental APIs.
 
 ---
 
-## What you need
+## What you can do with it
 
-- A [Google Cloud account](https://console.cloud.google.com/) (free)
-- A Google Cloud API key with two APIs enabled:
-    - **Air Quality API**
-    - **Pollen API**
-- Home Assistant 2025.1.0 or later
-
----
-
-## Step 1 — Get a Google API key
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or select an existing one)
-3. In the left menu, go to **APIs & Services → Library**
-4. Search for **Air Quality API** and click **Enable**
-5. Search for **Pollen API** and click **Enable**
-6. Go to **APIs & Services → Credentials**
-7. Click **Create Credentials → API key**
-8. Copy the key — you'll need it in the next step
-
-!!! tip
-    You don't need to restrict the key unless you want to. For home use, an unrestricted key is fine.
+- **React to air quality events** — automatically close HVAC fresh-air intakes, send alerts, or pause outdoor routines when AQI rises from wildfire smoke or traffic
+- **Stay ahead of pollen season** — trigger morning pollen briefs or allergy reminders on high-pollen days
+- **Weather-aware automations** — combine AQI advisory, pollen level, and weather conditions to decide when outdoor activities are safe
+- **Stay within Google's free tier** — automatic quota enforcement keeps all three APIs within their monthly limits by default
 
 ---
 
-## Step 2 — Install Particle Man
+## Quick start
 
-### Via HACS (recommended)
+**1. Enable the Google APIs**
 
-1. Open HACS in Home Assistant
-2. Go to **Integrations → three-dot menu → Custom repositories**
-3. Add `https://github.com/mnestrud/particle-man` as an **Integration**
-4. Find **Particle Man** in the list and click **Download**
-5. Restart Home Assistant
+In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials), enable:
 
-### Manually
+- [Air Quality API](https://developers.google.com/maps/documentation/air-quality/overview)
+- [Pollen API](https://developers.google.com/maps/documentation/pollen/overview)
+- [Weather API](https://developers.google.com/maps/documentation/weather/overview)
 
-1. Download the latest release from [GitHub](https://github.com/mnestrud/particle-man/releases)
-2. Copy the `custom_components/particle_man/` folder into your `config/custom_components/` directory
-3. Restart Home Assistant
+Then create an API key under **APIs & Services → Credentials → Create Credentials → API key**.
 
----
+**2. Install via HACS**
 
-## Step 3 — Add the integration
+In HACS: **Integrations → three-dot menu → Custom repositories** → add `https://github.com/mnestrud/particle-man` as an **Integration** → Download → restart Home Assistant.
 
-1. Go to **Settings → Devices & Services**
-2. Click **Add Integration**
-3. Search for **Particle Man**
-4. Enter your Google API key
-5. Confirm your location (latitude and longitude default to your Home Assistant home address)
-6. Set an update interval (default is 60 minutes, which works well within Google's free tier)
-7. Click **Submit**
+**3. Add the integration**
 
-That's it. Particle Man will create three devices and begin populating sensors within a minute.
+**Settings → Devices & Services → Add Integration → Particle Man** — enter your API key and confirm your location.
+
+→ [Full setup guide: manual install, all configuration options, and removal instructions](setup.md)
 
 ---
 
-## What happens next
+## What you get
 
-After setup you'll find three new devices under **Settings → Devices & Services → Particle Man**:
+For each monitored location:
 
-- **Particle Man Pollution** — AQI and pollutant sensors
-- **Particle Man Pollen** — pollen type and plant sensors
-- **Particle Man Diagnostics** — API call tracking
+| Device | Contents |
+|---|---|
+| **Particle Man Pollution** | Universal AQI, Air Quality Advisory, pollutant sensors (PM2.5, PM10, O3, NO2, CO, SO2), optional regional AQI |
+| **Particle Man Pollen** | Pollen Advisory, grass/tree/weed sensors, optional plant-species sensors |
+| **Particle Man Weather** | HA weather entity with hourly/daily/twice-daily forecasts, thunderstorm probability, heat index, wind chill, optional weather alerts |
+| **Particle Man Diagnostics** | Monthly API call tracking for all three services |
 
-Head to [What's Included](sensors.md) for a plain-language guide to every sensor, or jump to [Dashboard Examples](dashboard.md) to start visualizing the data.
+→ [Sensors & Entities](sensors.md) · [Weather entity](weather.md)
 
 ---
 
-## Removing the integration
+??? success "HACS compatible"
 
-1. Go to **Settings → Devices & Services → Particle Man**
-2. Click the three-dot menu → **Delete**
-3. Restart Home Assistant
-4. (Optional) Remove the component files via HACS or manually delete `custom_components/particle_man/` from your config directory
+    Particle Man meets all HACS custom integration requirements:
+
+    - Valid `manifest.json` with `domain`, `version`, `codeowners`, and `issue_tracker`
+    - UI-based setup via `config_flow` — no YAML required
+    - No external Python package dependencies (`requirements: []`)
+    - Actively maintained with a public [issue tracker](https://github.com/mnestrud/particle-man/issues)
+
+    **To install:** In HACS, go to **Integrations → three-dot menu → Custom repositories**, add `https://github.com/mnestrud/particle-man` as an Integration repository, then find and download Particle Man.
+
+??? success "Meets HA Integration Quality Scale criteria through Platinum tier"
+
+    The [HA Integration Quality Scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/) defines 56 rules across Bronze, Silver, Gold, and Platinum tiers. Particle Man satisfies all applicable rules at every tier.
+
+    !!! note
+        The official Platinum designation is awarded by Nabu Casa exclusively to integrations in the core HA repository. Particle Man is a custom integration — this documents compliance with the same criteria, not possession of the official award.
+
+    **🥉 Bronze — 16/16 applicable**
+
+    | Rule | |
+    |---|---|
+    | appropriate-polling | ✅ Configurable interval, 15-min floor, quota-aware enforcement |
+    | brands | ✅ icon.png + icon@2x.png |
+    | common-modules | ✅ coordinator.py + const.py |
+    | config-flow | ✅ Full UI setup, no YAML |
+    | config-flow-test-coverage | ✅ 100% |
+    | dependency-transparency | ✅ No external requirements |
+    | docs-high-level-description | ✅ This page |
+    | docs-installation-instructions | ✅ [Setup](setup.md) |
+    | docs-removal-instructions | ✅ [Setup — Removing](setup.md#removing-the-integration) |
+    | entity-event-setup | ✅ Coordinator-based updates |
+    | entity-unique-id | ✅ All entities |
+    | has-entity-name | ✅ `_attr_has_entity_name = True` |
+    | runtime-data | ✅ `entry.runtime_data` |
+    | test-before-configure | ✅ API key validated before entry created |
+    | test-before-setup | ✅ Raises `ConfigEntryAuthFailed` / `ConfigEntryNotReady` |
+    | unique-config-entry | ✅ MD5(api_key) as unique_id |
+
+    **🥈 Silver — 9/9 applicable**
+
+    | Rule | |
+    |---|---|
+    | config-entry-unloading | ✅ `async_unload_entry` implemented |
+    | docs-configuration-parameters | ✅ [Setup — Options](setup.md#options) |
+    | docs-installation-parameters | ✅ [Setup — Initial configuration](setup.md#initial-configuration) |
+    | entity-unavailable | ✅ Marks unavailable on API failure |
+    | integration-owner | ✅ codeowners: @mnestrud |
+    | log-when-unavailable | ✅ Logs once on failure, once on recovery |
+    | parallel-updates | ✅ `PARALLEL_UPDATES = 1` in all platforms |
+    | reauthentication-flow | ✅ `async_step_reauth` + `async_step_reauth_confirm` |
+    | test-coverage | ✅ 99% overall (231 tests) |
+
+    **🥇 Gold — 18/18 applicable**
+
+    | Rule | |
+    |---|---|
+    | devices | ✅ Pollution, Pollen, Weather, Diagnostics devices |
+    | diagnostics | ✅ `diagnostics.py` with API key redaction |
+    | docs-data-update | ✅ [Reference — How data updates](reference.md#how-data-updates) |
+    | docs-examples | ✅ [Examples](examples.md) with published blueprints |
+    | docs-known-limitations | ✅ [Reference — Known limitations](reference.md#known-limitations) |
+    | docs-supported-functions | ✅ [Sensors](sensors.md) + [Weather](weather.md) |
+    | docs-troubleshooting | ✅ [Reference — Troubleshooting](reference.md#troubleshooting) |
+    | docs-use-cases | ✅ This page |
+    | dynamic-devices | ✅ New pollen plant sensors added per poll |
+    | entity-category | ✅ `DIAGNOSTIC` on diagnostic entities |
+    | entity-device-class | ✅ `SensorDeviceClass.AQI`, `TEMPERATURE`, `HUMIDITY`, etc. |
+    | entity-disabled-by-default | ✅ Pollutant and plant sensors disabled by default |
+    | entity-translations | ✅ `_attr_translation_key` on all entities |
+    | exception-translations | ✅ `UpdateFailed` + `ConfigEntryAuthFailed` use translation keys |
+    | icon-translations | ✅ `icons.json` |
+    | reconfiguration-flow | ✅ `async_step_reconfigure` |
+    | repair-issues | ✅ `async_create_issue` for quota exhaustion |
+    | stale-devices | ✅ `_remove_stale_devices` in `__init__.py` |
+
+    **🏆 Platinum — 3/3**
+
+    | Rule | |
+    |---|---|
+    | async-dependency | ✅ No blocking I/O; aiohttp throughout |
+    | inject-websession | ✅ `hass.helpers.aiohttp_client` |
+    | strict-typing | ✅ `py.typed`, mypy strict mode, 0 errors |

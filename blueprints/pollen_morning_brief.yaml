@@ -1,0 +1,73 @@
+blueprint:
+  name: "Particle Man: Morning Pollen Brief"
+  description: >-
+    Sends a daily notification at a configured time when the Pollen Advisory
+    is at or above a configured level.
+  domain: automation
+  source_url: https://github.com/mnestrud/particle-man/blob/main/blueprints/pollen_morning_brief.yaml
+  input:
+    pollen_advisory:
+      name: Pollen Advisory sensor
+      description: >-
+        Select your Particle Man Pollen Advisory sensor
+        (Pollen device → Pollen Advisory).
+      selector:
+        entity:
+          domain: sensor
+    grass_sensor:
+      name: Grass Pollen sensor
+      selector:
+        entity:
+          domain: sensor
+    tree_sensor:
+      name: Tree Pollen sensor
+      selector:
+        entity:
+          domain: sensor
+    weed_sensor:
+      name: Weed Pollen sensor
+      selector:
+        entity:
+          domain: sensor
+    alert_level:
+      name: Notify when pollen reaches
+      default: High
+      selector:
+        select:
+          options:
+            - Very Low
+            - Low
+            - Moderate
+            - High
+            - Very High
+    brief_time:
+      name: Notification time
+      default: "07:00:00"
+      selector:
+        time: {}
+    notify_actions:
+      name: Notification actions
+      selector:
+        action: {}
+
+variables:
+  level: !input alert_level
+  all_levels:
+    - None
+    - Very Low
+    - Low
+    - Moderate
+    - High
+    - Very High
+
+triggers:
+  - trigger: time
+    at: !input brief_time
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ all_levels.index(states(pollen_advisory))
+         >= all_levels.index(level) }}
+
+actions: !input notify_actions

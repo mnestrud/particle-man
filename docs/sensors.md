@@ -1,14 +1,20 @@
-# What's Included
+# Sensors & Entities
 
-Particle Man creates three devices, each grouping related sensors.
+Particle Man creates four devices per monitored location, each grouping related sensors.
 
 ---
 
 ## Particle Man Pollution
 
+!!! info "About the two AQI types"
+
+    **Universal AQI (UAQI)** is Google's own air quality index — a single 0–500 scale that means the same thing everywhere. It is always available and is the primary AQI sensor. ([Google UAQI reference](https://developers.google.com/maps/documentation/air-quality/air-quality-indexes))
+
+    **Regional/Local AQI** is the official index published by your country's regulatory authority — for example, the US EPA AQI, UK DEFRA index, or Germany's UBA index. It measures the same air quality but applies the thresholds and categories defined by that authority. This is optional and disabled by default; enable it in Configure if you want your country's standard alongside the universal one. 13 regional standards are supported — see [Setup](setup.md#air-quality-options).
+
 ### Universal AQI
 
-The main air quality number. This is Google's **Universal AQI (UAQI)** — a single 0–500 scale that works the same way in every country. Higher is worse.
+The main air quality number. Google's **Universal AQI (UAQI)** — a single 0–500 scale that works the same way in every country. Higher is worse.
 
 | Range | Category | What it means |
 |---|---|---|
@@ -19,19 +25,34 @@ The main air quality number. This is Google's **Universal AQI (UAQI)** — a sin
 | 201–300 | Very Unhealthy | Health alert — everyone may experience serious effects |
 | 301–500 | Hazardous | Emergency conditions |
 
-The sensor also includes a **trend** (`rising`, `falling`, `stable`) calculated from the hourly forecast, and a `daily_forecast` and `hourly_forecast` attribute for charts.
+Includes a **trend** (`rising`, `falling`, `stable`) calculated from the hourly forecast, plus `daily_forecast` and `hourly_forecast` attributes for charts.
 
 ### Universal AQI Level
 
-The same data as Universal AQI but expressed as the category text (`Good`, `Moderate`, etc.) rather than a number. Useful for display cards and condition-based automations.
+The same data as Universal AQI expressed as a category text (`Good`, `Moderate`, etc.). Useful for display cards and condition-based automations.
+
+### Air Quality Advisory
+
+A simplified advisory level for automations — maps the UAQI category to four levels:
+
+| Advisory | AQI Categories |
+|---|---|
+| None | Good, Moderate |
+| Caution | Unhealthy for Sensitive Groups |
+| Warning | Unhealthy |
+| Alert | Very Unhealthy, Hazardous |
+
+**Attributes:** AQI value, full category, dominant pollutant, elevated pollutants list, trend, and health recommendations (if enabled).
+
+Use this sensor in automations when you want simple state-based triggers without numeric thresholds.
 
 ### Local AQI *(optional)*
 
-A country-specific index in addition to the Universal AQI — for example, the US AQI, UK DEFRA index, or German UBA index. Enable this in **Configure** after setup. Supports 13 regional indices.
+A country-specific index alongside the Universal AQI. Enable in **Configure → Air Quality Options**. Supports 13 regional standards. ([AQI indexes reference](https://developers.google.com/maps/documentation/air-quality/air-quality-indexes))
 
 ### Pollutant Sensors
 
-A sensor for each pollutant detected at your location. Common pollutants include:
+A sensor for each pollutant detected at your location:
 
 | Pollutant | What it is |
 |---|---|
@@ -42,24 +63,78 @@ A sensor for each pollutant detected at your location. Common pollutants include
 | CO (Carbon Monoxide) | From combustion — vehicles, fires |
 | SO2 (Sulfur Dioxide) | From burning fossil fuels, industrial activity |
 
-Each pollutant sensor shows the current concentration and includes an **EPA health category** (for the six pollutants above), a trend, and hourly and daily forecasts.
+Each shows current concentration with an **EPA health category**, trend, and hourly/daily forecasts. A matching **Level sensor** (e.g. "PM2.5 Level") shows the plain-language EPA category.
 
-A matching **Level sensor** (e.g. "PM2.5 Level") shows the plain-language EPA category for easier use in dashboards and automations.
+Pollutant sensors are **disabled by default** — enable individually as needed.
+
+([Pollutants reference](https://developers.google.com/maps/documentation/air-quality/pollutants))
+
+??? "Sensor attributes"
+
+    **AQI and Pollutant sensors**
+
+    | Attribute | Description |
+    |---|---|
+    | `daily_forecast` | Daily peak values up to configured forecast days. Each entry: `datetime`, `aqi` or `max`, `category` |
+    | `hourly_forecast` | Hourly values up to 96 hours. Each entry: `datetime`, `aqi` or `value`, `category`, `epa_category` |
+    | `trend` | Direction based on hourly slope: `rising`, `falling`, or `stable` |
 
 ---
 
 ## Particle Man Pollen
 
+### Pollen Advisory
+
+The worst pollen level across all in-season pollen types. Levels: `None`, `Very Low`, `Low`, `Moderate`, `High`, `Very High`.
+
+**Attributes:** dominant type, dominant index value, in-season types list, all levels by type, health recommendations (if enabled).
+
+Use this for simple automations — trigger on `High` or `Very High` without checking each type individually.
+
 ### Pollen Type Sensors
 
-Three sensors covering the main pollen categories: **Grass**, **Tree**, and **Weed**. Each shows a 0–5 index value and a category (`None` through `Very High`), plus a trend and a 5-day daily forecast.
+Three sensors covering the main pollen categories: **Grass**, **Tree**, and **Weed**. Each shows a 0–5 index value and category, plus a trend and 5-day daily forecast.
 
 ### Pollen Plant Sensors *(optional)*
 
-Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information if plant descriptions are enabled.
+Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information if plant details are enabled.
+
+Plant sensors are **disabled by default**.
 
 !!! note
-    Pollen data is only available in regions covered by Google's Pollen API, which includes most of North America and Europe. If your location isn't covered, pollen sensors will remain unavailable.
+    Pollen data is only available in regions covered by Google's Pollen API. [Coverage map](https://developers.google.com/maps/documentation/pollen/coverage) — primarily North America and Europe. If your location isn't covered, pollen sensors will remain unavailable.
+
+??? "Sensor attributes"
+
+    | Attribute | Description |
+    |---|---|
+    | `daily_forecast` | Daily forecast entries: `datetime`, `index`, `category`, `color_hex` |
+    | `trend` | `up`, `down`, or `flat` based on today vs tomorrow |
+    | `expected_peak` | Forecast entry with the highest index value |
+
+([Pollen types reference](https://developers.google.com/maps/documentation/pollen/pollen-types))
+
+---
+
+## Particle Man Weather
+
+The weather device includes a native HA weather entity and several extra sensors. See [Weather](weather.md) for full details.
+
+### Weather Entity
+
+Current conditions and three forecast types (hourly 24h, daily 5-day, twice-daily 5-day). Works with all native HA weather cards and the `weather.get_forecasts` action.
+
+### Extra Sensors
+
+| Sensor | Description |
+|---|---|
+| Thunderstorm Probability | Probability (%) of a thunderstorm this hour |
+| Heat Index | Feels-like temperature in hot and humid conditions |
+| Wind Chill | Feels-like temperature in cold and windy conditions |
+
+### Weather Alerts *(optional)*
+
+Count of currently active weather warnings. Enable in **Configure → Weather Options**. Attributes include full alert list with severity, event type, area, and instructions.
 
 ---
 
@@ -67,14 +142,19 @@ Individual sensors for specific plant species — Oak, Ragweed, Birch, and other
 
 ### Last API Update
 
-A timestamp showing when Google last refreshed the data for your location. Useful for confirming the integration is working.
+Timestamp of when Google last refreshed the data for your location.
 
-### AQ API Calls (Monthly)
+### API Call Sensors (Monthly)
 
-Tracks how many Air Quality API calls have been made in the current billing period. Includes projected usage through end of period and a status (`ok` / `warning` / `critical`) based on your configured limit.
+One sensor each for AQ, Pollen, and Weather API calls.
 
-### Pollen API Calls (Monthly)
-
-Same as above, but for Pollen API calls.
-
-See [API Usage & Free Tier](api-usage.md) for details on staying within Google's free limits.
+| Attribute | Description |
+|---|---|
+| `monthly_limit` | Your configured limit for this API |
+| `projected_monthly` | Estimated calls by end of billing period at current rate |
+| `pct_of_limit` | Percentage of limit used so far |
+| `pct_projected` | Percentage of limit the projection will reach |
+| `status` | `ok` / `warning` (≥80% projected) / `critical` (≥95% projected) |
+| `billing_period` | Current period in YYYY-MM format (Pacific Time) |
+| `shared_total_calls` | Total across all entries sharing this API key |
+| `locations_sharing_key` | Number of locations sharing this key |

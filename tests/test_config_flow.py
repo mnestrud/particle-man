@@ -1,17 +1,20 @@
 """Tests for Particle Man config flow and options flow."""
 import pytest
-from unittest.mock import MagicMock, patch
-import aiohttp
+from unittest.mock import patch
 
 from homeassistant import config_entries, data_entry_flow
 
 from custom_components.particle_man.const import (
     CONF_API_KEY,
-    CONF_FORECAST_DAYS,
-    CONF_LANGUAGE,
+    CONF_AUTOMAGIC_MODE,
+    CONF_ENABLE_AIR_QUALITY,
+    CONF_ENABLE_POLLEN,
+    CONF_ENABLE_WEATHER,
     CONF_LATITUDE,
     CONF_LONGITUDE,
-    CONF_UPDATE_INTERVAL,
+    CONF_QUIET_END,
+    CONF_QUIET_HOURS_ENABLED,
+    CONF_QUIET_START,
     DOMAIN,
 )
 
@@ -21,35 +24,11 @@ USER_INPUT = {
     CONF_API_KEY: MOCK_API_KEY,
     CONF_LATITUDE: MOCK_LAT,
     CONF_LONGITUDE: MOCK_LON,
-    CONF_UPDATE_INTERVAL: 60,
 }
 
-OPTIONS_INPUT = {
-    "location": {
-        CONF_LATITUDE: MOCK_LAT,
-        CONF_LONGITUDE: MOCK_LON,
-        CONF_UPDATE_INTERVAL: 30,
-    },
-    "forecast": {
-        CONF_FORECAST_DAYS: 3,
-        CONF_LANGUAGE: "en",
-    },
-    "air_quality": {
-        "enable_local_aqi": False,
-        "local_aqi_code": "us_aqi",
-        "include_health_recommendations": False,
-    },
-    "pollen": {
-        "include_plant_sensors": True,
-        "include_plant_descriptions": True,
-    },
-    "api_limits": {
-        "aq_monthly_limit": 10000,
-        "pollen_monthly_limit": 5000,
-        "reset_day": 1,
-        "enforce_limits": False,
-    },
-}
+_OK_COVERAGE = ({"aq": "ok", "pollen": "ok", "weather": "ok"}, [])
+_INVALID_AUTH_COVERAGE = ({"aq": "invalid_auth", "pollen": "ok", "weather": "ok"}, [])
+_CANNOT_CONNECT_COVERAGE = ({"aq": "cannot_connect", "pollen": "ok", "weather": "ok"}, [])
 
 
 # ---------------------------------------------------------------------------
@@ -66,8 +45,8 @@ async def test_config_flow_shows_form(hass):
 
 async def test_config_flow_success(hass):
     with patch(
-        "custom_components.particle_man.config_flow._validate_api_key",
-        return_value=None,
+        "custom_components.particle_man.config_flow._check_api_coverage",
+        return_value=_OK_COVERAGE,
     ), patch(
         "custom_components.particle_man.async_setup_entry",
         return_value=True,
@@ -81,15 +60,12 @@ async def test_config_flow_success(hass):
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_API_KEY] == MOCK_API_KEY
-    assert result["data"][CONF_LATITUDE] == MOCK_LAT
-    assert result["data"][CONF_LONGITUDE] == MOCK_LON
 
 
 async def test_config_flow_invalid_auth(hass):
-    err = aiohttp.ClientResponseError(MagicMock(), (), status=403, message="Forbidden")
     with patch(
-        "custom_components.particle_man.config_flow._validate_api_key",
-        side_effect=err,
+        "custom_components.particle_man.config_flow._check_api_coverage",
+        return_value=_INVALID_AUTH_COVERAGE,
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -103,10 +79,9 @@ async def test_config_flow_invalid_auth(hass):
 
 
 async def test_config_flow_bad_request_is_invalid_auth(hass):
-    err = aiohttp.ClientResponseError(MagicMock(), (), status=400, message="Bad Request")
     with patch(
-        "custom_components.particle_man.config_flow._validate_api_key",
-        side_effect=err,
+        "custom_components.particle_man.config_flow._check_api_coverage",
+        return_value=_INVALID_AUTH_COVERAGE,
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -120,8 +95,8 @@ async def test_config_flow_bad_request_is_invalid_auth(hass):
 
 async def test_config_flow_cannot_connect(hass):
     with patch(
-        "custom_components.particle_man.config_flow._validate_api_key",
-        side_effect=aiohttp.ClientError("connection refused"),
+        "custom_components.particle_man.config_flow._check_api_coverage",
+        return_value=_CANNOT_CONNECT_COVERAGE,
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -136,7 +111,7 @@ async def test_config_flow_cannot_connect(hass):
 
 async def test_config_flow_unknown_error(hass):
     with patch(
-        "custom_components.particle_man.config_flow._validate_api_key",
+        "custom_components.particle_man.config_flow._check_api_coverage",
         side_effect=RuntimeError("unexpected"),
     ):
         result = await hass.config_entries.flow.async_init(
@@ -151,8 +126,8 @@ async def test_config_flow_unknown_error(hass):
 
 async def test_config_flow_duplicate_location_aborted(hass):
     with patch(
-        "custom_components.particle_man.config_flow._validate_api_key",
-        return_value=None,
+        "custom_components.particle_man.config_flow._check_api_coverage",
+        return_value=_OK_COVERAGE,
     ), patch(
         "custom_components.particle_man.async_setup_entry",
         return_value=True,
@@ -164,7 +139,7 @@ async def test_config_flow_duplicate_location_aborted(hass):
             result["flow_id"], user_input=USER_INPUT
         )
 
-        # Second entry for same lat/lon should abort
+        # Second entry for same API key should abort
         result2 = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -192,14 +167,42 @@ async def test_options_flow_shows_form(hass, mock_config_entry):
 async def test_options_flow_saves_flattened_options(hass, mock_config_entry):
     mock_config_entry.add_to_hass(hass)
 
+    # Step 1: init
     result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    assert result["step_id"] == "init"
+
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input=OPTIONS_INPUT
+        result["flow_id"], user_input={CONF_AUTOMAGIC_MODE: True}
+    )
+    assert result["step_id"] == "locations"
+
+    # Step 2: locations — mock_config_entry already has one location, so "continue" is available
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"action": "continue"}
+    )
+    assert result["step_id"] == "quiet_hours"
+
+    # Step 3: quiet hours
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_QUIET_HOURS_ENABLED: False,
+            CONF_QUIET_START: "22:00:00",
+            CONF_QUIET_END: "06:00:00",
+        },
+    )
+    assert result["step_id"] == "apis"
+
+    # Step 4: apis — in automagic mode, creates entry directly after this step
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_ENABLE_AIR_QUALITY: True,
+            CONF_ENABLE_POLLEN: True,
+            CONF_ENABLE_WEATHER: True,
+        },
     )
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    # Sections should be flattened into a single dict
-    assert result["data"][CONF_UPDATE_INTERVAL] == 30
-    assert result["data"][CONF_FORECAST_DAYS] == 3
-    assert result["data"][CONF_LATITUDE] == MOCK_LAT
-    assert result["data"]["enforce_limits"] is False
+    assert result["data"][CONF_AUTOMAGIC_MODE] is True
+    assert result["data"][CONF_ENABLE_AIR_QUALITY] is True

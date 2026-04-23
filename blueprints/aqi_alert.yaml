@@ -1,0 +1,79 @@
+blueprint:
+  name: "Particle Man: AQI Alert"
+  description: >-
+    Sends a notification when the Air Quality Advisory reaches a configured level,
+    and a recovery notification when it clears.
+  domain: automation
+  source_url: https://github.com/mnestrud/particle-man/blob/main/blueprints/aqi_alert.yaml
+  input:
+    aqi_advisory:
+      name: Air Quality Advisory sensor
+      description: >-
+        Select your Particle Man Air Quality Advisory sensor
+        (Pollution device → Air Quality Advisory).
+      selector:
+        entity:
+          domain: sensor
+    alert_level:
+      name: Alert when advisory reaches
+      default: Warning
+      selector:
+        select:
+          options:
+            - label: "Caution (Unhealthy for Sensitive Groups)"
+              value: Caution
+            - label: "Warning (Unhealthy)"
+              value: Warning
+            - label: "Alert (Very Unhealthy or Hazardous)"
+              value: Alert
+    alert_actions:
+      name: Actions on alert
+      description: What to do when air quality reaches the alert level.
+      selector:
+        action: {}
+    clear_actions:
+      name: Actions on clear
+      description: >-
+        What to do when air quality returns below the alert level.
+        Leave empty to skip.
+      default: []
+      selector:
+        action: {}
+
+variables:
+  level: !input alert_level
+  levels_map:
+    Caution: ["Caution", "Warning", "Alert"]
+    Warning: ["Warning", "Alert"]
+    Alert: ["Alert"]
+
+triggers:
+  - trigger: state
+    entity_id: !input aqi_advisory
+    id: changed
+
+conditions:
+  - condition: or
+    conditions:
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: changed
+          - condition: template
+            value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: changed
+          - condition: template
+            value_template: >-
+              {{ trigger.from_state is not none
+                 and trigger.from_state.state in levels_map[level]
+                 and trigger.to_state.state not in levels_map[level] }}
+
+actions:
+  - if:
+      - condition: template
+        value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+    then: !input alert_actions
+    else: !input clear_actions

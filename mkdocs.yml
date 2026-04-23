@@ -14,24 +14,27 @@ theme:
       accent: light-blue
   features:
     - navigation.sections
+    - navigation.tabs
     - navigation.top
     - search.suggest
     - search.highlight
     - content.action.edit
+    - content.tabs.link
 
 nav:
-  - Getting Started: index.md
-  - What's Included: sensors.md
-  - Dashboard Examples: dashboard.md
-  - Automations & Blueprints: automations.md
-  - API Usage & Free Tier: api-usage.md
-  - Troubleshooting: troubleshooting.md
-  - Configuration Reference: configuration.md
+  - Home: index.md
+  - Setup: setup.md
+  - Sensors: sensors.md
+  - Weather: weather.md
+  - Examples: examples.md
+  - Reference: reference.md
 
 markdown_extensions:
   - admonition
   - pymdownx.details
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - tables
   - toc:
       permalink: true

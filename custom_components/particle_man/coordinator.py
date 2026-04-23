@@ -1,9 +1,9 @@
-"""Google Air Quality + Pollen data coordinator."""
+"""Particle Man data coordinator."""
 import asyncio
-import calendar as _calendar
+import hashlib
+import re
 from collections import defaultdict
-from datetime import date as _date
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as _time, timedelta, timezone
 from typing import Any
 
 import aiohttp
@@ -16,29 +16,78 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     BASE_URL,
+    CONDITION_MAP,
     CURRENT_EXTRA_COMPUTATIONS_BASE,
     DEFAULT_AQ_MONTHLY_LIMIT,
-    DEFAULT_ENFORCE_LIMITS,
+    DEFAULT_ENABLE_AIR_QUALITY,
+    DEFAULT_ENABLE_POLLEN,
+    DEFAULT_ENABLE_WEATHER,
+    DEFAULT_ENABLE_WEATHER_ALERTS,
+    DEFAULT_AUTOMAGIC_MODE,
     DEFAULT_FORECAST_DAYS,
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
     DEFAULT_LOCAL_AQI_CODE,
     DEFAULT_POLLEN_MONTHLY_LIMIT,
-    DEFAULT_RESET_DAY,
+    DEFAULT_QUIET_END,
+    DEFAULT_QUIET_HOURS_ENABLED,
+    DEFAULT_QUIET_START,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_WEATHER_MONTHLY_LIMIT,
+    DEFAULT_WEATHER_UNITS,
     DOMAIN,
     EPA_BREAKPOINTS,
     FORECAST_EXTRA_COMPUTATIONS,
     GAS_MW,
     MOLAR_VOL,
     POLLEN_API_URL,
+    WEATHER_API_URL,
+    _PACIFIC_TZ,
 )
 
 import logging
 _LOGGER = logging.getLogger(__name__)
 
-_STORAGE_KEY = "particle_man"
 _STORAGE_VERSION = 1
+_STORAGE_KEY = "particle_man"
+
+# Google AQ data refreshes every hour; pollen models update daily but we match AQ cadence.
+_AQ_FETCH_INTERVAL = timedelta(hours=1)
+_POLLEN_FETCH_INTERVAL = timedelta(hours=1)
+
+
+class ParticleManGlobalState:
+    """Shared state across all location coordinators for the same config entry."""
+
+    def __init__(self) -> None:
+        self._quiet_hours_runtime_override: bool | None = None
+
+    def set_quiet_hours_runtime(self, enabled: bool | None) -> None:
+        """Override quiet hours at runtime. Pass None to revert to config default."""
+        self._quiet_hours_runtime_override = enabled
+
+    def quiet_hours_active(self, config_enabled: bool) -> bool:
+        """Return effective quiet-hours enabled state (runtime override or config default)."""
+        if self._quiet_hours_runtime_override is not None:
+            return self._quiet_hours_runtime_override
+        return config_enabled
+
+
+def _aq_advisory_level(category: str) -> str:
+    cat = (category or "").lower()
+    if "hazardous" in cat or "very unhealthy" in cat:
+        return "Alert"
+    if "unhealthy" in cat and "sensitive" not in cat:
+        return "Warning"
+    if "sensitive" in cat:
+        return "Caution"
+    return "None"
+
+_POLLEN_LEVEL_ORDER = ["None", "Very Low", "Low", "Moderate", "High", "Very High"]
+
+
+def _empty_shared_tracking() -> dict[str, Any]:
+    return {"period_month": "", "aq_calls": 0, "pollen_calls": 0, "weather_calls": 0}
 
 
 def _parse_units(api_units: str) -> str:
@@ -86,8 +135,6 @@ def _epa_category(code: str, value: float | None, units: str) -> str | None:
     return breakpoints[-1][1]
 
 
-# Pollen color / RGB helpers
-
 def _normalize_channel(val: Any) -> int:
     if isinstance(val, float):
         return round(val * 255)
@@ -122,27 +169,23 @@ def _day_to_datetime(date_obj: dict) -> str | None:
         return None
 
 
-def _period_start_date(reset_day: int) -> _date:
-    """Return the start date of the current billing period."""
-    today = _date.today()
-    days_this_month = _calendar.monthrange(today.year, today.month)[1]
-    effective_day = min(reset_day, days_this_month)
-    candidate = today.replace(day=effective_day)
-    if today >= candidate:
-        return candidate
-    # Reset day hasn't arrived yet this month — period started last month
-    if today.month == 1:
-        prev_year, prev_month = today.year - 1, 12
-    else:
-        prev_year, prev_month = today.year, today.month - 1
-    days_prev = _calendar.monthrange(prev_year, prev_month)[1]
-    return _date(prev_year, prev_month, min(reset_day, days_prev))
+def _w_degrees(obj: Any) -> float | None:
+    if isinstance(obj, dict):
+        return obj.get("degrees")
+    return None
 
 
-# Coordinator
+def _w_condition(cond_obj: Any, is_daytime: bool) -> str | None:
+    cond_type = (cond_obj or {}).get("type", "") if isinstance(cond_obj, dict) else ""
+    if not cond_type:
+        return None
+    if cond_type == "CLEAR":
+        return "sunny" if is_daytime else "clear-night"
+    return CONDITION_MAP.get(cond_type, "exceptional")
 
-class GoogleAirQualityCoordinator(DataUpdateCoordinator):
-    """Coordinator for Google Air Quality API + Google Pollen API."""
+
+class ParticleManCoordinator(DataUpdateCoordinator):
+    """Coordinator for Particle Man — fetches air quality, pollen, and weather data."""
 
     def __init__(
         self,
@@ -150,118 +193,343 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
         api_key: str,
         latitude: float,
         longitude: float,
+        location_name: str = "Location",
+        global_state: ParticleManGlobalState | None = None,
+        automagic_mode: bool = DEFAULT_AUTOMAGIC_MODE,
+        num_locations: int = 1,
         update_interval_minutes: int = DEFAULT_UPDATE_INTERVAL,
         forecast_days: int = DEFAULT_FORECAST_DAYS,
         language_code: str = DEFAULT_LANGUAGE,
         enable_local_aqi: bool = DEFAULT_LOCAL_AQI,
         local_aqi_code: str = DEFAULT_LOCAL_AQI_CODE,
-        include_health_recs: bool = False,
         include_plant_sensors: bool = True,
-        include_plant_descriptions: bool = True,
         aq_monthly_limit: int = DEFAULT_AQ_MONTHLY_LIMIT,
         pollen_monthly_limit: int = DEFAULT_POLLEN_MONTHLY_LIMIT,
-        reset_day: int = DEFAULT_RESET_DAY,
-        enforce_limits: bool = DEFAULT_ENFORCE_LIMITS,
+        weather_monthly_limit: int = DEFAULT_WEATHER_MONTHLY_LIMIT,
+        enable_air_quality: bool = DEFAULT_ENABLE_AIR_QUALITY,
+        enable_pollen: bool = DEFAULT_ENABLE_POLLEN,
+        enable_weather: bool = DEFAULT_ENABLE_WEATHER,
+        enable_weather_alerts: bool = DEFAULT_ENABLE_WEATHER_ALERTS,
+        weather_units: str = DEFAULT_WEATHER_UNITS,
+        quiet_hours_enabled: bool = DEFAULT_QUIET_HOURS_ENABLED,
+        quiet_start: str = DEFAULT_QUIET_START,
+        quiet_end: str = DEFAULT_QUIET_END,
         entry_id: str = "",
     ) -> None:
         self.api_key = api_key
         self.latitude = latitude
         self.longitude = longitude
+        self.location_name = location_name
+        self.location_slug = re.sub(r"[^a-z0-9]+", "_", location_name.lower()).strip("_") or "location"
+        self._global_state = global_state
+        self.automagic_mode = automagic_mode
+        self.num_locations = num_locations
         self.forecast_days = max(1, min(5, forecast_days))
         self.language_code = language_code.strip() if language_code else DEFAULT_LANGUAGE
         self.enable_local_aqi = enable_local_aqi
         self.local_aqi_code = local_aqi_code
-        self.include_health_recs = include_health_recs
+        self.include_health_recs = True
         self.include_plant_sensors = include_plant_sensors
-        self.include_plant_descriptions = include_plant_descriptions
+        self.include_plant_descriptions = True
         self.aq_monthly_limit = int(aq_monthly_limit)
         self.pollen_monthly_limit = int(pollen_monthly_limit)
-        self.reset_day = max(1, min(28, int(reset_day)))
-        self.enforce_limits = enforce_limits
+        self.weather_monthly_limit = int(weather_monthly_limit)
+        self.enable_air_quality = enable_air_quality
+        self.enable_pollen = enable_pollen
+        self.enable_weather = enable_weather
+        self.enable_weather_alerts = enable_weather_alerts
+        self.weather_units = weather_units
+        self._quiet_hours_enabled = quiet_hours_enabled
+        self._quiet_start = quiet_start
+        self._quiet_end = quiet_end
         self.entry_id = entry_id
-        self._pollen_calls: int = 0
-        self._monthly_aq_calls: int = 0
-        self._monthly_pollen_calls: int = 0
-        self._tracking_period_start: str = _period_start_date(self.reset_day).isoformat()
-        self._store: Store = Store(hass, _STORAGE_VERSION, f"{_STORAGE_KEY}.{entry_id}")
+
+        key_hash = hashlib.md5(api_key.encode()).hexdigest()[:12]
+        self._key_hash = key_hash
+        self._shared_store: Store = Store(
+            hass, _STORAGE_VERSION, f"{_STORAGE_KEY}.shared.{key_hash}"
+        )
+        shared_state = hass.data.setdefault(DOMAIN, {})
+        self._shared_lock: asyncio.Lock = (
+            shared_state.setdefault("locks", {}).setdefault(key_hash, asyncio.Lock())
+        )
+        self._cached_tracking: dict[str, Any] = _empty_shared_tracking()
+        self._api_backoff: dict[str, Any] = {}
+        self._api_failures: dict[str, int] = {}
+        self._last_aq_fetch: datetime | None = None
+        self._last_pollen_fetch: datetime | None = None
+
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN}_{self.location_slug}",
             update_interval=timedelta(minutes=update_interval_minutes),
         )
 
-    async def async_load_tracking(self) -> None:
-        """Load persistent API call counts from storage."""
-        stored = await self._store.async_load()
-        if stored:
-            current_period = _period_start_date(self.reset_day).isoformat()
-            # Support both new format (period_start) and old format (month)
-            stored_period = stored.get("period_start") or stored.get("month", "")
-            if stored_period == current_period:
-                self._monthly_aq_calls = stored.get("aq_calls", 0)
-                self._monthly_pollen_calls = stored.get("pollen_calls", 0)
-                self._tracking_period_start = stored_period
+    def _current_billing_month(self) -> str:
+        return datetime.now(_PACIFIC_TZ).strftime("%Y-%m")
 
-    async def _save_tracking(self) -> None:
-        """Persist API call counts to storage."""
-        await self._store.async_save({
-            "period_start": self._tracking_period_start,
-            "aq_calls": self._monthly_aq_calls,
-            "pollen_calls": self._monthly_pollen_calls,
-        })
+    def _effective_quiet_hours_enabled(self) -> bool:
+        if self._global_state is not None:
+            return self._global_state.quiet_hours_active(self._quiet_hours_enabled)
+        return self._quiet_hours_enabled
+
+    def _is_quiet_hours(self) -> bool:
+        if not self._effective_quiet_hours_enabled():
+            return False
+        now = datetime.now().time()
+        try:
+            start = _time.fromisoformat(self._quiet_start)
+            end = _time.fromisoformat(self._quiet_end)
+        except (ValueError, TypeError):
+            return False
+        if start > end:  # spans midnight (e.g. 23:00–05:00)
+            return now >= start or now < end
+        return start <= now < end
+
+    def _is_backed_off(self, api: str) -> bool:
+        until = self._api_backoff.get(api)
+        if until is None:
+            return False
+        if datetime.now(timezone.utc) < until:
+            return True
+        del self._api_backoff[api]
+        return False
+
+    def _record_api_error(self, api: str, status: int | None = None) -> None:
+        failures = self._api_failures.get(api, 0) + 1
+        self._api_failures[api] = failures
+        now = datetime.now(timezone.utc)
+        if status == 429:
+            hours = min(8, 2 ** (failures - 1))
+            self._api_backoff[api] = now + timedelta(hours=hours)
+            _LOGGER.error(
+                "Particle Man %s API rate-limited (429). Backing off %dh.", api.upper(), hours
+            )
+        elif status is not None and 500 <= status < 600:
+            if failures < 3:
+                _LOGGER.warning(
+                    "Particle Man %s API server error %s (failure %d before backoff).",
+                    api.upper(), status, failures,
+                )
+            else:
+                hours = min(8, 2 ** (failures - 2))
+                self._api_backoff[api] = now + timedelta(hours=hours)
+                _LOGGER.warning(
+                    "Particle Man %s API persistent errors. Backing off %dh.", api.upper(), hours
+                )
+        elif status is not None:
+            _LOGGER.error("Particle Man %s API permanent error %s.", api.upper(), status)
+        else:
+            if failures == 1:
+                _LOGGER.warning("Particle Man %s fetch failed (transient).", api.upper())
+            else:
+                _LOGGER.debug(
+                    "Particle Man %s fetch still failing (failure %d).", api.upper(), failures
+                )
+
+    def _clear_api_error(self, api: str) -> None:
+        self._api_failures.pop(api, None)
+        self._api_backoff.pop(api, None)
+
+    async def async_load_tracking(self) -> None:
+        """Load persistent API call counts from shared storage."""
+        async with self._shared_lock:
+            stored = await self._shared_store.async_load()
+            current_month = self._current_billing_month()
+            if stored and stored.get("period_month") == current_month:
+                self._cached_tracking = dict(stored)
+            else:
+                self._cached_tracking = _empty_shared_tracking()
+                self._cached_tracking["period_month"] = current_month
+                await self._shared_store.async_save(self._cached_tracking)
+
+    async def _save_tracking(
+        self, aq_inc: int = 0, pollen_inc: int = 0, weather_inc: int = 0
+    ) -> None:
+        """Persist API call counts to shared storage."""
+        async with self._shared_lock:
+            stored = await self._shared_store.async_load() or _empty_shared_tracking()
+            current_month = self._current_billing_month()
+            if stored.get("period_month") != current_month:
+                stored = _empty_shared_tracking()
+                stored["period_month"] = current_month
+            stored["aq_calls"] = stored.get("aq_calls", 0) + aq_inc
+            stored["pollen_calls"] = stored.get("pollen_calls", 0) + pollen_inc
+            stored["weather_calls"] = stored.get("weather_calls", 0) + weather_inc
+            self._cached_tracking = dict(stored)
+            await self._shared_store.async_save(stored)
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch current conditions, forecast, and pollen in parallel."""
-        # Reset counters on billing period rollover
-        current_period = _period_start_date(self.reset_day).isoformat()
-        if current_period != self._tracking_period_start:
-            self._tracking_period_start = current_period
-            self._monthly_aq_calls = 0
-            self._monthly_pollen_calls = 0
+        """Fetch data from enabled APIs, respecting quiet hours and monthly limits."""
+        if self._is_quiet_hours():
+            _LOGGER.debug("Particle Man [%s]: quiet hours active, skipping update", self.location_name)
+            return self.data or {}
 
-        # Enforce API limits if enabled
-        if self.enforce_limits:
-            if self.aq_monthly_limit > 0 and self._monthly_aq_calls >= self.aq_monthly_limit:
-                raise UpdateFailed(
-                    f"AQ API limit reached ({self._monthly_aq_calls}/{self.aq_monthly_limit} calls). "
-                    "Polling suspended. Disable 'Enforce API limits' in options to resume."
-                )
-            if self.pollen_monthly_limit > 0 and self._monthly_pollen_calls >= self.pollen_monthly_limit:
-                raise UpdateFailed(
-                    f"Pollen API limit reached ({self._monthly_pollen_calls}/{self.pollen_monthly_limit} calls). "
-                    "Polling suspended. Disable 'Enforce API limits' in options to resume."
-                )
+        # Roll over month counter if needed
+        current_month = self._current_billing_month()
+        if self._cached_tracking.get("period_month") != current_month:
+            async with self._shared_lock:
+                new_tracking = _empty_shared_tracking()
+                new_tracking["period_month"] = current_month
+                self._cached_tracking = new_tracking
+                await self._shared_store.async_save(new_tracking)
 
+        now = dt_util.utcnow()
+        data = dict(self.data) if self.data else {}
         session = async_get_clientsession(self.hass)
+        aq_inc = 0
+        pollen_inc = 0
+        weather_inc = 0
 
-        try:
-            current, forecast_hours = await asyncio.gather(
-                self._fetch_current(session),
-                self._fetch_forecast(session),
+        # --- Air Quality (fetched at most once per hour — Google updates hourly) ---
+        if self.enable_air_quality:
+            aq_due = self._last_aq_fetch is None or (now - self._last_aq_fetch) >= _AQ_FETCH_INTERVAL
+            if not aq_due:
+                _LOGGER.debug(
+                    "Particle Man [%s]: AQ not due yet (last: %s), skipping",
+                    self.location_name, self._last_aq_fetch,
+                )
+            else:
+                aq_blocked = (
+                    self.automagic_mode
+                    and self.aq_monthly_limit > 0
+                    and self._cached_tracking.get("aq_calls", 0) >= self.aq_monthly_limit
+                )
+                if aq_blocked:
+                    _LOGGER.debug(
+                        "AQ monthly limit reached (%d/%d), skipping",
+                        self._cached_tracking.get("aq_calls", 0),
+                        self.aq_monthly_limit,
+                    )
+                elif self._is_backed_off("aq"):
+                    _LOGGER.debug("AQ API backed off until %s, skipping", self._api_backoff.get("aq"))
+                else:
+                    try:
+                        current, forecast_hours = await asyncio.gather(
+                            self._fetch_current(session),
+                            self._fetch_forecast(session),
+                        )
+                        aq_data = self._build_data(current, forecast_hours)
+                        data.update(aq_data)
+                        aq_inc += 2
+                        self._last_aq_fetch = now
+                        self._clear_api_error("aq")
+                    except aiohttp.ClientResponseError as err:
+                        self._record_api_error("aq", err.status)
+                    except Exception as err:  # noqa: BLE001
+                        self._record_api_error("aq")
+                        _LOGGER.debug("Air Quality fetch exception: %s", err)
+
+        # --- Weather ---
+        if self.enable_weather:
+            weather_blocked = (
+                self.automagic_mode
+                and self.weather_monthly_limit > 0
+                and self._cached_tracking.get("weather_calls", 0) >= self.weather_monthly_limit
             )
-        except aiohttp.ClientResponseError as err:
-            raise UpdateFailed(
-                f"Google Air Quality API error {err.status}: {err.message}"
-            ) from err
-        except aiohttp.ClientError as err:
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+            if weather_blocked:
+                _LOGGER.debug(
+                    "Weather monthly limit reached (%d/%d), skipping",
+                    self._cached_tracking.get("weather_calls", 0),
+                    self.weather_monthly_limit,
+                )
+            elif self._is_backed_off("weather"):
+                _LOGGER.debug("Weather API backed off until %s, skipping", self._api_backoff.get("weather"))
+            else:
+                try:
+                    weather_tasks: list = [
+                        self._fetch_weather_current(session),
+                        self._fetch_weather_hourly(session),
+                        self._fetch_weather_daily(session),
+                    ]
+                    if self.enable_weather_alerts:
+                        weather_tasks.append(self._fetch_weather_alerts(session))
 
-        data = self._build_data(current, forecast_hours)
+                    results = await asyncio.gather(*weather_tasks, return_exceptions=True)
 
-        try:
-            pollen_response = await self._fetch_pollen(session)
-            pollen_data = self._build_pollen_data(pollen_response)
-            data.update(pollen_data)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Pollen API fetch failed, keeping last data: %s", err)
-            if self.data:
-                for key, val in self.data.items():
-                    if key.startswith("pollen_"):
-                        data[key] = val
+                    w_current: dict[Any, Any] = results[0] if not isinstance(results[0], Exception) else {}  # type: ignore[assignment]
+                    w_hourly: dict[Any, Any] = results[1] if not isinstance(results[1], Exception) else {}  # type: ignore[assignment]
+                    w_daily: dict[Any, Any] = results[2] if not isinstance(results[2], Exception) else {}  # type: ignore[assignment]
+                    w_alerts: dict[Any, Any] | None = None
+                    if self.enable_weather_alerts and len(results) > 3:
+                        w_alerts = results[3] if not isinstance(results[3], Exception) else None  # type: ignore[assignment]
 
-        await self._save_tracking()
+                    any_failed = False
+                    for i, res in enumerate(results):
+                        if isinstance(res, Exception):
+                            any_failed = True
+                            _LOGGER.debug("Weather fetch task %d failed: %s", i, res)
+                        else:
+                            weather_inc += 1
+
+                    weather_data = self._build_weather_data(w_current, w_hourly, w_daily, w_alerts)
+                    data.update(weather_data)
+                    if not any_failed:
+                        self._clear_api_error("weather")
+                except aiohttp.ClientResponseError as err:
+                    self._record_api_error("weather", err.status)
+                except Exception as err:  # noqa: BLE001
+                    self._record_api_error("weather")
+                    _LOGGER.debug("Weather fetch exception: %s", err)
+
+        # --- Pollen (fetched at most once per hour — Google updates pollen models daily,
+        #     but we match the AQ cadence to keep sensor freshness consistent) ---
+        if self.enable_pollen:
+            pollen_due = self._last_pollen_fetch is None or (now - self._last_pollen_fetch) >= _POLLEN_FETCH_INTERVAL
+            if not pollen_due:
+                _LOGGER.debug(
+                    "Particle Man [%s]: Pollen not due yet (last: %s), skipping",
+                    self.location_name, self._last_pollen_fetch,
+                )
+            else:
+                pollen_blocked = (
+                    self.automagic_mode
+                    and self.pollen_monthly_limit > 0
+                    and self._cached_tracking.get("pollen_calls", 0) >= self.pollen_monthly_limit
+                )
+                if pollen_blocked:
+                    _LOGGER.debug(
+                        "Pollen monthly limit reached (%d/%d), skipping",
+                        self._cached_tracking.get("pollen_calls", 0),
+                        self.pollen_monthly_limit,
+                    )
+                elif self._is_backed_off("pollen"):
+                    _LOGGER.debug("Pollen API backed off until %s, skipping", self._api_backoff.get("pollen"))
+                else:
+                    try:
+                        pollen_response = await self._fetch_pollen(session)
+                        pollen_data = self._build_pollen_data(pollen_response)
+                        data.update(pollen_data)
+                        pollen_inc += 1
+                        self._last_pollen_fetch = now
+                        self._clear_api_error("pollen")
+                    except aiohttp.ClientResponseError as err:
+                        self._record_api_error("pollen", err.status)
+                        if self.data:
+                            for key, val in self.data.items():
+                                if key.startswith("pollen_"):
+                                    data.setdefault(key, val)
+                    except Exception as err:  # noqa: BLE001
+                        self._record_api_error("pollen")
+                        _LOGGER.debug("Pollen fetch exception: %s", err)
+                        if self.data:
+                            for key, val in self.data.items():
+                                if key.startswith("pollen_"):
+                                    data.setdefault(key, val)
+
+        await self._save_tracking(
+            aq_inc=aq_inc, pollen_inc=pollen_inc, weather_inc=weather_inc
+        )
+
+        if not data and not self.data:
+            raise UpdateFailed("No data available from any enabled API")
+
         return data
+
+    # -------------------------------------------------------------------------
+    # Air Quality fetch
+    # -------------------------------------------------------------------------
 
     async def _fetch_current(self, session: aiohttp.ClientSession) -> dict:
         url = f"{BASE_URL}/currentConditions:lookup?key={self.api_key}"
@@ -286,7 +554,6 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                     "Google AQI currentConditions error %s: %s", resp.status, error_body
                 )
             resp.raise_for_status()
-            self._monthly_aq_calls += 1
             return await resp.json()
 
     async def _fetch_forecast(self, session: aiohttp.ClientSession) -> list[dict]:
@@ -319,9 +586,12 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                     "Google AQI forecast error %s: %s", resp.status, error_body
                 )
             resp.raise_for_status()
-            self._monthly_aq_calls += 1
             result = await resp.json()
             return result.get("hourlyForecasts", [])
+
+    # -------------------------------------------------------------------------
+    # Pollen fetch
+    # -------------------------------------------------------------------------
 
     async def _fetch_pollen(self, session: aiohttp.ClientSession) -> dict:
         params: dict[str, Any] = {
@@ -343,9 +613,94 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                     "Google Pollen API error %s: %s", resp.status, error_body[:300]
                 )
                 resp.raise_for_status()
-            self._pollen_calls += 1
-            self._monthly_pollen_calls += 1
             return await resp.json()
+
+    # -------------------------------------------------------------------------
+    # Weather fetch
+    # -------------------------------------------------------------------------
+
+    async def _fetch_weather_current(self, session: aiohttp.ClientSession) -> dict:
+        url = f"{WEATHER_API_URL}/currentConditions:lookup"
+        params: dict[str, Any] = {
+            "key": self.api_key,
+            "location.latitude": f"{self.latitude:.6f}",
+            "location.longitude": f"{self.longitude:.6f}",
+            "unitsSystem": self.weather_units,
+        }
+        async with session.get(
+            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+        ) as resp:
+            if not resp.ok:
+                error_body = await resp.text()
+                _LOGGER.warning(
+                    "Google Weather currentConditions error %s: %s", resp.status, error_body[:300]
+                )
+                resp.raise_for_status()
+            return await resp.json()
+
+    async def _fetch_weather_hourly(self, session: aiohttp.ClientSession) -> dict:
+        url = f"{WEATHER_API_URL}/forecast/hours:lookup"
+        params: dict[str, Any] = {
+            "key": self.api_key,
+            "location.latitude": f"{self.latitude:.6f}",
+            "location.longitude": f"{self.longitude:.6f}",
+            "hours": 24,
+            "pageSize": 24,
+            "unitsSystem": self.weather_units,
+        }
+        async with session.get(
+            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+        ) as resp:
+            if not resp.ok:
+                error_body = await resp.text()
+                _LOGGER.warning(
+                    "Google Weather forecast/hours error %s: %s", resp.status, error_body[:300]
+                )
+                resp.raise_for_status()
+            return await resp.json()
+
+    async def _fetch_weather_daily(self, session: aiohttp.ClientSession) -> dict:
+        url = f"{WEATHER_API_URL}/forecast/days:lookup"
+        params: dict[str, Any] = {
+            "key": self.api_key,
+            "location.latitude": f"{self.latitude:.6f}",
+            "location.longitude": f"{self.longitude:.6f}",
+            "days": 10,
+            "pageSize": 10,
+            "unitsSystem": self.weather_units,
+        }
+        async with session.get(
+            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+        ) as resp:
+            if not resp.ok:
+                error_body = await resp.text()
+                _LOGGER.warning(
+                    "Google Weather forecast/days error %s: %s", resp.status, error_body[:300]
+                )
+                resp.raise_for_status()
+            return await resp.json()
+
+    async def _fetch_weather_alerts(self, session: aiohttp.ClientSession) -> dict:
+        url = f"{WEATHER_API_URL}/publicAlerts:lookup"
+        params: dict[str, Any] = {
+            "key": self.api_key,
+            "location.latitude": f"{self.latitude:.6f}",
+            "location.longitude": f"{self.longitude:.6f}",
+        }
+        async with session.get(
+            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+        ) as resp:
+            if not resp.ok:
+                error_body = await resp.text()
+                _LOGGER.warning(
+                    "Google Weather publicAlerts error %s: %s", resp.status, error_body[:300]
+                )
+                resp.raise_for_status()
+            return await resp.json()
+
+    # -------------------------------------------------------------------------
+    # Air Quality data builders
+    # -------------------------------------------------------------------------
 
     def _build_data(self, current: dict, forecast_hours: list[dict]) -> dict[str, Any]:
         """Structure AQ API responses into sensor data."""
@@ -384,7 +739,7 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
 
         if self.enable_local_aqi:
             local_idx = next(
-                (i for i in indexes if i.get("code") not in ("uaqi", None)), None
+                (i for i in indexes if i.get("code") == self.local_aqi_code), None
             )
             if local_idx:
                 local_trend = self._compute_hourly_trend(
@@ -426,12 +781,28 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
                 "trend": trend,
             }
 
+        # AQ advisory
+        category = (new_data.get("aqi") or {}).get("category", "")
+        elevated = [
+            v.get("display_name", k.replace("pollutant_", ""))
+            for k, v in new_data.items()
+            if k.startswith("pollutant_") and v.get("epa_category") not in ("Good", None)
+        ]
+        new_data["aq_advisory"] = {
+            "value": _aq_advisory_level(category),
+            "aqi": (new_data.get("aqi") or {}).get("value"),
+            "category": category,
+            "dominant_pollutant": dominant_code or None,
+            "health_recommendations": health_recs,
+            "elevated_pollutants": elevated,
+            "trend": aqi_trend,
+        }
+
         return new_data
 
     def _build_aqi_hourly_forecast(
         self, hours: list[dict]
     ) -> tuple[list[dict], list[dict]]:
-        """Build per-hour AQI lists for UAQI and local AQI."""
         uaqi_hourly: list[dict] = []
         local_hourly: list[dict] = []
         for h in hours:
@@ -458,7 +829,6 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
     def _build_pollutant_hourly_forecast(
         self, hours: list[dict]
     ) -> dict[str, list[dict]]:
-        """Build per-hour concentration lists for each pollutant."""
         result: dict[str, list[dict]] = defaultdict(list)
         for h in hours:
             dt_str = h.get("dateTime", "")
@@ -555,6 +925,10 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
             result[code] = daily
         return result
 
+    # -------------------------------------------------------------------------
+    # Pollen data builder
+    # -------------------------------------------------------------------------
+
     def _build_pollen_data(self, response: dict) -> dict[str, Any]:
         """Parse Google Pollen API response into sensor data."""
         if not isinstance(response, dict):
@@ -647,6 +1021,40 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
 
                 result[f"pollen_plant_{pcode.lower()}"] = pbase
 
+        # Pollen advisory — worst in-season type
+        worst_level = "None"
+        dominant_type = None
+        dominant_index = None
+        in_season: list[str] = []
+        all_levels: dict[str, str] = {}
+        advisory_health_recs = None
+
+        for key, val in result.items():
+            if not key.startswith("pollen_type_"):
+                continue
+            category = val.get("category") or "None"
+            display = val.get("display_name", key)
+            if val.get("in_season"):
+                in_season.append(display)
+                all_levels[display] = category
+                try:
+                    if _POLLEN_LEVEL_ORDER.index(category) > _POLLEN_LEVEL_ORDER.index(worst_level):
+                        worst_level = category
+                        dominant_type = display
+                        dominant_index = val.get("value")
+                        advisory_health_recs = val.get("health_recommendations")
+                except ValueError:
+                    pass
+
+        result["pollen_advisory"] = {
+            "value": worst_level,
+            "dominant_type": dominant_type,
+            "dominant_index": dominant_index,
+            "in_season_types": in_season,
+            "all_levels": all_levels,
+            "health_recommendations": advisory_health_recs,
+        }
+
         return result
 
     def _build_pollen_forecast(
@@ -675,9 +1083,166 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
             )
         return forecast
 
+    # -------------------------------------------------------------------------
+    # Weather data builders
+    # -------------------------------------------------------------------------
+
+    def _build_weather_data(
+        self,
+        current: dict,
+        hourly: dict,
+        daily: dict,
+        alerts: dict | None,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+
+        is_daytime = current.get("isDaytime", True)
+        wind = current.get("wind") or {}
+        precip = current.get("precipitation") or {}
+        qpf = precip.get("qpf") or {}
+
+        result["weather_current"] = {
+            "condition": _w_condition(current.get("weatherCondition"), is_daytime),
+            "temperature": _w_degrees(current.get("temperature")),
+            "apparent_temperature": _w_degrees(current.get("feelsLikeTemperature")),
+            "dew_point": _w_degrees(current.get("dewPoint")),
+            "humidity": current.get("relativeHumidity"),
+            "wind_speed": ((wind.get("speed") or {}).get("value")),
+            "wind_bearing": ((wind.get("direction") or {}).get("degrees")),
+            "wind_gust_speed": ((wind.get("gust") or {}).get("value")),
+            "pressure": (current.get("airPressure") or {}).get("meanSeaLevelMillibars"),
+            "visibility": (current.get("visibility") or {}).get("distance"),
+            "uv_index": current.get("uvIndex"),
+            "cloud_coverage": current.get("cloudCover"),
+            "precipitation": qpf.get("quantity"),
+            "thunderstorm_probability": current.get("thunderstormProbability"),
+            "heat_index": _w_degrees(current.get("heatIndex")),
+            "wind_chill": _w_degrees(current.get("windChill")),
+            "is_daytime": is_daytime,
+            "datetime": current.get("currentTime"),
+        }
+
+        result["weather_hourly"] = self._build_weather_hourly(hourly)
+        daily_list, twice_daily_list = self._build_weather_daily(daily)
+        result["weather_daily"] = daily_list
+        result["weather_twice_daily"] = twice_daily_list
+
+        if alerts is not None:
+            result["weather_alerts"] = self._build_weather_alerts(alerts)
+
+        return result
+
+    def _build_weather_hourly(self, hourly: dict) -> list[dict]:
+        entries = []
+        for h in hourly.get("forecastHours", []):
+            is_daytime = h.get("isDaytime", True)
+            wind = h.get("wind") or {}
+            precip = h.get("precipitation") or {}
+            prob = (precip.get("probability") or {}).get("percent")
+            cloud = h.get("cloudCover")
+            cloud_val = cloud.get("percent") if isinstance(cloud, dict) else cloud
+
+            entry = {
+                "datetime": (h.get("interval") or {}).get("startTime") or h.get("displayDateTime"),
+                "condition": _w_condition(h.get("weatherCondition"), is_daytime),
+                "native_temperature": _w_degrees(h.get("temperature")),
+                "humidity": h.get("relativeHumidity"),
+                "native_wind_speed": ((wind.get("speed") or {}).get("value")),
+                "wind_bearing": ((wind.get("direction") or {}).get("degrees")),
+                "native_wind_gust_speed": ((wind.get("gust") or {}).get("value")),
+                "precipitation_probability": prob,
+                "native_pressure": (h.get("airPressure") or {}).get("meanSeaLevelMillibars"),
+                "cloud_coverage": cloud_val,
+                "uv_index": h.get("uvIndex"),
+            }
+            if entry.get("datetime"):
+                entries.append(entry)
+        return entries
+
+    def _build_weather_daily(self, daily: dict) -> tuple[list[dict], list[dict]]:
+        daily_list: list[dict] = []
+        twice_daily_list: list[dict] = []
+
+        for day in daily.get("forecastDays", []):
+            date_obj = day.get("displayDate") or {}
+            try:
+                y = date_obj["year"]
+                m = date_obj["month"]
+                d = date_obj["day"]
+                date_str = f"{y:04d}-{m:02d}-{d:02d}T12:00:00+00:00"
+                date_str_night = f"{y:04d}-{m:02d}-{d:02d}T21:00:00+00:00"
+            except (KeyError, TypeError):
+                continue
+
+            max_temp = _w_degrees(day.get("maxTemperature"))
+            min_temp = _w_degrees(day.get("minTemperature"))
+            day_fc = day.get("daytimeForecast") or {}
+            night_fc = day.get("nighttimeForecast") or {}
+
+            def _parse_fc(
+                fc: dict,
+                dt_str: str,
+                is_daytime: bool,
+                temp: float | None,
+                templow: float | None,
+            ) -> dict:
+                wind = fc.get("wind") or {}
+                precip = fc.get("precipitation") or {}
+                prob = (precip.get("probability") or {}).get("percent")
+                humidity_val = fc.get("relativeHumidity")
+                cloud = fc.get("cloudCover")
+                cloud_val = (
+                    cloud.get("percent") if isinstance(cloud, dict) else cloud
+                )
+                return {
+                    "datetime": dt_str,
+                    "is_daytime": is_daytime,
+                    "condition": _w_condition(fc.get("weatherCondition"), is_daytime),
+                    "native_temperature": temp,
+                    "native_templow": templow,
+                    "precipitation_probability": prob,
+                    "native_wind_speed": ((wind.get("speed") or {}).get("value")),
+                    "wind_bearing": ((wind.get("direction") or {}).get("degrees")),
+                    "native_wind_gust_speed": ((wind.get("gust") or {}).get("value")),
+                    "humidity": humidity_val,
+                    "cloud_coverage": cloud_val,
+                    "uv_index": fc.get("uvIndex"),
+                }
+
+            if day_fc:
+                entry = _parse_fc(day_fc, date_str, True, max_temp, min_temp)
+                daily_entry = {k: v for k, v in entry.items() if k != "is_daytime"}
+                daily_list.append(daily_entry)
+                twice_daily_list.append(_parse_fc(day_fc, date_str, True, max_temp, None))
+            if night_fc:
+                twice_daily_list.append(
+                    _parse_fc(night_fc, date_str_night, False, min_temp, None)
+                )
+
+        return daily_list, twice_daily_list
+
+    def _build_weather_alerts(self, alerts: dict) -> list[dict]:
+        result = []
+        for alert in alerts.get("publicAlerts", []) or []:
+            severity = (alert.get("severity") or "").replace("_SEVERITY", "")
+            result.append({
+                "title": alert.get("alertHeadline", ""),
+                "severity": severity,
+                "event_type": (alert.get("event") or {}).get("type", ""),
+                "area": alert.get("areaDescription", ""),
+                "start_time": alert.get("effectiveTime"),
+                "expiration_time": alert.get("expireTime"),
+                "description": alert.get("description", ""),
+                "instructions": alert.get("instruction", ""),
+            })
+        return result
+
+    # -------------------------------------------------------------------------
+    # Trend / peak helpers
+    # -------------------------------------------------------------------------
+
     @staticmethod
     def _compute_trend(current_val: Any, forecast: list[dict]) -> str | None:
-        """Pollen trend: compare today vs tomorrow (up/down/flat)."""
         if not isinstance(current_val, (int, float)) or not forecast:
             return None
         tomorrow = forecast[0].get("index")
@@ -691,7 +1256,6 @@ class GoogleAirQualityCoordinator(DataUpdateCoordinator):
 
     @staticmethod
     def _compute_hourly_trend(values: list[float]) -> str:
-        """AQI/pollutant trend: linear slope across hourly forecast values."""
         clean = [v for v in values if isinstance(v, (int, float))]
         if len(clean) < 3:
             return "stable"
