@@ -11,6 +11,7 @@
 - **Pollen Advisory sensor** — worst pollen level across all in-season types in a single sensor
 - **Multi-location support** — monitor multiple locations per API key; add, edit, and remove locations via Configure without re-adding the integration
 - **Per-API toggles** — Air Quality, Pollen, and Weather can be independently enabled or disabled
+- **Automagic mode** — calculates a safe polling interval automatically based on enabled APIs, monthly limits, and number of locations; eliminates manual interval tuning to stay within free tier
 - **Quota enforcement** — each API pauses independently when its monthly free-tier limit is reached and resumes automatically at the start of the next billing period
 - **Quiet hours** — configurable overnight polling pause (default 23:00–05:00)
 - **Projected usage preview** — options form shows estimated monthly API calls before saving, with a suggested minimum interval based on enabled APIs and number of locations
@@ -22,6 +23,7 @@
 - Billing period reset: configurable reset day replaced with fixed 1st of month at midnight Pacific Time, matching Google's actual billing cycle
 - Quota tracking is now shared across multiple config entries using the same API key
 - Documentation site refactored from 8 pages to 6 with a quick-start-first structure
+- Self-assessed compliance with all HA Integration Quality Scale criteria through Platinum tier (Bronze 16/16, Silver 9/9, Gold 18/18, Platinum 3/3 — note: the official Platinum designation is awarded by Nabu Casa to core HA integrations only)
 
 ### Removed
 
