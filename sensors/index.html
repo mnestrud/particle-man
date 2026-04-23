@@ -1,0 +1,1382 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://mnestrud.github.io/particle-man/sensors/">
+      
+      
+        <link rel="prev" href="../setup/">
+      
+      
+        <link rel="next" href="../weather/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Sensors - Particle Man</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="light-blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sensors-entities" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Particle Man" class="md-header__button md-logo" aria-label="Particle Man" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Particle Man
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Sensors
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="light-blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mnestrud/particle-man" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnestrud/particle-man
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Sensors
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../weather/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Weather
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Reference
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Particle Man" class="md-nav__button md-logo" aria-label="Particle Man" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    Particle Man
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mnestrud/particle-man" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnestrud/particle-man
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sensors
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sensors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-pollution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Pollution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Pollution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#universal-aqi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Universal AQI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#universal-aqi-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Universal AQI Level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#air-quality-advisory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Air Quality Advisory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-aqi-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local AQI (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollutant-sensors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollutant Sensors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-pollen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Pollen
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Pollen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pollen-advisory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen Advisory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollen-type-sensors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen Type Sensors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollen-plant-sensors-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen Plant Sensors (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-weather" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Weather
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Weather">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#weather-entity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather Entity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extra-sensors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extra Sensors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather-alerts-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather Alerts (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Diagnostics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#last-api-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Last API Update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-call-sensors-monthly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Call Sensors (Monthly)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-pollution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Pollution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Pollution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#universal-aqi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Universal AQI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#universal-aqi-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Universal AQI Level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#air-quality-advisory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Air Quality Advisory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-aqi-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local AQI (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollutant-sensors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollutant Sensors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-pollen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Pollen
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Pollen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pollen-advisory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen Advisory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollen-type-sensors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen Type Sensors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollen-plant-sensors-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen Plant Sensors (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-weather" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Weather
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Weather">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#weather-entity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather Entity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extra-sensors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extra Sensors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather-alerts-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather Alerts (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-man-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle Man Diagnostics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Particle Man Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#last-api-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Last API Update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-call-sensors-monthly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Call Sensors (Monthly)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/mnestrud/particle-man/edit/main/docs/sensors.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="sensors-entities">Sensors &amp; Entities<a class="headerlink" href="#sensors-entities" title="Permanent link">&para;</a></h1>
+<p>Particle Man creates four devices per monitored location, each grouping related sensors.</p>
+<hr />
+<h2 id="particle-man-pollution">Particle Man Pollution<a class="headerlink" href="#particle-man-pollution" title="Permanent link">&para;</a></h2>
+<div class="admonition info">
+<p class="admonition-title">About the two AQI types</p>
+<p><strong>Universal AQI (UAQI)</strong> is Google's own air quality index — a single 0–500 scale that means the same thing everywhere. It is always available and is the primary AQI sensor. (<a href="https://developers.google.com/maps/documentation/air-quality/air-quality-indexes">Google UAQI reference</a>)</p>
+<p><strong>Regional/Local AQI</strong> is the official index published by your country's regulatory authority — for example, the US EPA AQI, UK DEFRA index, or Germany's UBA index. It measures the same air quality but applies the thresholds and categories defined by that authority. This is optional and disabled by default; enable it in Configure if you want your country's standard alongside the universal one. 13 regional standards are supported — see <a href="../setup/#air-quality-options">Setup</a>.</p>
+</div>
+<h3 id="universal-aqi">Universal AQI<a class="headerlink" href="#universal-aqi" title="Permanent link">&para;</a></h3>
+<p>The main air quality number. Google's <strong>Universal AQI (UAQI)</strong> — a single 0–500 scale that works the same way in every country. Higher is worse.</p>
+<table>
+<thead>
+<tr>
+<th>Range</th>
+<th>Category</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0–50</td>
+<td>Good</td>
+<td>Air quality is satisfactory</td>
+</tr>
+<tr>
+<td>51–100</td>
+<td>Moderate</td>
+<td>Acceptable; some pollutants may be a concern for sensitive people</td>
+</tr>
+<tr>
+<td>101–150</td>
+<td>Unhealthy for Sensitive Groups</td>
+<td>Children, elderly, and people with lung or heart conditions should limit outdoor exertion</td>
+</tr>
+<tr>
+<td>151–200</td>
+<td>Unhealthy</td>
+<td>Everyone may begin to experience health effects</td>
+</tr>
+<tr>
+<td>201–300</td>
+<td>Very Unhealthy</td>
+<td>Health alert — everyone may experience serious effects</td>
+</tr>
+<tr>
+<td>301–500</td>
+<td>Hazardous</td>
+<td>Emergency conditions</td>
+</tr>
+</tbody>
+</table>
+<p>Includes a <strong>trend</strong> (<code>rising</code>, <code>falling</code>, <code>stable</code>) calculated from the hourly forecast, plus <code>daily_forecast</code> and <code>hourly_forecast</code> attributes for charts.</p>
+<h3 id="universal-aqi-level">Universal AQI Level<a class="headerlink" href="#universal-aqi-level" title="Permanent link">&para;</a></h3>
+<p>The same data as Universal AQI expressed as a category text (<code>Good</code>, <code>Moderate</code>, etc.). Useful for display cards and condition-based automations.</p>
+<h3 id="air-quality-advisory">Air Quality Advisory<a class="headerlink" href="#air-quality-advisory" title="Permanent link">&para;</a></h3>
+<p>A simplified advisory level for automations — maps the UAQI category to four levels:</p>
+<table>
+<thead>
+<tr>
+<th>Advisory</th>
+<th>AQI Categories</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>None</td>
+<td>Good, Moderate</td>
+</tr>
+<tr>
+<td>Caution</td>
+<td>Unhealthy for Sensitive Groups</td>
+</tr>
+<tr>
+<td>Warning</td>
+<td>Unhealthy</td>
+</tr>
+<tr>
+<td>Alert</td>
+<td>Very Unhealthy, Hazardous</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Attributes:</strong> AQI value, full category, dominant pollutant, elevated pollutants list, trend, and health recommendations (if enabled).</p>
+<p>Use this sensor in automations when you want simple state-based triggers without numeric thresholds.</p>
+<h3 id="local-aqi-optional">Local AQI <em>(optional)</em><a class="headerlink" href="#local-aqi-optional" title="Permanent link">&para;</a></h3>
+<p>A country-specific index alongside the Universal AQI. Enable in <strong>Configure → Air Quality Options</strong>. Supports 13 regional standards. (<a href="https://developers.google.com/maps/documentation/air-quality/air-quality-indexes">AQI indexes reference</a>)</p>
+<h3 id="pollutant-sensors">Pollutant Sensors<a class="headerlink" href="#pollutant-sensors" title="Permanent link">&para;</a></h3>
+<p>A sensor for each pollutant detected at your location:</p>
+<table>
+<thead>
+<tr>
+<th>Pollutant</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PM2.5</td>
+<td>Fine particles from smoke, traffic, industry</td>
+</tr>
+<tr>
+<td>PM10</td>
+<td>Coarser particles — dust, pollen, mold spores</td>
+</tr>
+<tr>
+<td>O3 (Ozone)</td>
+<td>Ground-level ozone from sunlight + traffic exhaust</td>
+</tr>
+<tr>
+<td>NO2 (Nitrogen Dioxide)</td>
+<td>Mainly from vehicles and power plants</td>
+</tr>
+<tr>
+<td>CO (Carbon Monoxide)</td>
+<td>From combustion — vehicles, fires</td>
+</tr>
+<tr>
+<td>SO2 (Sulfur Dioxide)</td>
+<td>From burning fossil fuels, industrial activity</td>
+</tr>
+</tbody>
+</table>
+<p>Each shows current concentration with an <strong>EPA health category</strong>, trend, and hourly/daily forecasts. A matching <strong>Level sensor</strong> (e.g. "PM2.5 Level") shows the plain-language EPA category.</p>
+<p>Pollutant sensors are <strong>disabled by default</strong> — enable individually as needed.</p>
+<p>(<a href="https://developers.google.com/maps/documentation/air-quality/pollutants">Pollutants reference</a>)</p>
+<details>
+<summary>Sensor attributes</summary>
+<p><strong>AQI and Pollutant sensors</strong></p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>daily_forecast</code></td>
+<td>Daily peak values up to configured forecast days. Each entry: <code>datetime</code>, <code>aqi</code> or <code>max</code>, <code>category</code></td>
+</tr>
+<tr>
+<td><code>hourly_forecast</code></td>
+<td>Hourly values up to 96 hours. Each entry: <code>datetime</code>, <code>aqi</code> or <code>value</code>, <code>category</code>, <code>epa_category</code></td>
+</tr>
+<tr>
+<td><code>trend</code></td>
+<td>Direction based on hourly slope: <code>rising</code>, <code>falling</code>, or <code>stable</code></td>
+</tr>
+</tbody>
+</table>
+</details>
+<hr />
+<h2 id="particle-man-pollen">Particle Man Pollen<a class="headerlink" href="#particle-man-pollen" title="Permanent link">&para;</a></h2>
+<h3 id="pollen-advisory">Pollen Advisory<a class="headerlink" href="#pollen-advisory" title="Permanent link">&para;</a></h3>
+<p>The worst pollen level across all in-season pollen types. Levels: <code>None</code>, <code>Very Low</code>, <code>Low</code>, <code>Moderate</code>, <code>High</code>, <code>Very High</code>.</p>
+<p><strong>Attributes:</strong> dominant type, dominant index value, in-season types list, all levels by type, health recommendations (if enabled).</p>
+<p>Use this for simple automations — trigger on <code>High</code> or <code>Very High</code> without checking each type individually.</p>
+<h3 id="pollen-type-sensors">Pollen Type Sensors<a class="headerlink" href="#pollen-type-sensors" title="Permanent link">&para;</a></h3>
+<p>Three sensors covering the main pollen categories: <strong>Grass</strong>, <strong>Tree</strong>, and <strong>Weed</strong>. Each shows a 0–5 index value and category, plus a trend and 5-day daily forecast.</p>
+<h3 id="pollen-plant-sensors-optional">Pollen Plant Sensors <em>(optional)</em><a class="headerlink" href="#pollen-plant-sensors-optional" title="Permanent link">&para;</a></h3>
+<p>Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information if plant details are enabled.</p>
+<p>Plant sensors are <strong>disabled by default</strong>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Pollen data is only available in regions covered by Google's Pollen API. <a href="https://developers.google.com/maps/documentation/pollen/coverage">Coverage map</a> — primarily North America and Europe. If your location isn't covered, pollen sensors will remain unavailable.</p>
+</div>
+<details>
+<summary>Sensor attributes</summary>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>daily_forecast</code></td>
+<td>Daily forecast entries: <code>datetime</code>, <code>index</code>, <code>category</code>, <code>color_hex</code></td>
+</tr>
+<tr>
+<td><code>trend</code></td>
+<td><code>up</code>, <code>down</code>, or <code>flat</code> based on today vs tomorrow</td>
+</tr>
+<tr>
+<td><code>expected_peak</code></td>
+<td>Forecast entry with the highest index value</td>
+</tr>
+</tbody>
+</table>
+</details>
+<p>(<a href="https://developers.google.com/maps/documentation/pollen/pollen-types">Pollen types reference</a>)</p>
+<hr />
+<h2 id="particle-man-weather">Particle Man Weather<a class="headerlink" href="#particle-man-weather" title="Permanent link">&para;</a></h2>
+<p>The weather device includes a native HA weather entity and several extra sensors. See <a href="../weather/">Weather</a> for full details.</p>
+<h3 id="weather-entity">Weather Entity<a class="headerlink" href="#weather-entity" title="Permanent link">&para;</a></h3>
+<p>Current conditions and three forecast types (hourly 24h, daily 5-day, twice-daily 5-day). Works with all native HA weather cards and the <code>weather.get_forecasts</code> action.</p>
+<h3 id="extra-sensors">Extra Sensors<a class="headerlink" href="#extra-sensors" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Sensor</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thunderstorm Probability</td>
+<td>Probability (%) of a thunderstorm this hour</td>
+</tr>
+<tr>
+<td>Heat Index</td>
+<td>Feels-like temperature in hot and humid conditions</td>
+</tr>
+<tr>
+<td>Wind Chill</td>
+<td>Feels-like temperature in cold and windy conditions</td>
+</tr>
+</tbody>
+</table>
+<h3 id="weather-alerts-optional">Weather Alerts <em>(optional)</em><a class="headerlink" href="#weather-alerts-optional" title="Permanent link">&para;</a></h3>
+<p>Count of currently active weather warnings. Enable in <strong>Configure → Weather Options</strong>. Attributes include full alert list with severity, event type, area, and instructions.</p>
+<hr />
+<h2 id="particle-man-diagnostics">Particle Man Diagnostics<a class="headerlink" href="#particle-man-diagnostics" title="Permanent link">&para;</a></h2>
+<h3 id="last-api-update">Last API Update<a class="headerlink" href="#last-api-update" title="Permanent link">&para;</a></h3>
+<p>Timestamp of when Google last refreshed the data for your location.</p>
+<h3 id="api-call-sensors-monthly">API Call Sensors (Monthly)<a class="headerlink" href="#api-call-sensors-monthly" title="Permanent link">&para;</a></h3>
+<p>One sensor each for AQ, Pollen, and Weather API calls.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>monthly_limit</code></td>
+<td>Your configured limit for this API</td>
+</tr>
+<tr>
+<td><code>projected_monthly</code></td>
+<td>Estimated calls by end of billing period at current rate</td>
+</tr>
+<tr>
+<td><code>pct_of_limit</code></td>
+<td>Percentage of limit used so far</td>
+</tr>
+<tr>
+<td><code>pct_projected</code></td>
+<td>Percentage of limit the projection will reach</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>ok</code> / <code>warning</code> (≥80% projected) / <code>critical</code> (≥95% projected)</td>
+</tr>
+<tr>
+<td><code>billing_period</code></td>
+<td>Current period in YYYY-MM format (Pacific Time)</td>
+</tr>
+<tr>
+<td><code>shared_total_calls</code></td>
+<td>Total across all entries sharing this API key</td>
+</tr>
+<tr>
+<td><code>locations_sharing_key</code></td>
+<td>Number of locations sharing this key</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "search.suggest", "search.highlight", "content.action.edit", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
