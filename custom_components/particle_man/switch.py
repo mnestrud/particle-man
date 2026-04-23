@@ -7,7 +7,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity import EntityCategory  # type: ignore[attr-defined]
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -16,6 +16,8 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import ParticleManGlobalState
+
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -36,9 +38,9 @@ class QuietHoursSwitch(SwitchEntity):
     """Switch to enable/disable quiet hours at runtime without entering options."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:weather-night"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_should_poll = False
+    _attr_translation_key = "quiet_hours"
 
     def __init__(
         self,
@@ -50,10 +52,6 @@ class QuietHoursSwitch(SwitchEntity):
         self._entry_id = entry_id
         self._config_default = config_default
         self._attr_unique_id = f"{entry_id}_quiet_hours"
-
-    @property
-    def name(self) -> str:
-        return "Quiet Hours"
 
     @property
     def device_info(self) -> DeviceInfo:

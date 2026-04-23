@@ -3,21 +3,20 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 import asyncio
 import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
-    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -69,6 +68,7 @@ from .const import (
     DEFAULT_QUIET_START,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
+    DEFAULT_WEATHER_UNITS,
     DOMAIN,
     LOCAL_AQI_CODES,
     POLLEN_API_URL,
@@ -127,7 +127,7 @@ def _usage_summary(
     return f"With {loc_str} at {weather_interval} min — estimated monthly: {' · '.join(parts)} calls."
 
 
-def _classify_api_error(status: int, body: dict) -> str:
+def _classify_api_error(status: int, body: dict[str, Any]) -> str:
     if status == 403:
         err = body.get("error", {}) or {}
         msg = (err.get("message") or "").lower()
@@ -140,7 +140,7 @@ def _classify_api_error(status: int, body: dict) -> str:
 
 
 async def _check_api_coverage(
-    hass, api_key: str, lat: float, lon: float
+    hass: HomeAssistant, api_key: str, lat: float, lon: float
 ) -> tuple[dict[str, str], list[str]]:
     session = async_get_clientsession(hass)
 
@@ -155,7 +155,7 @@ async def _check_api_coverage(
             async with session.post(
                 url, json=body, timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
-                if resp.ok:
+                if resp.status < 400:
                     data = await resp.json()
                     codes = [
                         i.get("code") for i in data.get("indexes", [])
@@ -173,7 +173,7 @@ async def _check_api_coverage(
             return "cannot_connect", []
 
     async def _check_pollen() -> str:
-        params: dict[str, str | int] = {
+        params: dict[str, Any] = {
             "key": api_key,
             "location.latitude": f"{lat:.6f}",
             "location.longitude": f"{lon:.6f}",
@@ -183,7 +183,7 @@ async def _check_api_coverage(
             async with session.get(
                 POLLEN_API_URL, params=params, timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
-                if resp.ok:
+                if resp.status < 400:
                     return "ok"
                 try:
                     body_data = await resp.json()
@@ -207,7 +207,7 @@ async def _check_api_coverage(
             async with session.get(
                 url, params=params, timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
-                if resp.ok:
+                if resp.status < 400:
                     return "ok"
                 try:
                     body_data = await resp.json()
@@ -294,7 +294,6 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(key_hash)
                 self._abort_if_unique_id_configured()
 
-                locale_units = "METRIC" if self.hass.config.units._name == "metric" else "IMPERIAL"  # type: ignore[attr-defined]
                 seeded_options = {
                     CONF_AUTOMAGIC_MODE: DEFAULT_AUTOMAGIC_MODE,
                     CONF_QUIET_HOURS_ENABLED: DEFAULT_QUIET_HOURS_ENABLED,
@@ -308,7 +307,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_ENABLE_POLLEN: DEFAULT_ENABLE_POLLEN,
                     CONF_ENABLE_WEATHER: DEFAULT_ENABLE_WEATHER,
                     CONF_ENABLE_WEATHER_ALERTS: DEFAULT_ENABLE_WEATHER_ALERTS,
-                    CONF_WEATHER_UNITS: locale_units,
+                    CONF_WEATHER_UNITS: DEFAULT_WEATHER_UNITS,
                     CONF_AQ_MONTHLY_LIMIT: DEFAULT_AQ_MONTHLY_LIMIT,
                     CONF_POLLEN_MONTHLY_LIMIT: DEFAULT_POLLEN_MONTHLY_LIMIT,
                     CONF_WEATHER_MONTHLY_LIMIT: DEFAULT_WEATHER_MONTHLY_LIMIT,
@@ -321,7 +320,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     }],
                 }
                 return self.async_create_entry(
-                    title="Particle Man",
+                    title=f"Particle Man",
                     data={CONF_API_KEY: api_key},
                     options=seeded_options,
                 )
@@ -354,6 +353,118 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 }
             ),
+            errors=errors,
+        )
+
+
+    async def async_step_reauth(
+        self, entry_data: dict[str, Any]
+    ) -> config_entries.ConfigFlowResult:
+        """Handle reauthentication when the API key becomes invalid."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Confirm reauthentication with a new API key."""
+        errors: dict[str, str] = {}
+        entry = self._get_reauth_entry()
+
+        if user_input is not None:
+            api_key = user_input[CONF_API_KEY]
+            locations = entry.options.get(CONF_LOCATIONS, [])
+            lat = self.hass.config.latitude
+            lon = self.hass.config.longitude
+            if locations:
+                lat = float(locations[0].get(CONF_LATITUDE, lat))
+                lon = float(locations[0].get(CONF_LONGITUDE, lon))
+
+            try:
+                statuses, _codes = await _check_api_coverage(self.hass, api_key, lat, lon)
+                for api, err_key in {
+                    "aq": "aq_not_enabled",
+                    "pollen": "pollen_not_enabled",
+                    "weather": "weather_not_enabled",
+                }.items():
+                    if statuses.get(api) == "not_enabled":
+                        errors["base"] = err_key
+                        break
+                if not errors:
+                    for api, status in statuses.items():
+                        if status in ("invalid_auth", "cannot_connect"):
+                            errors["base"] = status
+                            break
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error during Particle Man reauthentication")
+                errors["base"] = "unknown"
+
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={**entry.data, CONF_API_KEY: api_key},
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({
+                vol.Required(CONF_API_KEY): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Handle reconfiguration — allows updating the API key."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            api_key = user_input[CONF_API_KEY]
+            locations = entry.options.get(CONF_LOCATIONS, [])
+            lat = self.hass.config.latitude
+            lon = self.hass.config.longitude
+            if locations:
+                lat = float(locations[0].get(CONF_LATITUDE, lat))
+                lon = float(locations[0].get(CONF_LONGITUDE, lon))
+
+            try:
+                statuses, _codes = await _check_api_coverage(self.hass, api_key, lat, lon)
+                for api, err_key in {
+                    "aq": "aq_not_enabled",
+                    "pollen": "pollen_not_enabled",
+                    "weather": "weather_not_enabled",
+                }.items():
+                    if statuses.get(api) == "not_enabled":
+                        errors["base"] = err_key
+                        break
+                if not errors:
+                    for api, status in statuses.items():
+                        if status in ("invalid_auth", "cannot_connect"):
+                            errors["base"] = status
+                            break
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error during Particle Man reconfiguration")
+                errors["base"] = "unknown"
+
+            if not errors:
+                key_hash = hashlib.md5(api_key.encode()).hexdigest()
+                await self.async_set_unique_id(key_hash)
+                self._abort_if_unique_id_configured(updates={CONF_API_KEY: api_key})
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={**entry.data, CONF_API_KEY: api_key},
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({
+                vol.Required(CONF_API_KEY): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
+            }),
             errors=errors,
         )
 
@@ -394,7 +505,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         if not self._locations:
             return "No locations added yet."
         lines = []
-        for loc in self._locations:  # type: ignore[union-attr]
+        for loc in self._locations:
             name = loc.get(CONF_LOCATION_NAME, "?")
             lat = loc.get(CONF_LATITUDE, 0)
             lon = loc.get(CONF_LONGITUDE, 0)
@@ -402,10 +513,9 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         return "\n".join(lines)
 
     def _automagic(self) -> bool:
-        return self._options.get(
-            CONF_AUTOMAGIC_MODE,
-            self._get(CONF_AUTOMAGIC_MODE, DEFAULT_AUTOMAGIC_MODE),
-        )
+        if CONF_AUTOMAGIC_MODE in self._options:
+            return bool(self._options[CONF_AUTOMAGIC_MODE])
+        return bool(self._get(CONF_AUTOMAGIC_MODE, DEFAULT_AUTOMAGIC_MODE))
 
     def _next_step(self, after: str) -> str | None:
         """Return next step ID after `after`, or None to create entry."""
@@ -480,14 +590,14 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_quiet_hours()
 
         has_locations = bool(self._locations)
-        action_options: list[SelectOptionDict] = [SelectOptionDict(value=_ACTION_ADD, label="Add a location")]
+        action_options = [{"value": _ACTION_ADD, "label": "Add a location"}]
         if has_locations:
-            action_options.append(SelectOptionDict(value=_ACTION_REMOVE, label="Remove a location"))
-            action_options.append(SelectOptionDict(value=_ACTION_CONTINUE, label="Continue →"))
+            action_options.append({"value": _ACTION_REMOVE, "label": "Remove a location"})
+            action_options.append({"value": _ACTION_CONTINUE, "label": "Continue →"})
 
         schema = vol.Schema({
             vol.Required(_ACTION, default=_ACTION_ADD if not has_locations else _ACTION_CONTINUE): SelectSelector(
-                SelectSelectorConfig(options=action_options, mode=SelectSelectorMode.LIST)
+                SelectSelectorConfig(options=action_options, mode=SelectSelectorMode.LIST)  # type: ignore[typeddict-item]
             ),
         })
 
@@ -510,6 +620,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             loc_name = (user_input.get(CONF_LOCATION_NAME) or "").strip()
+            lat = user_input.get(CONF_LATITUDE)
+            lon = user_input.get(CONF_LONGITUDE)
 
             if not loc_name:
                 errors[CONF_LOCATION_NAME] = "location_name_required"
@@ -523,10 +635,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
 
             if not errors:
                 api_key = self.config_entry.data[CONF_API_KEY]
-                lat = user_input[CONF_LATITUDE]
-                lon = user_input[CONF_LONGITUDE]
                 try:
-                    statuses, codes = await _check_api_coverage(self.hass, api_key, lat, lon)
+                    statuses, codes = await _check_api_coverage(self.hass, api_key, cast(float, lat), cast(float, lon))
                     self._availability = statuses
                     self._available_local_aqi_codes = codes
                     self._coverage_notes = _build_coverage_notes(statuses)
@@ -612,6 +722,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             self._options.update(user_input)
+            if self._automagic():
+                return self._create_entry()
             return await self.async_step_apis()
 
         schema = vol.Schema({
@@ -640,7 +752,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             self._options.update(user_input)
             next_step = self._next_step("apis")
             if next_step:
-                return await getattr(self, f"async_step_{next_step}")()
+                return await getattr(self, f"async_step_{next_step}")()  # type: ignore[no-any-return]
             return self._create_entry()
 
         automagic = self._automagic()
@@ -712,7 +824,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
                 self._options.update(user_input)
                 next_step = self._next_step("air_quality")
                 if next_step:
-                    return await getattr(self, f"async_step_{next_step}")()
+                    return await getattr(self, f"async_step_{next_step}")()  # type: ignore[no-any-return]
                 return self._create_entry()
 
         available_codes = self._available_local_aqi_codes or LOCAL_AQI_CODES
@@ -758,7 +870,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             self._options.update(user_input)
             next_step = self._next_step("pollen")
             if next_step:
-                return await getattr(self, f"async_step_{next_step}")()
+                return await getattr(self, f"async_step_{next_step}")()  # type: ignore[no-any-return]
             return self._create_entry()
 
         schema = vol.Schema({
@@ -783,7 +895,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             self._options.update(user_input)
             next_step = self._next_step("weather")
             if next_step:
-                return await getattr(self, f"async_step_{next_step}")()
+                return await getattr(self, f"async_step_{next_step}")()  # type: ignore[no-any-return]
             return self._create_entry()
 
         schema = vol.Schema({
@@ -795,9 +907,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             ),
             vol.Required(CONF_ENABLE_WEATHER_ALERTS): BooleanSelector(),
         })
-        locale_units = "METRIC" if self.hass.config.units._name == "metric" else "IMPERIAL"  # type: ignore[attr-defined]
         suggested = {
-            CONF_WEATHER_UNITS: self._get(CONF_WEATHER_UNITS, locale_units),
+            CONF_WEATHER_UNITS: self._get(CONF_WEATHER_UNITS, DEFAULT_WEATHER_UNITS),
             CONF_ENABLE_WEATHER_ALERTS: self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS),
         }
         return self.async_show_form(
@@ -830,8 +941,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT),
         )
 
-        fields: dict = {}
-        suggested: dict = {}
+        fields: dict[Any, Any] = {}
+        suggested: dict[Any, Any] = {}
 
         if enable_aq:
             fields[vol.Required(CONF_AQ_MONTHLY_LIMIT)] = NumberSelector(

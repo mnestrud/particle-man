@@ -1,14 +1,22 @@
 """Particle Man data coordinator."""
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import re
 from collections import defaultdict
 from datetime import datetime, time as _time, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 
+from homeassistant.helpers.issue_registry import (
+    IssueSeverity,
+    async_create_issue,
+    async_delete_issue,
+)
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -158,7 +166,7 @@ def _rgb_to_hex(rgb: tuple[int, int, int] | None) -> str | None:
     return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
-def _day_to_datetime(date_obj: dict) -> str | None:
+def _day_to_datetime(date_obj: dict[str, Any]) -> str | None:
     """Convert pollen API date dict {year, month, day} to ISO 8601 noon UTC string."""
     try:
         y = date_obj["year"]
@@ -215,6 +223,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         quiet_start: str = DEFAULT_QUIET_START,
         quiet_end: str = DEFAULT_QUIET_END,
         entry_id: str = "",
+        config_entry: Any = None,
     ) -> None:
         self.api_key = api_key
         self.latitude = latitude
@@ -246,7 +255,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
         key_hash = hashlib.md5(api_key.encode()).hexdigest()[:12]
         self._key_hash = key_hash
-        self._shared_store: Store = Store(
+        self._shared_store: Store[dict[str, Any]] = Store(
             hass, _STORAGE_VERSION, f"{_STORAGE_KEY}.shared.{key_hash}"
         )
         shared_state = hass.data.setdefault(DOMAIN, {})
@@ -256,6 +265,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self._cached_tracking: dict[str, Any] = _empty_shared_tracking()
         self._api_backoff: dict[str, Any] = {}
         self._api_failures: dict[str, int] = {}
+        self._api_unavailable_logged: set[str] = set()
         self._last_aq_fetch: datetime | None = None
         self._last_pollen_fetch: datetime | None = None
 
@@ -264,6 +274,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name=f"{DOMAIN}_{self.location_slug}",
             update_interval=timedelta(minutes=update_interval_minutes),
+            config_entry=config_entry,
         )
 
     def _current_billing_month(self) -> str:
@@ -297,38 +308,47 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         return False
 
     def _record_api_error(self, api: str, status: int | None = None) -> None:
+        if status in (401, 403):
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+            )
         failures = self._api_failures.get(api, 0) + 1
         self._api_failures[api] = failures
         now = datetime.now(timezone.utc)
         if status == 429:
             hours = min(8, 2 ** (failures - 1))
             self._api_backoff[api] = now + timedelta(hours=hours)
-            _LOGGER.error(
-                "Particle Man %s API rate-limited (429). Backing off %dh.", api.upper(), hours
-            )
-        elif status is not None and 500 <= status < 600:
-            if failures < 3:
+            if api not in self._api_unavailable_logged:
+                self._api_unavailable_logged.add(api)
                 _LOGGER.warning(
-                    "Particle Man %s API server error %s (failure %d before backoff).",
-                    api.upper(), status, failures,
+                    "Particle Man %s API rate-limited (429). Backing off %dh.", api.upper(), hours
                 )
-            else:
+        elif status is not None and 500 <= status < 600:
+            if failures == 1:
+                self._api_unavailable_logged.add(api)
+                _LOGGER.warning(
+                    "Particle Man %s API server error %s — will retry.", api.upper(), status
+                )
+            elif failures >= 3:
                 hours = min(8, 2 ** (failures - 2))
                 self._api_backoff[api] = now + timedelta(hours=hours)
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Particle Man %s API persistent errors. Backing off %dh.", api.upper(), hours
                 )
-        elif status is not None:
-            _LOGGER.error("Particle Man %s API permanent error %s.", api.upper(), status)
         else:
             if failures == 1:
-                _LOGGER.warning("Particle Man %s fetch failed (transient).", api.upper())
+                self._api_unavailable_logged.add(api)
+                _LOGGER.warning("Particle Man %s fetch failed — will retry.", api.upper())
             else:
                 _LOGGER.debug(
                     "Particle Man %s fetch still failing (failure %d).", api.upper(), failures
                 )
 
     def _clear_api_error(self, api: str) -> None:
+        if api in self._api_unavailable_logged:
+            self._api_unavailable_logged.discard(api)
+            _LOGGER.warning("Particle Man %s API recovered.", api.upper())
         self._api_failures.pop(api, None)
         self._api_backoff.pop(api, None)
 
@@ -364,6 +384,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         """Fetch data from enabled APIs, respecting quiet hours and monthly limits."""
         if self._is_quiet_hours():
             _LOGGER.debug("Particle Man [%s]: quiet hours active, skipping update", self.location_name)
+            await self._save_tracking(aq_inc=0, pollen_inc=0, weather_inc=0)
             return self.data or {}
 
         # Roll over month counter if needed
@@ -374,6 +395,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 new_tracking["period_month"] = current_month
                 self._cached_tracking = new_tracking
                 await self._shared_store.async_save(new_tracking)
+            for api in ("aq", "pollen", "weather"):
+                async_delete_issue(self.hass, DOMAIN, f"{api}_quota_{self.entry_id}")
 
         now = dt_util.utcnow()
         data = dict(self.data) if self.data else {}
@@ -397,6 +420,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     and self._cached_tracking.get("aq_calls", 0) >= self.aq_monthly_limit
                 )
                 if aq_blocked:
+                    async_create_issue(
+                        self.hass, DOMAIN, f"aq_quota_{self.entry_id}",
+                        is_fixable=False, severity=IssueSeverity.WARNING,
+                        translation_key="api_quota_exhausted",
+                        translation_placeholders={"api_name": "Air Quality"},
+                    )
                     _LOGGER.debug(
                         "AQ monthly limit reached (%d/%d), skipping",
                         self._cached_tracking.get("aq_calls", 0),
@@ -429,6 +458,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 and self._cached_tracking.get("weather_calls", 0) >= self.weather_monthly_limit
             )
             if weather_blocked:
+                async_create_issue(
+                    self.hass, DOMAIN, f"weather_quota_{self.entry_id}",
+                    is_fixable=False, severity=IssueSeverity.WARNING,
+                    translation_key="api_quota_exhausted",
+                    translation_placeholders={"api_name": "Weather"},
+                )
                 _LOGGER.debug(
                     "Weather monthly limit reached (%d/%d), skipping",
                     self._cached_tracking.get("weather_calls", 0),
@@ -438,7 +473,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Weather API backed off until %s, skipping", self._api_backoff.get("weather"))
             else:
                 try:
-                    weather_tasks: list = [
+                    weather_tasks: list[Any] = [
                         self._fetch_weather_current(session),
                         self._fetch_weather_hourly(session),
                         self._fetch_weather_daily(session),
@@ -448,12 +483,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
                     results = await asyncio.gather(*weather_tasks, return_exceptions=True)
 
-                    w_current: dict[Any, Any] = results[0] if not isinstance(results[0], Exception) else {}  # type: ignore[assignment]
-                    w_hourly: dict[Any, Any] = results[1] if not isinstance(results[1], Exception) else {}  # type: ignore[assignment]
-                    w_daily: dict[Any, Any] = results[2] if not isinstance(results[2], Exception) else {}  # type: ignore[assignment]
-                    w_alerts: dict[Any, Any] | None = None
+                    w_current: dict[str, Any] = results[0] if not isinstance(results[0], Exception) else {}  # type: ignore[assignment]
+                    w_hourly: dict[str, Any] = results[1] if not isinstance(results[1], Exception) else {}  # type: ignore[assignment]
+                    w_daily: dict[str, Any] = results[2] if not isinstance(results[2], Exception) else {}  # type: ignore[assignment]
+                    w_alerts: dict[str, Any] | None = None
                     if self.enable_weather_alerts and len(results) > 3:
-                        w_alerts = results[3] if not isinstance(results[3], Exception) else None  # type: ignore[assignment]
+                        w_alerts = results[3] if not isinstance(results[3], Exception) else {}  # type: ignore[assignment]
 
                     any_failed = False
                     for i, res in enumerate(results):
@@ -489,6 +524,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     and self._cached_tracking.get("pollen_calls", 0) >= self.pollen_monthly_limit
                 )
                 if pollen_blocked:
+                    async_create_issue(
+                        self.hass, DOMAIN, f"pollen_quota_{self.entry_id}",
+                        is_fixable=False, severity=IssueSeverity.WARNING,
+                        translation_key="api_quota_exhausted",
+                        translation_placeholders={"api_name": "Pollen"},
+                    )
                     _LOGGER.debug(
                         "Pollen monthly limit reached (%d/%d), skipping",
                         self._cached_tracking.get("pollen_calls", 0),
@@ -523,7 +564,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         )
 
         if not data and not self.data:
-            raise UpdateFailed("No data available from any enabled API")
+            raise UpdateFailed(translation_domain=DOMAIN, translation_key="no_data_available")
 
         return data
 
@@ -531,7 +572,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
     # Air Quality fetch
     # -------------------------------------------------------------------------
 
-    async def _fetch_current(self, session: aiohttp.ClientSession) -> dict:
+    async def _fetch_current(self, session: aiohttp.ClientSession) -> dict[str, Any]:
         url = f"{BASE_URL}/currentConditions:lookup?key={self.api_key}"
         extra = list(CURRENT_EXTRA_COMPUTATIONS_BASE)
         if self.include_health_recs:
@@ -548,15 +589,15 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         async with session.post(
             url, json=body, timeout=aiohttp.ClientTimeout(total=15)
         ) as resp:
-            if not resp.ok:
+            if resp.status >= 400:
                 error_body = await resp.text()
                 _LOGGER.error(
                     "Google AQI currentConditions error %s: %s", resp.status, error_body
                 )
             resp.raise_for_status()
-            return await resp.json()
+            return cast(dict[str, Any], await resp.json())
 
-    async def _fetch_forecast(self, session: aiohttp.ClientSession) -> list[dict]:
+    async def _fetch_forecast(self, session: aiohttp.ClientSession) -> list[dict[str, Any]]:
         url = f"{BASE_URL}/forecast:lookup?key={self.api_key}"
         next_hour = (
             datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -580,20 +621,20 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         async with session.post(
             url, json=body, timeout=aiohttp.ClientTimeout(total=15)
         ) as resp:
-            if not resp.ok:
+            if resp.status >= 400:
                 error_body = await resp.text()
                 _LOGGER.error(
                     "Google AQI forecast error %s: %s", resp.status, error_body
                 )
             resp.raise_for_status()
-            result = await resp.json()
-            return result.get("hourlyForecasts", [])
+            result: dict[str, Any] = cast(dict[str, Any], await resp.json())
+            return cast(list[dict[str, Any]], result.get("hourlyForecasts", []))
 
     # -------------------------------------------------------------------------
     # Pollen fetch
     # -------------------------------------------------------------------------
 
-    async def _fetch_pollen(self, session: aiohttp.ClientSession) -> dict:
+    async def _fetch_pollen(self, session: aiohttp.ClientSession) -> dict[str, Any]:
         params: dict[str, Any] = {
             "key": self.api_key,
             "location.latitude": f"{self.latitude:.6f}",
@@ -607,19 +648,19 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         async with session.get(
             POLLEN_API_URL, params=params, timeout=aiohttp.ClientTimeout(total=15)
         ) as resp:
-            if not resp.ok:
+            if resp.status >= 400:
                 error_body = await resp.text()
                 _LOGGER.warning(
                     "Google Pollen API error %s: %s", resp.status, error_body[:300]
                 )
                 resp.raise_for_status()
-            return await resp.json()
+            return cast(dict[str, Any], await resp.json())
 
     # -------------------------------------------------------------------------
     # Weather fetch
     # -------------------------------------------------------------------------
 
-    async def _fetch_weather_current(self, session: aiohttp.ClientSession) -> dict:
+    async def _fetch_weather_current(self, session: aiohttp.ClientSession) -> dict[str, Any]:
         url = f"{WEATHER_API_URL}/currentConditions:lookup"
         params: dict[str, Any] = {
             "key": self.api_key,
@@ -630,15 +671,15 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         async with session.get(
             url, params=params, timeout=aiohttp.ClientTimeout(total=15)
         ) as resp:
-            if not resp.ok:
+            if resp.status >= 400:
                 error_body = await resp.text()
                 _LOGGER.warning(
                     "Google Weather currentConditions error %s: %s", resp.status, error_body[:300]
                 )
                 resp.raise_for_status()
-            return await resp.json()
+            return cast(dict[str, Any], await resp.json())
 
-    async def _fetch_weather_hourly(self, session: aiohttp.ClientSession) -> dict:
+    async def _fetch_weather_hourly(self, session: aiohttp.ClientSession) -> dict[str, Any]:
         url = f"{WEATHER_API_URL}/forecast/hours:lookup"
         params: dict[str, Any] = {
             "key": self.api_key,
@@ -651,15 +692,15 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         async with session.get(
             url, params=params, timeout=aiohttp.ClientTimeout(total=15)
         ) as resp:
-            if not resp.ok:
+            if resp.status >= 400:
                 error_body = await resp.text()
                 _LOGGER.warning(
                     "Google Weather forecast/hours error %s: %s", resp.status, error_body[:300]
                 )
                 resp.raise_for_status()
-            return await resp.json()
+            return cast(dict[str, Any], await resp.json())
 
-    async def _fetch_weather_daily(self, session: aiohttp.ClientSession) -> dict:
+    async def _fetch_weather_daily(self, session: aiohttp.ClientSession) -> dict[str, Any]:
         url = f"{WEATHER_API_URL}/forecast/days:lookup"
         params: dict[str, Any] = {
             "key": self.api_key,
@@ -672,15 +713,15 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         async with session.get(
             url, params=params, timeout=aiohttp.ClientTimeout(total=15)
         ) as resp:
-            if not resp.ok:
+            if resp.status >= 400:
                 error_body = await resp.text()
                 _LOGGER.warning(
                     "Google Weather forecast/days error %s: %s", resp.status, error_body[:300]
                 )
                 resp.raise_for_status()
-            return await resp.json()
+            return cast(dict[str, Any], await resp.json())
 
-    async def _fetch_weather_alerts(self, session: aiohttp.ClientSession) -> dict:
+    async def _fetch_weather_alerts(self, session: aiohttp.ClientSession) -> dict[str, Any]:
         url = f"{WEATHER_API_URL}/publicAlerts:lookup"
         params: dict[str, Any] = {
             "key": self.api_key,
@@ -690,19 +731,19 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         async with session.get(
             url, params=params, timeout=aiohttp.ClientTimeout(total=15)
         ) as resp:
-            if not resp.ok:
+            if resp.status >= 400:
                 error_body = await resp.text()
                 _LOGGER.warning(
                     "Google Weather publicAlerts error %s: %s", resp.status, error_body[:300]
                 )
                 resp.raise_for_status()
-            return await resp.json()
+            return cast(dict[str, Any], await resp.json())
 
     # -------------------------------------------------------------------------
     # Air Quality data builders
     # -------------------------------------------------------------------------
 
-    def _build_data(self, current: dict, forecast_hours: list[dict]) -> dict[str, Any]:
+    def _build_data(self, current: dict[str, Any], forecast_hours: list[dict[str, Any]]) -> dict[str, Any]:
         """Structure AQ API responses into sensor data."""
         new_data: dict[str, Any] = {}
 
@@ -801,10 +842,10 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         return new_data
 
     def _build_aqi_hourly_forecast(
-        self, hours: list[dict]
-    ) -> tuple[list[dict], list[dict]]:
-        uaqi_hourly: list[dict] = []
-        local_hourly: list[dict] = []
+        self, hours: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        uaqi_hourly: list[dict[str, Any]] = []
+        local_hourly: list[dict[str, Any]] = []
         for h in hours:
             dt_str = h.get("dateTime", "")
             for idx in h.get("indexes", []):
@@ -827,9 +868,9 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         return uaqi_hourly, local_hourly
 
     def _build_pollutant_hourly_forecast(
-        self, hours: list[dict]
-    ) -> dict[str, list[dict]]:
-        result: dict[str, list[dict]] = defaultdict(list)
+        self, hours: list[dict[str, Any]]
+    ) -> dict[str, list[dict[str, Any]]]:
+        result: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for h in hours:
             dt_str = h.get("dateTime", "")
             for p in h.get("pollutants", []):
@@ -847,10 +888,10 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         return dict(result)
 
     def _build_aqi_daily_forecast(
-        self, hours: list[dict]
-    ) -> tuple[list[dict], list[dict]]:
-        uaqi_days: dict[str, list[dict]] = defaultdict(list)
-        local_days: dict[str, list[dict]] = defaultdict(list)
+        self, hours: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        uaqi_days: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        local_days: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
         for h in hours:
             dt_str = h.get("dateTime", "")
@@ -871,7 +912,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                         {"aqi": idx["aqi"], "category": idx.get("category")}
                     )
 
-        def _to_daily(days_dict: dict) -> list[dict]:
+        def _to_daily(days_dict: dict[str, Any]) -> list[dict[str, Any]]:
             result = []
             for date_key in sorted(days_dict.keys())[: self.forecast_days]:
                 entries = days_dict[date_key]
@@ -888,9 +929,9 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         return _to_daily(uaqi_days), _to_daily(local_days)
 
     def _build_pollutant_daily_forecast(
-        self, hours: list[dict]
-    ) -> dict[str, list[dict]]:
-        days: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+        self, hours: list[dict[str, Any]]
+    ) -> dict[str, list[dict[str, Any]]]:
+        days: dict[str, dict[str, list[Any]]] = defaultdict(lambda: defaultdict(list))
         for h in hours:
             dt_str = h.get("dateTime", "")
             try:
@@ -907,7 +948,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 if val is not None:
                     days[code][date_key].append({"value": val, "units": units})
 
-        result: dict[str, list[dict]] = {}
+        result: dict[str, list[dict[str, Any]]] = {}
         for code, date_dict in days.items():
             daily = []
             for date_key in sorted(date_dict.keys())[: self.forecast_days]:
@@ -929,7 +970,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
     # Pollen data builder
     # -------------------------------------------------------------------------
 
-    def _build_pollen_data(self, response: dict) -> dict[str, Any]:
+    def _build_pollen_data(self, response: dict[str, Any]) -> dict[str, Any]:
         """Parse Google Pollen API response into sensor data."""
         if not isinstance(response, dict):
             return {}
@@ -941,12 +982,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         result: dict[str, Any] = {}
 
         type_codes: set[str] = set()
-        type_by_day: list[dict[str, dict]] = []
-        plant_by_day: list[dict[str, dict]] = []
+        type_by_day: list[dict[str, Any]] = []
+        plant_by_day: list[dict[str, Any]] = []
         plant_codes: list[str] = []
 
         for i, day in enumerate(daily):
-            day_types: dict[str, dict] = {}
+            day_types: dict[str, Any] = {}
             for item in day.get("pollenTypeInfo", []) or []:
                 if not isinstance(item, dict):
                     continue
@@ -956,7 +997,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     type_codes.add(code)
             type_by_day.append(day_types)
 
-            day_plants: dict[str, dict] = {}
+            day_plants: dict[str, Any] = {}
             for item in day.get("plantInfo", []) or []:
                 if not isinstance(item, dict):
                     continue
@@ -1059,11 +1100,11 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
     def _build_pollen_forecast(
         self,
-        daily: list[dict],
-        by_day: list[dict[str, dict]],
+        daily: list[dict[str, Any]],
+        by_day: list[dict[str, Any]],
         code: str,
         kind: str,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         forecast = []
         for i, day in enumerate(daily[1:], start=1):
             date_obj = day.get("date") or {}
@@ -1089,10 +1130,10 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
     def _build_weather_data(
         self,
-        current: dict,
-        hourly: dict,
-        daily: dict,
-        alerts: dict | None,
+        current: dict[str, Any],
+        hourly: dict[str, Any],
+        daily: dict[str, Any],
+        alerts: dict[str, Any] | None,
     ) -> dict[str, Any]:
         result: dict[str, Any] = {}
 
@@ -1132,7 +1173,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
         return result
 
-    def _build_weather_hourly(self, hourly: dict) -> list[dict]:
+    def _build_weather_hourly(self, hourly: dict[str, Any]) -> list[dict[str, Any]]:
         entries = []
         for h in hourly.get("forecastHours", []):
             is_daytime = h.get("isDaytime", True)
@@ -1159,9 +1200,9 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 entries.append(entry)
         return entries
 
-    def _build_weather_daily(self, daily: dict) -> tuple[list[dict], list[dict]]:
-        daily_list: list[dict] = []
-        twice_daily_list: list[dict] = []
+    def _build_weather_daily(self, daily: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        daily_list: list[dict[str, Any]] = []
+        twice_daily_list: list[dict[str, Any]] = []
 
         for day in daily.get("forecastDays", []):
             date_obj = day.get("displayDate") or {}
@@ -1180,12 +1221,12 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             night_fc = day.get("nighttimeForecast") or {}
 
             def _parse_fc(
-                fc: dict,
+                fc: dict[str, Any],
                 dt_str: str,
                 is_daytime: bool,
                 temp: float | None,
                 templow: float | None,
-            ) -> dict:
+            ) -> dict[str, Any]:
                 wind = fc.get("wind") or {}
                 precip = fc.get("precipitation") or {}
                 prob = (precip.get("probability") or {}).get("percent")
@@ -1221,7 +1262,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
         return daily_list, twice_daily_list
 
-    def _build_weather_alerts(self, alerts: dict) -> list[dict]:
+    def _build_weather_alerts(self, alerts: dict[str, Any]) -> list[dict[str, Any]]:
         result = []
         for alert in alerts.get("publicAlerts", []) or []:
             severity = (alert.get("severity") or "").replace("_SEVERITY", "")
@@ -1242,7 +1283,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
     # -------------------------------------------------------------------------
 
     @staticmethod
-    def _compute_trend(current_val: Any, forecast: list[dict]) -> str | None:
+    def _compute_trend(current_val: Any, forecast: list[dict[str, Any]]) -> str | None:
         if not isinstance(current_val, (int, float)) or not forecast:
             return None
         tomorrow = forecast[0].get("index")
@@ -1275,7 +1316,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         return "stable"
 
     @staticmethod
-    def _compute_peak(forecast: list[dict]) -> dict | None:
+    def _compute_peak(forecast: list[dict[str, Any]]) -> dict[str, Any] | None:
         peak = None
         for f in forecast:
             idx = f.get("index")

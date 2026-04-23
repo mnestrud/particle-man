@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Particle Man",
-        "description": "Particle Man uses Google's air quality, pollen, and weather data. You'll need a Google Maps Platform API key with the Air Quality, Pollen, and Weather APIs enabled.",
+        "description": "Particle Man uses Google's air quality, pollen, and weather data. You'll need a Google Maps Platform API key with the Air Quality, Pollen, and Weather APIs enabled. [Get an API key →](https://mnestrud.github.io/particle-man/)",
         "data": {
           "api_key": "API Key",
           "name": "Location name",
@@ -11,7 +11,7 @@
           "longitude": "Longitude"
         },
         "data_description": {
-          "api_key": "Paste your Google Maps Platform key here — it won't be visible after saving.",
+          "api_key": "Paste your Google Maps Platform key here — it won't be visible after saving. [How to get a key](https://mnestrud.github.io/particle-man/)",
           "name": "A name for this location (e.g. Home, Work). You can add more locations after setup.",
           "latitude": "Decimal latitude of the location to monitor. Pre-filled from Home Assistant.",
           "longitude": "Decimal longitude of the location to monitor. Pre-filled from Home Assistant."
@@ -22,27 +22,70 @@
       "invalid_auth": "API key not recognized — make sure the Air Quality, Pollen, and Weather APIs are enabled in your Google Cloud project.",
       "cannot_connect": "Couldn't reach Google. Check your internet connection and try again.",
       "unknown": "Something went wrong. Check the Home Assistant logs for details.",
-      "aq_not_enabled": "The Air Quality API is not enabled for this API key. Enable it in Google Cloud Console under APIs & Services.",
-      "pollen_not_enabled": "The Pollen API is not enabled for this API key. Enable it in Google Cloud Console under APIs & Services.",
-      "weather_not_enabled": "The Weather API is not enabled for this API key. Enable it in Google Cloud Console under APIs & Services."
+      "aq_not_enabled": "The Air Quality API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/airquality.googleapis.com",
+      "pollen_not_enabled": "The Pollen API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/pollen.googleapis.com",
+      "weather_not_enabled": "The Weather API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/weather.googleapis.com"
     },
     "abort": {
-      "already_configured": "An entry for this API key is already configured."
+      "already_configured": "An entry for this API key is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Configuration updated successfully."
+    },
+    "step": {
+      "reauth_confirm": {
+        "title": "Re-authenticate Particle Man",
+        "description": "Your API key is no longer valid. Enter a new Google Maps Platform API key to restore access.",
+        "data": {
+          "api_key": "API Key"
+        },
+        "data_description": {
+          "api_key": "Paste your new Google Maps Platform key here."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Particle Man",
+        "description": "Update the Google Maps Platform API key for this integration.",
+        "data": {
+          "api_key": "API Key"
+        },
+        "data_description": {
+          "api_key": "Paste your updated Google Maps Platform key here."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "aqi": {"name": "Universal AQI"},
+      "aqi_level": {"name": "Universal AQI Level"},
+      "aq_advisory": {"name": "Air Quality Advisory"},
+      "pollen_advisory": {"name": "Pollen Advisory"},
+      "weather_alerts": {"name": "Weather Alerts"},
+      "thunderstorm_probability": {"name": "Thunderstorm Probability"},
+      "heat_index": {"name": "Heat Index"},
+      "wind_chill": {"name": "Wind Chill"},
+      "last_api_update": {"name": "Last API Update"},
+      "monthly_aq_calls": {"name": "AQ API Calls (Monthly)"},
+      "monthly_pollen_calls": {"name": "Pollen API Calls (Monthly)"},
+      "monthly_weather_calls": {"name": "Weather API Calls (Monthly)"}
+    },
+    "switch": {
+      "quiet_hours": {"name": "Quiet Hours"}
     }
   },
   "options": {
     "error": {
-      "aq_not_enabled": "The Air Quality API is not enabled for this API key. Enable it in Google Cloud Console under APIs & Services.",
-      "pollen_not_enabled": "The Pollen API is not enabled for this API key. Enable it in Google Cloud Console under APIs & Services.",
-      "weather_not_enabled": "The Weather API is not enabled for this API key. Enable it in Google Cloud Console under APIs & Services.",
-      "local_aqi_unavailable": "This regional AQI standard is not available at your location. Check the Google Air Quality API documentation for available standards.",
+      "aq_not_enabled": "The Air Quality API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/airquality.googleapis.com",
+      "pollen_not_enabled": "The Pollen API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/pollen.googleapis.com",
+      "weather_not_enabled": "The Weather API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/weather.googleapis.com",
+      "local_aqi_unavailable": "This regional AQI standard is not available at your location. See available standards: https://developers.google.com/maps/documentation/air-quality/air-quality-indexes",
       "location_name_required": "Location name cannot be blank.",
       "location_name_duplicate": "A location with that name already exists. Use a unique name."
     },
     "step": {
       "init": {
         "title": "API Mode",
-        "description": "Choose how Particle Man manages API calls.\n\n**Automagic Free API Mode** keeps all enabled APIs within Google's free monthly quota automatically. In this mode:\n- **Air quality and pollen** check for new data every hour, matching Google's data refresh schedule.\n- **Weather** is checked more frequently — the interval is calculated from your location count and the free-tier limit.\n\nTurn off Automagic to set your own update interval and monthly limits.",
+        "description": "Choose how Particle Man manages API calls.\n\n**Automagic Free API Mode** keeps all enabled APIs within Google's free monthly quota automatically. In this mode:\n- **Air quality and pollen** check for new data every hour, matching Google's data refresh schedule.\n- **Weather** is checked more frequently — the interval is calculated from your location count and the free-tier limit.\n\nTurn off Automagic to set your own update interval and monthly limits. [Free tier details](https://mnestrud.github.io/particle-man/api-usage/)",
         "data": {
           "automagic_mode": "Automagic Free API Mode"
         },
@@ -94,7 +137,7 @@
       },
       "apis": {
         "title": "Data Sources",
-        "description": "{usage_summary}{coverage_notes}",
+        "description": "{usage_summary}{coverage_notes} [See what each provides →](https://mnestrud.github.io/particle-man/sensors/)",
         "data": {
           "enable_air_quality": "Air Quality",
           "enable_pollen": "Pollen",
@@ -105,7 +148,7 @@
           "enable_air_quality": "Current AQI, pollutant levels (PM2.5, ozone, NO₂, and more), and multi-day forecasts. Updated hourly (Google's data refresh rate).",
           "enable_pollen": "Pollen index by type (grass, tree, weed) with forecasts and optional per-plant-species detail. Updated hourly.",
           "enable_weather": "Current conditions, hourly and daily forecasts, and active weather alerts.",
-          "update_interval": "How often to fetch new weather data. Air quality and pollen always update hourly regardless of this setting — a shorter interval won't give you fresher AQ or pollen data."
+          "update_interval": "How often to fetch new weather data. Air quality and pollen always update hourly regardless of this setting — a shorter interval won't give you fresher AQ or pollen data. [How call counts work](https://mnestrud.github.io/particle-man/api-usage/)"
         }
       },
       "air_quality": {
@@ -120,8 +163,8 @@
         "data_description": {
           "forecast_days": "How many days of forecast data to include on each sensor (1 = today only, 5 = maximum).",
           "language_code": "Language for pollutant names and health guidance — use a two-letter code like en, es, or fr.",
-          "enable_local_aqi": "Adds a second AQI sensor using your region's health authority scale (e.g., US AQI) alongside the always-present Universal AQI (UAQI).",
-          "local_aqi_code": "The AQI standard used in your area. US users should typically choose US AQI."
+          "enable_local_aqi": "Adds a second AQI sensor using your region's health authority scale (e.g., US AQI) alongside the always-present Universal AQI (UAQI). [UAQI vs. regional standards →](https://mnestrud.github.io/particle-man/sensors/)",
+          "local_aqi_code": "The AQI standard used in your area. US users should typically choose US AQI. [Regional standards reference](https://mnestrud.github.io/particle-man/configuration/)"
         }
       },
       "pollen": {
@@ -148,18 +191,32 @@
       },
       "api_limits": {
         "title": "Custom Monthly Limits",
-        "description": "{usage_summary} Each API pauses for the rest of the month when its limit is reached.",
+        "description": "{usage_summary} Each API pauses for the rest of the month when its limit is reached. [How to view current usage](https://mnestrud.github.io/particle-man/api-usage/)",
         "data": {
           "aq_monthly_limit": "Air Quality limit",
           "pollen_monthly_limit": "Pollen limit",
           "weather_monthly_limit": "Weather limit"
         },
         "data_description": {
-          "aq_monthly_limit": "Maximum Air Quality checks per month. Google's free tier is 10,000 — set higher if you're on a paid plan.",
+          "aq_monthly_limit": "Maximum Air Quality checks per month. Google's free tier is 10,000 — set higher if you're on a paid plan. [Pricing details](https://mnestrud.github.io/particle-man/api-usage/)",
           "pollen_monthly_limit": "Maximum Pollen checks per month. Google's free tier is 5,000.",
           "weather_monthly_limit": "Maximum Weather checks per month. Google's free tier is 10,000."
         }
       }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "API key rejected — re-authentication required."
+    },
+    "no_data_available": {
+      "message": "No data available from any enabled API."
+    }
+  },
+  "issues": {
+    "api_quota_exhausted": {
+      "title": "{api_name} API quota exhausted",
+      "description": "The {api_name} API monthly call quota has been reached. Data updates are paused until the next billing cycle. To resume sooner, increase the monthly limit in the integration options or disable Automagic mode."
     }
   }
 }

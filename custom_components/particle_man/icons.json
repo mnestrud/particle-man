@@ -1,0 +1,47 @@
+{
+  "entity": {
+    "sensor": {
+      "aqi": {
+        "default": "mdi:air-filter"
+      },
+      "aqi_level": {
+        "default": "mdi:air-filter"
+      },
+      "aq_advisory": {
+        "default": "mdi:shield-alert-outline"
+      },
+      "pollen_advisory": {
+        "default": "mdi:flower-pollen"
+      },
+      "weather_alerts": {
+        "default": "mdi:alert-circle-outline"
+      },
+      "thunderstorm_probability": {
+        "default": "mdi:weather-lightning"
+      },
+      "heat_index": {
+        "default": "mdi:thermometer"
+      },
+      "wind_chill": {
+        "default": "mdi:thermometer"
+      },
+      "last_api_update": {
+        "default": "mdi:clock-check-outline"
+      },
+      "monthly_aq_calls": {
+        "default": "mdi:api"
+      },
+      "monthly_pollen_calls": {
+        "default": "mdi:flower-pollen-outline"
+      },
+      "monthly_weather_calls": {
+        "default": "mdi:weather-partly-cloudy"
+      }
+    },
+    "switch": {
+      "quiet_hours": {
+        "default": "mdi:weather-night"
+      }
+    }
+  }
+}

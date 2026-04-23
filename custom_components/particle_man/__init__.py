@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     CONF_API_KEY,
@@ -23,6 +25,7 @@ from .const import (
     CONF_LOCATION_NAME,
     CONF_LOCATIONS,
     CONF_LONGITUDE,
+    DOMAIN,
     CONF_PLANT_SENSORS,
     CONF_POLLEN_MONTHLY_LIMIT,
     CONF_QUIET_END,
@@ -59,7 +62,31 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.WEATHER, Platform.SWITCH]
 
 
-def _opt(entry: ConfigEntry, key: str, default):
+def _remove_stale_devices(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinators: dict[str, ParticleManCoordinator],
+    enable_aq: bool,
+    enable_pollen: bool,
+    enable_weather: bool,
+) -> None:
+    """Remove device registry entries for locations/APIs no longer configured."""
+    dev_reg = dr.async_get(hass)
+    expected: set[tuple[str, str]] = {(DOMAIN, f"{entry.entry_id}_diagnostics")}
+    for coordinator in coordinators.values():
+        slug = coordinator.location_slug
+        expected.add((DOMAIN, f"{entry.entry_id}_{slug}"))
+        if enable_pollen:
+            expected.add((DOMAIN, f"{entry.entry_id}_{slug}_pollen"))
+        if enable_weather:
+            expected.add((DOMAIN, f"{entry.entry_id}_{slug}_weather"))
+
+    for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+        if not any(ident in expected for ident in device.identifiers):
+            dev_reg.async_remove_device(device.id)
+
+
+def _opt(entry: ConfigEntry, key: str, default: Any) -> Any:
     """Read option from options first, then data, then default."""
     return entry.options.get(key, entry.data.get(key, default))
 
@@ -148,6 +175,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             quiet_start=quiet_start,
             quiet_end=quiet_end,
             entry_id=entry.entry_id,
+            config_entry=entry,
         )
         await coordinator.async_load_tracking()
         await coordinator.async_config_entry_first_refresh()
@@ -157,6 +185,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinators": coordinators,
         "global_state": global_state,
     }
+
+    _remove_stale_devices(hass, entry, coordinators, enable_aq, enable_pollen, enable_weather)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
