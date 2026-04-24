@@ -16,22 +16,7 @@
           "latitude": "Decimal latitude of the location to monitor. Pre-filled from Home Assistant.",
           "longitude": "Decimal longitude of the location to monitor. Pre-filled from Home Assistant."
         }
-      }
-    },
-    "error": {
-      "invalid_auth": "API key not recognized — make sure the Air Quality, Pollen, and Weather APIs are enabled in your Google Cloud project.",
-      "cannot_connect": "Couldn't reach Google. Check your internet connection and try again.",
-      "unknown": "Something went wrong. Check the Home Assistant logs for details.",
-      "aq_not_enabled": "The Air Quality API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/airquality.googleapis.com",
-      "pollen_not_enabled": "The Pollen API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/pollen.googleapis.com",
-      "weather_not_enabled": "The Weather API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/weather.googleapis.com"
-    },
-    "abort": {
-      "already_configured": "An entry for this API key is already configured.",
-      "reauth_successful": "Re-authentication was successful.",
-      "reconfigure_successful": "Configuration updated successfully."
-    },
-    "step": {
+      },
       "reauth_confirm": {
         "title": "Re-authenticate Particle Man",
         "description": "Your API key is no longer valid. Enter a new Google Maps Platform API key to restore access.",
@@ -52,6 +37,19 @@
           "api_key": "Paste your updated Google Maps Platform key here."
         }
       }
+    },
+    "error": {
+      "invalid_auth": "API key not recognized — make sure the Air Quality, Pollen, and Weather APIs are enabled in your Google Cloud project.",
+      "cannot_connect": "Couldn't reach Google. Check your internet connection and try again.",
+      "unknown": "Something went wrong. Check the Home Assistant logs for details.",
+      "aq_not_enabled": "The Air Quality API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/airquality.googleapis.com",
+      "pollen_not_enabled": "The Pollen API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/pollen.googleapis.com",
+      "weather_not_enabled": "The Weather API is not enabled for this API key. Enable it at: https://console.cloud.google.com/apis/library/weather.googleapis.com"
+    },
+    "abort": {
+      "already_configured": "An entry for this API key is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Configuration updated successfully."
     }
   },
   "entity": {

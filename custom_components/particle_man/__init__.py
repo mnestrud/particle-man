@@ -1,6 +1,7 @@
 """Particle Man integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -177,9 +178,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry_id=entry.entry_id,
             config_entry=entry,
         )
-        await coordinator.async_load_tracking()
-        await coordinator.async_config_entry_first_refresh()
         coordinators[loc_name] = coordinator
+
+    await asyncio.gather(
+        *(c.async_config_entry_first_refresh() for c in coordinators.values())
+    )
 
     entry.runtime_data = {
         "coordinators": coordinators,
@@ -200,4 +203,7 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok and not hass.config_entries.async_entries(DOMAIN):
+        hass.data.pop(DOMAIN, None)
+    return unload_ok

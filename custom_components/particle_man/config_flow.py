@@ -760,12 +760,12 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         enable_pollen = self._get(CONF_ENABLE_POLLEN, DEFAULT_ENABLE_POLLEN)
         enable_weather = self._get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER)
 
-        fields: dict = {
+        fields: dict[object, object] = {
             vol.Required(CONF_ENABLE_AIR_QUALITY): BooleanSelector(),
             vol.Required(CONF_ENABLE_POLLEN): BooleanSelector(),
             vol.Required(CONF_ENABLE_WEATHER): BooleanSelector(),
         }
-        suggested: dict = {
+        suggested: dict[str, object] = {
             CONF_ENABLE_AIR_QUALITY: enable_aq,
             CONF_ENABLE_POLLEN: enable_pollen,
             CONF_ENABLE_WEATHER: enable_weather,

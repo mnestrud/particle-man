@@ -4,8 +4,10 @@
   "codeowners": ["@mnestrud"],
   "config_flow": true,
   "documentation": "https://mnestrud.github.io/particle-man/",
+  "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/mnestrud/particle-man/issues",
+  "quality_scale": "platinum",
   "requirements": [],
   "version": "1.5.0"
 }

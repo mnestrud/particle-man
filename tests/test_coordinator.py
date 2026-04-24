@@ -393,14 +393,14 @@ def test_clear_api_error_no_op_if_not_logged(coordinator: ParticleManCoordinator
 
 
 # ---------------------------------------------------------------------------
-# async_load_tracking tests
+# _async_setup tests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_load_tracking_new_month(coordinator: ParticleManCoordinator) -> None:
     coordinator._shared_store.async_load = AsyncMock(return_value={"period_month": "2025-01", "aq_calls": 999})
-    await coordinator.async_load_tracking()
+    await coordinator._async_setup()
     current = coordinator._current_billing_month()
     assert coordinator._cached_tracking["period_month"] == current
     assert coordinator._cached_tracking.get("aq_calls", 0) == 0
@@ -411,7 +411,7 @@ async def test_load_tracking_same_month(coordinator: ParticleManCoordinator) -> 
     current = coordinator._current_billing_month()
     stored = {"period_month": current, "aq_calls": 42, "pollen_calls": 10, "weather_calls": 5}
     coordinator._shared_store.async_load = AsyncMock(return_value=stored)
-    await coordinator.async_load_tracking()
+    await coordinator._async_setup()
     assert coordinator._cached_tracking["aq_calls"] == 42
 
 

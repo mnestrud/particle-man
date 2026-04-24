@@ -1,5 +1,34 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Diagnostics endpoint** (`diagnostics.py`) — exposes coordinator state, API failure counts, backoff timers, and monthly usage via the HA diagnostics download; API key is redacted. Satisfies Gold quality rule.
+- **Icon translations** (`icons.json`) — entity icons now declared via HA's translation system rather than `_attr_icon`, satisfying the Gold icon-translations rule.
+- **Strict typing markers** (`py.typed`, `mypy.ini`) — enables mypy strict mode and marks the package as typed, satisfying the Platinum strict-typing rule.
+- **Full test suite** — expanded from 2 test files to 8 (`test_init`, `test_coordinator`, `test_config_flow`, `test_options_flow`, `test_sensor`, `test_switch`, `test_weather`, `test_diagnostics`); 231 tests at 99% overall coverage, 100% on `config_flow`.
+
+### Fixed
+
+- `resp.ok` usage replaced with `resp.status < 400` throughout `config_flow.py` and `coordinator.py` — `AiohttpClientMockResponse` has no `.ok` attribute, causing silent test failures with PHCC.
+- Weather unit handling updated for HA 2026.x — `UnitSystem.is_metric` / `UnitSystem.name` removed in 2026.x; code now uses the configured `DEFAULT_WEATHER_UNITS` option directly.
+- Quiet hours logic in automagic mode was silently dropped during a Samba deploy; restored the branch that gates polling when quiet hours are active regardless of mode.
+- `_automagic()` in `OptionsFlow` crashed with `ValueError` on direct instantiation because `_get()` was evaluated eagerly before `self._options` was populated; deferred to lazy access.
+
+### HA ADR Compliance
+
+- **Fixed config flow translation bug** — `strings.json` and `en.json` had a duplicate `"step"` key under `"config"`; JSON parsers silently drop the first occurrence, so the initial setup screen displayed raw key names (`api_key`, `name`, `latitude`, `longitude`) instead of human-readable labels. All three config steps (`user`, `reauth_confirm`, `reconfigure`) are now correctly merged under a single key.
+- **Added `integration_type: service` to manifest** — declares the integration as a cloud service, required for correct HACS and hassfest classification.
+- **Added `quality_scale: platinum` to manifest** — documents the achieved quality tier.
+- **Coordinator `_async_setup()` pattern** — renamed `async_load_tracking` to the standard `_async_setup()` hook introduced in HA 2024.8; the framework now calls it automatically before the first data fetch, and failures surface as `ConfigEntryNotReady` (with automatic retry) instead of a raw exception.
+- **`always_update=False` on coordinator** — entity listeners no longer fire during quiet hours or API backoff when cached data is returned unchanged, preventing unnecessary state writes.
+- **Fixed `EntityCategory` import paths** — both `sensor.py` and `switch.py` were importing from the deprecated `homeassistant.helpers.entity` path with a `# type: ignore` suppressor; updated to `homeassistant.const`.
+- **`hass.data[DOMAIN]` cleanup on unload** — shared coordinator locks are now removed from `hass.data` when the last config entry for the domain is unloaded.
+- **Parallel multi-location startup** — coordinator first-refresh calls are now run concurrently with `asyncio.gather()`; startup time for N locations is now ~1 API round-trip instead of N.
+
+---
+
 ## [1.5.0] — 2026-04-23
 
 ### Added

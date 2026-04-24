@@ -48,9 +48,10 @@ Platforms: `SENSOR, SWITCH, WEATHER` | Min HA: `2025.1.0` | Repo: `https://githu
 # First time — create venv
 python -m venv .venv
 .venv/Scripts/pip install -r requirements_test.txt
+.venv/Scripts/pip install mypy
 
-# Type check (strict)
-.venv/Scripts/mypy custom_components/particle_man --strict --ignore-missing-imports
+# Type check (strict — config in pyproject.toml)
+.venv/Scripts/mypy custom_components/particle_man
 
 # All tests
 .venv/Scripts/pytest tests/ -q
