@@ -62,6 +62,7 @@
       "thunderstorm_probability": {"name": "Thunderstorm Probability"},
       "heat_index": {"name": "Heat Index"},
       "wind_chill": {"name": "Wind Chill"},
+      "uv_index_category": {"name": "UV Index Category"},
       "last_api_update": {"name": "Last API Update"},
       "monthly_aq_calls": {"name": "AQ API Calls (Monthly)"},
       "monthly_pollen_calls": {"name": "Pollen API Calls (Monthly)"},

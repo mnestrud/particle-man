@@ -89,6 +89,7 @@ def _add_dynamic_entities(
             ThunderstormProbabilitySensor(coordinator),
             HeatIndexSensor(coordinator),
             WindChillSensor(coordinator),
+            UvIndexCategorySensor(coordinator),
         ])
         known.add("weather_current")
 
@@ -668,6 +669,20 @@ class HeatIndexSensor(_BaseWeatherSensor):
         return {ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION}
 
 
+def _uv_category(uv_index: float | None) -> str | None:
+    if uv_index is None:
+        return None
+    if uv_index <= 2:
+        return "Low"
+    if uv_index <= 5:
+        return "Moderate"
+    if uv_index <= 7:
+        return "High"
+    if uv_index <= 10:
+        return "Very High"
+    return "Extreme"
+
+
 class WindChillSensor(_BaseWeatherSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_device_class = SensorDeviceClass.TEMPERATURE
@@ -693,6 +708,27 @@ class WindChillSensor(_BaseWeatherSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION}
+
+
+class UvIndexCategorySensor(_BaseWeatherSensor):
+    _attr_translation_key = "uv_index_category"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_{coordinator.location_slug}_uv_index_category"
+
+    @property
+    def native_value(self) -> str | None:
+        val = self.coordinator.data.get("weather_current", {}).get("uv_index")
+        return _uv_category(float(val) if isinstance(val, (int, float)) else None)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        val = self.coordinator.data.get("weather_current", {}).get("uv_index")
+        return {
+            "uv_index": val,
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
 
 
 # ---------------------------------------------------------------------------
