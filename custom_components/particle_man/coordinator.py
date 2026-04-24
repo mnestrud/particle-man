@@ -275,6 +275,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             name=f"{DOMAIN}_{self.location_slug}",
             update_interval=timedelta(minutes=update_interval_minutes),
             config_entry=config_entry,
+            always_update=False,
         )
 
     def _current_billing_month(self) -> str:
@@ -352,7 +353,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self._api_failures.pop(api, None)
         self._api_backoff.pop(api, None)
 
-    async def async_load_tracking(self) -> None:
+    async def _async_setup(self) -> None:
         """Load persistent API call counts from shared storage."""
         async with self._shared_lock:
             stored = await self._shared_store.async_load()
@@ -1186,12 +1187,16 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             entry = {
                 "datetime": (h.get("interval") or {}).get("startTime") or h.get("displayDateTime"),
                 "condition": _w_condition(h.get("weatherCondition"), is_daytime),
+                "is_daytime": is_daytime,
                 "native_temperature": _w_degrees(h.get("temperature")),
+                "native_apparent_temperature": _w_degrees(h.get("feelsLikeTemperature")),
+                "native_dew_point": _w_degrees(h.get("dewPoint")),
                 "humidity": h.get("relativeHumidity"),
                 "native_wind_speed": ((wind.get("speed") or {}).get("value")),
                 "wind_bearing": ((wind.get("direction") or {}).get("degrees")),
                 "native_wind_gust_speed": ((wind.get("gust") or {}).get("value")),
                 "precipitation_probability": prob,
+                "native_precipitation": (precip.get("qpf") or {}).get("quantity"),
                 "native_pressure": (h.get("airPressure") or {}).get("meanSeaLevelMillibars"),
                 "cloud_coverage": cloud_val,
                 "uv_index": h.get("uvIndex"),
@@ -1242,6 +1247,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     "native_temperature": temp,
                     "native_templow": templow,
                     "precipitation_probability": prob,
+                    "native_precipitation": (precip.get("qpf") or {}).get("quantity"),
                     "native_wind_speed": ((wind.get("speed") or {}).get("value")),
                     "wind_bearing": ((wind.get("direction") or {}).get("degrees")),
                     "native_wind_gust_speed": ((wind.get("gust") or {}).get("value")),
