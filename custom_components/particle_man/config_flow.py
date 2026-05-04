@@ -333,6 +333,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     options=seeded_options,
                 )
 
+        _docs_url = "https://mnestrud.github.io/particle-man/"
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
@@ -362,6 +363,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+            description_placeholders={"docs_url": _docs_url},
         )
 
 
@@ -577,6 +579,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(schema, suggested),
+            description_placeholders={"api_usage_url": "https://mnestrud.github.io/particle-man/api-usage/"},
         )
 
     # -------------------------------------------------------------------------
@@ -820,7 +823,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="apis",
             data_schema=self.add_suggested_values_to_schema(vol.Schema(fields), suggested),
-            description_placeholders={"usage_summary": usage_text, "coverage_notes": coverage_notes_str},
+            description_placeholders={"usage_summary": usage_text, "coverage_notes": coverage_notes_str, "sensors_url": "https://mnestrud.github.io/particle-man/sensors/", "api_usage_url": "https://mnestrud.github.io/particle-man/api-usage/"},
         )
 
     # -------------------------------------------------------------------------
@@ -876,7 +879,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             step_id="air_quality",
             data_schema=self.add_suggested_values_to_schema(schema, suggested),
             errors=errors,
-            description_placeholders={"local_aqi_detail": local_aqi_detail},
+            description_placeholders={"local_aqi_detail": local_aqi_detail, "sensors_url": "https://mnestrud.github.io/particle-man/sensors/", "config_url": "https://mnestrud.github.io/particle-man/configuration/"},
         )
 
     # -------------------------------------------------------------------------
@@ -995,5 +998,5 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="api_limits",
             data_schema=self.add_suggested_values_to_schema(vol.Schema(fields), suggested),
-            description_placeholders={"usage_summary": summary},
+            description_placeholders={"usage_summary": summary, "api_usage_url": "https://mnestrud.github.io/particle-man/api-usage/"},
         )
