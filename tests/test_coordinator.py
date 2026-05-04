@@ -14,7 +14,6 @@ from custom_components.particle_man.const import DOMAIN, EPA_BREAKPOINTS
 from custom_components.particle_man.coordinator import (
     ParticleManCoordinator,
     ParticleManGlobalState,
-    _aq_advisory_level,
     _day_to_datetime,
     _epa_category,
     _normalize_channel,
@@ -150,16 +149,6 @@ def test_day_to_datetime() -> None:
 def test_day_to_datetime_missing_key() -> None:
     assert _day_to_datetime({"year": 2026}) is None
     assert _day_to_datetime(None) is None
-
-
-def test_aq_advisory_level() -> None:
-    assert _aq_advisory_level("Very Unhealthy") == "Alert"
-    assert _aq_advisory_level("Hazardous") == "Alert"
-    assert _aq_advisory_level("Unhealthy") == "Warning"
-    assert _aq_advisory_level("Unhealthy for Sensitive Groups") == "Caution"
-    assert _aq_advisory_level("Good") == "None"
-    assert _aq_advisory_level("Moderate") == "None"
-    assert _aq_advisory_level("") == "None"
 
 
 def test_w_condition_clear_daytime() -> None:

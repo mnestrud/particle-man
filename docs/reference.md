@@ -92,6 +92,87 @@ If counts get out of sync (e.g. after migrating to a new HA instance), remove an
 
 ---
 
+## Level scales and sources
+
+The four advisory/severity scales used by Particle Man sensors — air quality categories, pollen levels, UV index, and weather alert severity — come from different sources. Details below.
+
+### Air Quality category scale
+
+**Sensor:** Air Quality Advisory — state is the raw category text returned by Google.
+
+**Source:** Google uses the same six category names as the [US EPA AQI](https://www.airnow.gov/aqi/aqi-basics/). The categories are also consistent with the WHO UAQI framework.
+
+| Category | AQI range | PM2.5 (μg/m³, 24-h avg)* |
+|---|---|---|
+| Good | 0–50 | 0.0–9.0 |
+| Moderate | 51–100 | 9.1–35.4 |
+| Unhealthy for Sensitive Groups | 101–150 | 35.5–55.4 |
+| Unhealthy | 151–200 | 55.5–125.4 |
+| Very Unhealthy | 201–300 | 125.5–225.4 |
+| Hazardous | 301–500 | ≥ 225.5 |
+
+*PM2.5 breakpoints use the [2024 EPA NAAQS revision](https://www.epa.gov/criteria-air-pollutants/naaqs-table). Other pollutants (PM10, O3, NO2, CO, SO2) follow current EPA NAAQS breakpoints. Google derives its Universal AQI category from the dominant pollutant's concentration.
+
+**Alignment note:** Google's category boundary *names* match EPA AQI exactly. The underlying index score uses Google's proprietary UAQI formula, which may assign different numeric values than raw EPA AQI — but the category text returned by the API (and exposed as the sensor state) is identical to EPA terminology.
+
+The per-pollutant sensors (PM2.5, PM10, O3, etc.) under the Air Quality section also expose an `epa_category` attribute, calculated locally from the EPA breakpoints above.
+
+---
+
+### Pollen level scale
+
+**Sensors:** Pollen Advisory, individual plant species sensors — state is one of six levels.
+
+**Source:** [Google Universal Pollen Index (UPI)](https://developers.google.com/maps/documentation/pollen/pollen-index). Google returns an integer index (0–5) per plant type; the integration maps it to the label below.
+
+| Index | Level |
+|---|---|
+| 0 | None |
+| 1 | Very Low |
+| 2 | Low |
+| 3 | Moderate |
+| 4 | High |
+| 5 | Very High |
+
+Google does not publish fixed concentration thresholds for the UPI levels — the index is calculated from a proprietary model combining pollen concentration models, historical data, and regional plant phenology.
+
+---
+
+### UV Index category scale
+
+**Sensor:** UV Index Category — state is calculated locally from the raw UV index value returned by the Weather API.
+
+**Source:** [WHO Global Solar UV Index](https://www.who.int/news-room/questions-and-answers/item/radiation-the-ultraviolet-(uv)-index), adopted by WMO, UNEP, and national health agencies worldwide.
+
+| Category | UV Index |
+|---|---|
+| Low | 0–2 |
+| Moderate | 3–5 |
+| High | 6–7 |
+| Very High | 8–10 |
+| Extreme | 11+ |
+
+The raw UV index value is available as the `uv_index` attribute on the UV Index Category sensor, and also directly on the weather entity.
+
+---
+
+### Weather alert severity scale
+
+**Sensor:** Alert Highest Severity — state is one of four levels.
+
+**Source:** [Google Public Alerts](https://developers.google.com/maps/documentation/weather/get-public-alerts), which aggregates alerts from government meteorological agencies (e.g., NWS in the US). Severity is returned directly by the API.
+
+| Severity | Meaning |
+|---|---|
+| MINOR | Minimal or no known threat |
+| MODERATE | Possible threat to life or property |
+| SEVERE | Significant threat to life or property |
+| EXTREME | Extraordinary threat to life or property |
+
+`None` is the state when no active alerts are present.
+
+---
+
 ## Known limitations
 
 - **Pollen API coverage:** primarily North America and Europe. Outside covered regions, pollen sensors remain unavailable. ([Coverage map](https://developers.google.com/maps/documentation/pollen/coverage))

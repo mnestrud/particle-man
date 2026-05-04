@@ -315,7 +315,6 @@ class AirQualityAdvisorySensor(_BaseGaqSensor):
         info = cast(dict[str, Any], self.coordinator.data.get("aq_advisory", {}))
         attrs: dict[str, Any] = {
             "aqi": info.get("aqi"),
-            "category": info.get("category"),
             "dominant_pollutant": info.get("dominant_pollutant"),
             "elevated_pollutants": info.get("elevated_pollutants", []),
             "trend": info.get("trend"),

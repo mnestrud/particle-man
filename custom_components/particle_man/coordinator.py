@@ -82,16 +82,6 @@ class ParticleManGlobalState:
         return config_enabled
 
 
-def _aq_advisory_level(category: str) -> str:
-    cat = (category or "").lower()
-    if "hazardous" in cat or "very unhealthy" in cat:
-        return "Alert"
-    if "unhealthy" in cat and "sensitive" not in cat:
-        return "Warning"
-    if "sensitive" in cat:
-        return "Caution"
-    return "None"
-
 _POLLEN_LEVEL_ORDER = ["None", "Very Low", "Low", "Moderate", "High", "Very High"]
 
 
@@ -836,9 +826,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             if k.startswith("pollutant_") and v.get("epa_category") not in ("Good", None)
         ]
         new_data["aq_advisory"] = {
-            "value": _aq_advisory_level(category),
+            "value": category,
             "aqi": (new_data.get("aqi") or {}).get("value"),
-            "category": category,
             "dominant_pollutant": dominant_code or None,
             "health_recommendations": health_recs,
             "elevated_pollutants": elevated,

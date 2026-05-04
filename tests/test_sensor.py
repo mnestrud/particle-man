@@ -69,9 +69,8 @@ def coord(hass: HomeAssistant, mock_config_entry) -> ParticleManCoordinator:
             "health_recommendations": {"generalPopulation": "Fine."},
         },
         "aq_advisory": {
-            "value": "None",
+            "value": "Good",
             "aqi": 45,
-            "category": "Good",
             "dominant_pollutant": "pm25",
             "elevated_pollutants": [],
             "trend": "Stable",
@@ -263,7 +262,7 @@ def test_aqi_level_sensor_state(coord: ParticleManCoordinator) -> None:
 
 def test_aq_advisory_sensor_state(coord: ParticleManCoordinator) -> None:
     s = AirQualityAdvisorySensor(coord)
-    assert s.native_value == "None"
+    assert s.native_value == "Good"
 
 
 # ---------------------------------------------------------------------------
@@ -447,9 +446,8 @@ async def test_sensor_setup_entry_no_coordinators(
 def test_aq_advisory_sensor_with_health_recs(coord: ParticleManCoordinator) -> None:
     """AirQualityAdvisorySensor with health_recs in attributes (line 319)."""
     coord.data["aq_advisory"] = {
-        "value": "Caution",
+        "value": "Unhealthy for Sensitive Groups",
         "aqi": 55,
-        "category": "Unhealthy for Sensitive Groups",
         "dominant_pollutant": "pm25",
         "elevated_pollutants": ["PM2.5"],
         "trend": "rising",
