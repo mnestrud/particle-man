@@ -147,9 +147,17 @@ The Alert Count sensor retains the `highest_severity` and `active_event_types` a
 
 ## Particle Man Diagnostics
 
-### Last API Update
+### Fetch Timestamp Sensors
 
-Timestamp of when Google last refreshed the data for your location.
+Three sensors — one per API — showing when Particle Man last successfully called each Google API. Only created when the corresponding API is enabled.
+
+| Sensor | State | `data_timestamp` attribute |
+|---|---|---|
+| **AQ Last Fetched** | When the integration last called the Air Quality API | When Google generated that AQ observation |
+| **Pollen Last Fetched** | When the integration last called the Pollen API | — (not available from Pollen API) |
+| **Weather Last Fetched** | When the integration last called the Weather API | When Google generated that weather observation |
+
+The state and `data_timestamp` are typically different: the state is the actual poll time, while `data_timestamp` reflects when Google published the underlying data (usually rounded to the hour). Before the first poll after a restart, all three sensors are `unavailable`.
 
 ### API Call Sensors (Monthly)
 
@@ -165,3 +173,7 @@ One sensor each for AQ, Pollen, and Weather API calls.
 | `billing_period` | Current period in YYYY-MM format (Pacific Time) |
 | `shared_total_calls` | Total across all entries sharing this API key |
 | `locations_sharing_key` | Number of locations sharing this key |
+
+### HA Diagnostics download
+
+The full diagnostics payload (available via **Settings → Devices & Services → Particle Man → Download Diagnostics**) includes a `quiet_hours_active_now` field per location, indicating whether polling is currently paused due to quiet hours — distinct from `quiet_hours_enabled`, which only reflects whether the feature is turned on.

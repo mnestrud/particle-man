@@ -15,7 +15,9 @@ from custom_components.particle_man.sensor import (
     AqiLevelSensor,
     AqiSensor,
     HeatIndexSensor,
-    LastApiUpdateSensor,
+    AqLastFetchSensor,
+    PollenLastFetchSensor,
+    WeatherLastFetchSensor,
     LocalAqiSensor,
     MonthlyAqUsageSensor,
     MonthlyPollenUsageSensor,
@@ -369,9 +371,44 @@ def test_wind_chill_sensor(coord: ParticleManCoordinator) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_last_api_update_sensor(coord: ParticleManCoordinator) -> None:
-    s = LastApiUpdateSensor(coord)
-    assert s.unique_id == f"{ENTRY_ID}_last_api_update"
+def test_aq_last_fetch_sensor(coord: ParticleManCoordinator) -> None:
+    from datetime import datetime, timezone
+    ts = datetime(2026, 5, 4, 21, 0, 0, tzinfo=timezone.utc)
+    coord._last_aq_fetch = ts
+    coord.data["aqi"]["datetime"] = "2026-05-04T21:00:00Z"
+    s = AqLastFetchSensor(coord)
+    assert s.unique_id == f"{ENTRY_ID}_aq_last_fetch"
+    assert s.native_value == ts
+    assert s.extra_state_attributes["data_timestamp"] is not None
+
+
+def test_pollen_last_fetch_sensor(coord: ParticleManCoordinator) -> None:
+    from datetime import datetime, timezone
+    ts = datetime(2026, 5, 4, 20, 0, 0, tzinfo=timezone.utc)
+    coord._last_pollen_fetch = ts
+    s = PollenLastFetchSensor(coord)
+    assert s.unique_id == f"{ENTRY_ID}_pollen_last_fetch"
+    assert s.native_value == ts
+
+
+def test_weather_last_fetch_sensor(coord: ParticleManCoordinator) -> None:
+    from datetime import datetime, timezone
+    ts = datetime(2026, 5, 4, 21, 15, 0, tzinfo=timezone.utc)
+    coord._last_weather_fetch = ts
+    coord.data["weather_current"]["datetime"] = "2026-05-04T21:00:00Z"
+    s = WeatherLastFetchSensor(coord)
+    assert s.unique_id == f"{ENTRY_ID}_weather_last_fetch"
+    assert s.native_value == ts
+    assert s.extra_state_attributes["data_timestamp"] is not None
+
+
+def test_fetch_sensors_none_before_first_poll(coord: ParticleManCoordinator) -> None:
+    coord._last_aq_fetch = None
+    coord._last_pollen_fetch = None
+    coord._last_weather_fetch = None
+    assert AqLastFetchSensor(coord).native_value is None
+    assert PollenLastFetchSensor(coord).native_value is None
+    assert WeatherLastFetchSensor(coord).native_value is None
 
 
 def test_monthly_aq_usage_sensor(coord: ParticleManCoordinator) -> None:
@@ -534,27 +571,6 @@ def test_pollen_plant_sensor_extra_attributes_with_fields(coord: ParticleManCoor
     attrs = s.extra_state_attributes
     assert attrs.get("family") == "Betulaceae"
     assert attrs.get("picture") == "https://example.com/alder.jpg"
-
-
-def test_last_api_update_from_weather_fallback(coord: ParticleManCoordinator) -> None:
-    """LastApiUpdateSensor falls back to weather_current datetime (line 722)."""
-    coord.data = {"weather_current": {"datetime": "2026-04-22T12:00:00Z"}}
-    s = LastApiUpdateSensor(coord)
-    assert s.native_value is not None
-
-
-def test_last_api_update_returns_none_when_no_data(coord: ParticleManCoordinator) -> None:
-    """LastApiUpdateSensor returns None when no datetime available (line 724)."""
-    coord.data = {}
-    s = LastApiUpdateSensor(coord)
-    assert s.native_value is None
-
-
-def test_last_api_update_returns_none_for_invalid_datetime(coord: ParticleManCoordinator) -> None:
-    """LastApiUpdateSensor returns None for unparseable datetime string (lines 727-728)."""
-    coord.data = {"aqi": {"datetime": "not-a-valid-datetime-string"}}
-    s = LastApiUpdateSensor(coord)
-    assert s.native_value is None
 
 
 def test_billing_projection_critical_status(coord: ParticleManCoordinator) -> None:

@@ -114,7 +114,12 @@ async def async_setup_entry(
 
     # Shared diagnostics — one set per entry (monthly usage is pooled across all locations)
     first_coordinator = next(iter(coordinators.values()))
-    entities.append(LastApiUpdateSensor(first_coordinator))
+    if first_coordinator.enable_air_quality:
+        entities.append(AqLastFetchSensor(first_coordinator))
+    if first_coordinator.enable_pollen:
+        entities.append(PollenLastFetchSensor(first_coordinator))
+    if first_coordinator.enable_weather:
+        entities.append(WeatherLastFetchSensor(first_coordinator))
     if first_coordinator.enable_air_quality:
         entities.append(MonthlyAqUsageSensor(first_coordinator))
     if first_coordinator.enable_pollen:
@@ -783,26 +788,64 @@ class UvIndexCategorySensor(_BaseWeatherSensor):
 # Diagnostic sensors (shared per entry)
 # ---------------------------------------------------------------------------
 
-class LastApiUpdateSensor(_BaseDiagnosticSensor):
+class AqLastFetchSensor(_BaseDiagnosticSensor):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_translation_key = "last_api_update"
+    _attr_translation_key = "aq_last_fetch"
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry_id}_last_api_update"
+        self._attr_unique_id = f"{coordinator.entry_id}_aq_last_fetch"
 
     @property
     def native_value(self) -> _datetime | None:
+        return self.coordinator._last_aq_fetch
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
         dt_str = self.coordinator.data.get("aqi", {}).get("datetime")
-        if not dt_str:
-            dt_str = self.coordinator.data.get("weather_current", {}).get("datetime")
-        if not dt_str:
-            return None
         try:
-            return _datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+            data_ts = _datetime.fromisoformat(dt_str.replace("Z", "+00:00")) if dt_str else None
         except (ValueError, TypeError):
-            return None
+            data_ts = None
+        return {"data_timestamp": data_ts.isoformat() if data_ts else None}
+
+
+class PollenLastFetchSensor(_BaseDiagnosticSensor):
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "pollen_last_fetch"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_pollen_last_fetch"
+
+    @property
+    def native_value(self) -> _datetime | None:
+        return self.coordinator._last_pollen_fetch
+
+
+class WeatherLastFetchSensor(_BaseDiagnosticSensor):
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "weather_last_fetch"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_weather_last_fetch"
+
+    @property
+    def native_value(self) -> _datetime | None:
+        return self.coordinator._last_weather_fetch
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        dt_str = self.coordinator.data.get("weather_current", {}).get("datetime")
+        try:
+            data_ts = _datetime.fromisoformat(dt_str.replace("Z", "+00:00")) if dt_str else None
+        except (ValueError, TypeError):
+            data_ts = None
+        return {"data_timestamp": data_ts.isoformat() if data_ts else None}
 
 
 def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict[str, Any]:

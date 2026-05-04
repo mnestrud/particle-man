@@ -31,7 +31,13 @@
       "wind_chill": {
         "default": "mdi:thermometer"
       },
-      "last_api_update": {
+      "aq_last_fetch": {
+        "default": "mdi:clock-check-outline"
+      },
+      "pollen_last_fetch": {
+        "default": "mdi:clock-check-outline"
+      },
+      "weather_last_fetch": {
         "default": "mdi:clock-check-outline"
       },
       "monthly_aq_calls": {

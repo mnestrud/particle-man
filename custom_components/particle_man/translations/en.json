@@ -65,7 +65,9 @@
       "heat_index": {"name": "Heat Index"},
       "wind_chill": {"name": "Wind Chill"},
       "uv_index_category": {"name": "UV Index Category"},
-      "last_api_update": {"name": "Last API Update"},
+      "aq_last_fetch": {"name": "AQ Last Fetched"},
+      "pollen_last_fetch": {"name": "Pollen Last Fetched"},
+      "weather_last_fetch": {"name": "Weather Last Fetched"},
       "monthly_aq_calls": {"name": "AQ API Calls (Monthly)"},
       "monthly_pollen_calls": {"name": "Pollen API Calls (Monthly)"},
       "monthly_weather_calls": {"name": "Weather API Calls (Monthly)"}

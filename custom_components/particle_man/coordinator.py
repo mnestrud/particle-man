@@ -263,6 +263,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self._api_unavailable_logged: set[str] = set()
         self._last_aq_fetch: datetime | None = None
         self._last_pollen_fetch: datetime | None = None
+        self._last_weather_fetch: datetime | None = None
 
         super().__init__(
             hass,
@@ -497,6 +498,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     weather_data = self._build_weather_data(w_current, w_hourly, w_daily, w_alerts)
                     data.update(weather_data)
                     if not any_failed:
+                        self._last_weather_fetch = now
                         self._clear_api_error("weather")
                 except aiohttp.ClientResponseError as err:
                     self._record_api_error("weather", err.status)

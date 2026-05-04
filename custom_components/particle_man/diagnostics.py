@@ -40,6 +40,8 @@ async def async_get_config_entry_diagnostics(
                     coordinator.update_interval.total_seconds() / 60
                 ),
                 "num_locations": coordinator.num_locations,
+                "quiet_hours_enabled": coordinator._quiet_hours_enabled,
+                "quiet_hours_active_now": coordinator._is_quiet_hours(),
             },
         }
 
