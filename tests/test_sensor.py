@@ -572,13 +572,13 @@ def test_billing_projection_critical_status(coord: ParticleManCoordinator) -> No
 
 
 def test_billing_projection_warning_status(coord: ParticleManCoordinator) -> None:
-    """_billing_projection_attrs with 80-94% projected → warning (line 746)."""
+    """_billing_projection_attrs with 95-99% projected → warning."""
     from datetime import date as _date
     from custom_components.particle_man.sensor import _billing_projection_attrs
 
     with patch("custom_components.particle_man.sensor._datetime") as mock_dt:
         mock_dt.now.return_value.date.return_value = _date(2026, 4, 15)
-        attrs = _billing_projection_attrs(42, 100, "2026-04")
+        attrs = _billing_projection_attrs(48, 100, "2026-04")
     assert attrs["status"] == "warning"
 
 

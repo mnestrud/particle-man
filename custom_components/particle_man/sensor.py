@@ -821,9 +821,9 @@ def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict
         calls_per_day = round(calls / days_elapsed, 1)
         pct_used = round(calls / limit * 100, 1) if limit > 0 else 0.0
         pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
-        if pct_projected >= 95:
+        if pct_projected >= 100:
             status = "critical"
-        elif pct_projected >= 80:
+        elif pct_projected >= 95:
             status = "warning"
         else:
             status = "ok"
