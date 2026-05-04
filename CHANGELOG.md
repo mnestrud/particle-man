@@ -1,10 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [1.5.2] — 2026-05-04
 
 ### Changed
 
 - Plant species sensors are now always created and enabled by default; the "Individual plant species sensors" Configure option has been removed.
+- Air Quality Advisory sensor state is now the direct 6-level category string from Google (Good / Moderate / Unhealthy for Sensitive Groups / Unhealthy / Very Unhealthy / Hazardous), replacing the simplified 4-level mapping.
 
 ### Removed
 
