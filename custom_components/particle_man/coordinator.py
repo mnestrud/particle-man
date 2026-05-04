@@ -211,7 +211,6 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         language_code: str = DEFAULT_LANGUAGE,
         enable_local_aqi: bool = DEFAULT_LOCAL_AQI,
         local_aqi_code: str = DEFAULT_LOCAL_AQI_CODE,
-        include_plant_sensors: bool = True,
         aq_monthly_limit: int = DEFAULT_AQ_MONTHLY_LIMIT,
         pollen_monthly_limit: int = DEFAULT_POLLEN_MONTHLY_LIMIT,
         weather_monthly_limit: int = DEFAULT_WEATHER_MONTHLY_LIMIT,
@@ -242,7 +241,6 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self.enable_local_aqi = enable_local_aqi
         self.local_aqi_code = local_aqi_code
         self.include_health_recs = True
-        self.include_plant_sensors = include_plant_sensors
         self.include_plant_descriptions = True
         self.aq_monthly_limit = int(aq_monthly_limit)
         self.pollen_monthly_limit = int(pollen_monthly_limit)
@@ -1039,36 +1037,35 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
             result[f"pollen_type_{tcode.lower()}"] = base
 
-        if self.include_plant_sensors:
-            for pcode in plant_codes:
-                today_p = plant_by_day[0].get(pcode, {})
-                pidx = today_p.get("indexInfo") or {}
-                prgb = _rgb_from_api(pidx.get("color"))
-                desc = (
-                    (today_p.get("plantDescription") or {})
-                    if self.include_plant_descriptions
-                    else {}
-                )
+        for pcode in plant_codes:
+            today_p = plant_by_day[0].get(pcode, {})
+            pidx = today_p.get("indexInfo") or {}
+            prgb = _rgb_from_api(pidx.get("color"))
+            desc = (
+                (today_p.get("plantDescription") or {})
+                if self.include_plant_descriptions
+                else {}
+            )
 
-                pbase: dict[str, Any] = {
-                    "value": pidx.get("value"),
-                    "category": pidx.get("category"),
-                    "display_name": today_p.get("displayName", pcode),
-                    "in_season": today_p.get("inSeason"),
-                    "color_hex": _rgb_to_hex(prgb) or None,
-                    "family": desc.get("family"),
-                    "genus": desc.get("genus"),
-                    "season": desc.get("seasonality"),
-                    "cross_reaction": desc.get("crossReaction"),
-                    "picture": desc.get("imageUrl"),
-                }
+            pbase: dict[str, Any] = {
+                "value": pidx.get("value"),
+                "category": pidx.get("category"),
+                "display_name": today_p.get("displayName", pcode),
+                "in_season": today_p.get("inSeason"),
+                "color_hex": _rgb_to_hex(prgb) or None,
+                "family": desc.get("family"),
+                "genus": desc.get("genus"),
+                "season": desc.get("seasonality"),
+                "cross_reaction": desc.get("crossReaction"),
+                "picture": desc.get("imageUrl"),
+            }
 
-                forecast = self._build_pollen_forecast(daily, plant_by_day, pcode, kind="plant")
-                pbase["forecast"] = forecast
-                pbase["trend"] = self._compute_trend(pbase["value"], forecast)
-                pbase["expected_peak"] = self._compute_peak(forecast)
+            forecast = self._build_pollen_forecast(daily, plant_by_day, pcode, kind="plant")
+            pbase["forecast"] = forecast
+            pbase["trend"] = self._compute_trend(pbase["value"], forecast)
+            pbase["expected_peak"] = self._compute_peak(forecast)
 
-                result[f"pollen_plant_{pcode.lower()}"] = pbase
+            result[f"pollen_plant_{pcode.lower()}"] = pbase
 
         # Pollen advisory — worst in-season type
         worst_level = "None"

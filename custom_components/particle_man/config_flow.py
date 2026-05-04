@@ -43,7 +43,6 @@ from .const import (
     CONF_LOCATION_NAME,
     CONF_LOCATIONS,
     CONF_LONGITUDE,
-    CONF_PLANT_SENSORS,
     CONF_POLLEN_MONTHLY_LIMIT,
     CONF_QUIET_END,
     CONF_QUIET_HOURS_ENABLED,
@@ -61,7 +60,6 @@ from .const import (
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
     DEFAULT_LOCAL_AQI_CODE,
-    DEFAULT_PLANT_SENSORS,
     DEFAULT_POLLEN_MONTHLY_LIMIT,
     DEFAULT_QUIET_END,
     DEFAULT_QUIET_HOURS_ENABLED,
@@ -310,7 +308,6 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                     CONF_FORECAST_DAYS: DEFAULT_FORECAST_DAYS,
                     CONF_LANGUAGE: DEFAULT_LANGUAGE,
-                    CONF_PLANT_SENSORS: DEFAULT_PLANT_SENSORS,
                     CONF_ENABLE_AIR_QUALITY: DEFAULT_ENABLE_AIR_QUALITY,
                     CONF_ENABLE_POLLEN: DEFAULT_ENABLE_POLLEN,
                     CONF_ENABLE_WEATHER: DEFAULT_ENABLE_WEATHER,
@@ -530,11 +527,10 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
     def _next_step(self, after: str) -> str | None:
         """Return next step ID after `after`, or None to create entry."""
         automagic = self._automagic()
-        order = ["apis", "air_quality", "pollen", "weather", "api_limits"]
+        order = ["apis", "air_quality", "weather", "api_limits"]
         # Detail steps and api_limits only shown in manual mode
         enable_map = {
             "air_quality": (not automagic) and self._options.get(CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY),
-            "pollen": (not automagic) and self._options.get(CONF_ENABLE_POLLEN, DEFAULT_ENABLE_POLLEN),
             "weather": (not automagic) and self._options.get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER),
             "api_limits": not automagic,
         }
@@ -883,32 +879,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         )
 
     # -------------------------------------------------------------------------
-    # Step 6: Pollen Options (conditional)
-    # -------------------------------------------------------------------------
-
-    async def async_step_pollen(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        if user_input is not None:
-            self._options.update(user_input)
-            next_step = self._next_step("pollen")
-            if next_step:
-                return await getattr(self, f"async_step_{next_step}")()  # type: ignore[no-any-return]
-            return self._create_entry()
-
-        schema = vol.Schema({
-            vol.Required(CONF_PLANT_SENSORS): BooleanSelector(),
-        })
-        suggested = {
-            CONF_PLANT_SENSORS: self._get(CONF_PLANT_SENSORS, DEFAULT_PLANT_SENSORS),
-        }
-        return self.async_show_form(
-            step_id="pollen",
-            data_schema=self.add_suggested_values_to_schema(schema, suggested),
-        )
-
-    # -------------------------------------------------------------------------
-    # Step 7: Weather Options (conditional)
+    # Step 6: Weather Options (conditional)
     # -------------------------------------------------------------------------
 
     async def async_step_weather(

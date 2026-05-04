@@ -26,7 +26,6 @@ from custom_components.particle_man.const import (
     CONF_LOCATION_NAME,
     CONF_LOCATIONS,
     CONF_LONGITUDE,
-    CONF_PLANT_SENSORS,
     CONF_POLLEN_MONTHLY_LIMIT,
     CONF_QUIET_END,
     CONF_QUIET_HOURS_ENABLED,
@@ -138,14 +137,6 @@ async def test_options_manual_all_apis_path(
             CONF_LANGUAGE: DEFAULT_LANGUAGE,
             CONF_LOCAL_AQI: False,
             CONF_LOCAL_AQI_CODE: DEFAULT_LOCAL_AQI_CODE,
-        },
-    )
-    assert result["step_id"] == "pollen"
-
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            CONF_PLANT_SENSORS: True,
         },
     )
     assert result["step_id"] == "weather"
@@ -662,31 +653,6 @@ async def test_step_air_quality_create_entry_no_next_step(
     assert result["type"] == FlowResultType.CREATE_ENTRY
 
 
-async def test_step_pollen_create_entry_no_next_step(
-    hass: HomeAssistant, mock_config_entry
-) -> None:
-    """Line 879: async_step_pollen falls through to _create_entry when _next_step is None."""
-    mock_config_entry.add_to_hass(hass)
-    flow_id, _ = await _navigate_to_apis(hass, mock_config_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        flow_id,
-        {CONF_ENABLE_AIR_QUALITY: True, CONF_ENABLE_POLLEN: True, CONF_ENABLE_WEATHER: True, CONF_UPDATE_INTERVAL: 30},
-    )
-    result = await hass.config_entries.options.async_configure(
-        flow_id,
-        {CONF_FORECAST_DAYS: DEFAULT_FORECAST_DAYS, CONF_LANGUAGE: DEFAULT_LANGUAGE, CONF_LOCAL_AQI: False, CONF_LOCAL_AQI_CODE: DEFAULT_LOCAL_AQI_CODE},
-    )
-    assert result["step_id"] == "pollen"
-
-    flow_obj = hass.config_entries.options._progress[flow_id]
-    with patch.object(flow_obj, "_next_step", return_value=None):
-        result = await hass.config_entries.options.async_configure(
-            flow_id,
-            {CONF_PLANT_SENSORS: True},
-        )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-
-
 async def test_step_weather_create_entry_no_next_step(
     hass: HomeAssistant, mock_config_entry
 ) -> None:
@@ -700,10 +666,6 @@ async def test_step_weather_create_entry_no_next_step(
     result = await hass.config_entries.options.async_configure(
         flow_id,
         {CONF_FORECAST_DAYS: DEFAULT_FORECAST_DAYS, CONF_LANGUAGE: DEFAULT_LANGUAGE, CONF_LOCAL_AQI: False, CONF_LOCAL_AQI_CODE: DEFAULT_LOCAL_AQI_CODE},
-    )
-    result = await hass.config_entries.options.async_configure(
-        flow_id,
-        {CONF_PLANT_SENSORS: True},
     )
     assert result["step_id"] == "weather"
 

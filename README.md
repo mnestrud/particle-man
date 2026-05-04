@@ -36,16 +36,17 @@ Just Breathe.
 - **Pollen Advisory** — worst in-season level across all pollen types for easy automations
 - **Pollen sensors** by type (Grass, Tree, Weed) with index, color, and trend
 - **Daily pollen forecast** up to 5 days with trend and expected peak
-- **Per-plant pollen sensors** — individual species (Oak, Ragweed, etc.) with index, trend, and peak (optional)
+- **Per-plant pollen sensors** — individual species (Oak, Ragweed, etc.) with index, trend, and peak
 
 ### Weather
 
 - **Native weather entity** — current conditions with hourly (24h), daily (5-day), and twice-daily forecasts; works with all HA weather cards
 - **Weather Alerts sensor** — count of active weather warnings with severity, event types, and full alert details (optional)
-- **Extra sensors** — Thunderstorm Probability, Heat Index, Wind Chill
+- **Extra sensors** — Thunderstorm Probability, Heat Index, Wind Chill, UV Index Category
 
 ### API Management
 
+- **Automagic mode** — automatically calculates the optimal polling interval based on your enabled APIs, number of locations, and quiet hours; no manual interval tuning needed to stay within the free tier
 - **Free-tier enforce mode** — each API pauses automatically when its monthly quota is reached
 - **Multi-location support** — shared quota tracking across all locations using the same API key
 - **Quiet hours** — skip fetches during a configured overnight window to stretch your monthly budget
@@ -58,7 +59,7 @@ Just Breathe.
 ## Quick Start
 
 1. Get a free Google Cloud API key with the **Air Quality API**, **Pollen API**, and **Weather API** enabled
-2. Install via HACS (custom repository: `https://github.com/mnestrud/particle-man`) and restart Home Assistant
+2. Install via HACS — search for **Particle Man** and restart Home Assistant
 3. Go to **Settings → Devices & Services → Add Integration** and search for **Particle Man**
 4. Enter your API key — location defaults to your HA home address
 
@@ -78,57 +79,6 @@ Just Breathe.
 | [API Usage & Free Tier](https://mnestrud.github.io/particle-man/api-usage/) | How to stay within Google's free limits |
 | [Troubleshooting](https://mnestrud.github.io/particle-man/troubleshooting/) | Common issues and fixes |
 | [Configuration Reference](https://mnestrud.github.io/particle-man/configuration/) | Full options reference |
-
----
-
-## TODO
-
-### Features
-
-- Google Solar API integration
-- HACS default catalog
-
-### HACS Default Catalog Submission
-
-Requirements per [HACS publishing docs](https://www.hacs.xyz/docs/publish/include/).
-
-- [x] Public GitHub repository
-- [x] Repository description set
-- [x] Issues enabled
-- [x] README with documentation
-- [x] `hacs.json` with `name` field
-- [x] GitHub release published (v1.0.3)
-- [x] `manifest.json` with all required fields (`domain`, `name`, `version`, `documentation`, `issue_tracker`, `codeowners`)
-- [x] Brand directory with `icon.png`
-- [x] GitHub Topics added (`home-assistant`, `hacs`, `air-quality`, `pollen`, `home-assistant-integration`, `google-api`)
-- [x] HACS validation GitHub Action added and passing (required before PR submission)
-- [x] Hassfest GitHub Action added and passing (required for integrations)
-- [ ] Submit PR to [hacs/default](https://github.com/hacs/default) adding entry alphabetically to `integration` file
-
-### HA Integration Quality Scale
-
-Particle Man targets [Gold tier](https://www.home-assistant.io/docs/quality_scale/). Current status:
-
-**Bronze** — ALL REQUIREMENTS MET
-- [x] UI setup via config flow
-- [x] Basic end-user documentation
-- [x] Code adheres to basic HA standards — CI (`ruff`, `mypy`, `hassfest`, `hacs`) via `.github/workflows/validate.yml` — all passing
-- [x] Automated tests (`pytest-homeassistant-custom-component`) — coordinator, config flow, options flow, EPA category — all passing via CI
-
-**Silver** (requires Bronze)
-- [x] Stable experience — pollen API failures are caught and logged without crashing the integration
-- [x] Active maintenance — `@mnestrud` listed as codeowner in `manifest.json`
-- [x] Error recovery — AQ API errors raise `UpdateFailed`; pollen errors fall back to last known data
-- [ ] Re-authentication flow — if the API key is revoked, the integration retries indefinitely; needs `async_start_reauth` to surface a reauthentication prompt in the HA UI
-- [ ] Detailed documentation — covered by the [docs site](https://mnestrud.github.io/particle-man/); troubleshooting page in progress
-
-**Gold** (requires Silver)
-- [x] Reconfigurability — options flow (`Configure` button) supports all settings after initial setup
-- [x] Translation support — `strings.json` and `translations/en.json` present
-- [ ] Auto-discovery — N/A for cloud API integrations (no local device to discover)
-- [ ] Firmware updates — N/A for cloud API integrations
-- [ ] Comprehensive documentation for non-technical users — [docs site](https://mnestrud.github.io/particle-man/) scaffolded; content in progress
-- [ ] Full test coverage — same gap as Bronze; blocks all tiers above it
 
 ---
 

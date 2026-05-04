@@ -28,7 +28,6 @@ from .const import (
     CONF_LOCATIONS,
     CONF_LONGITUDE,
     DOMAIN,
-    CONF_PLANT_SENSORS,
     CONF_POLLEN_MONTHLY_LIMIT,
     CONF_QUIET_END,
     CONF_QUIET_HOURS_ENABLED,
@@ -46,7 +45,6 @@ from .const import (
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
     DEFAULT_LOCAL_AQI_CODE,
-    DEFAULT_PLANT_SENSORS,
     DEFAULT_POLLEN_MONTHLY_LIMIT,
     DEFAULT_QUIET_END,
     DEFAULT_QUIET_HOURS_ENABLED,
@@ -65,7 +63,7 @@ from .coordinator import ParticleManCoordinator, ParticleManGlobalState
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.WEATHER, Platform.SWITCH]
+PLATFORMS = [Platform.SENSOR, Platform.WEATHER, Platform.SWITCH]
 
 
 def _remove_stale_devices(
@@ -118,7 +116,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     weather_units = _opt(entry, CONF_WEATHER_UNITS, DEFAULT_WEATHER_UNITS)
     forecast_days = _opt(entry, CONF_FORECAST_DAYS, DEFAULT_FORECAST_DAYS)
     language_code = _opt(entry, CONF_LANGUAGE, DEFAULT_LANGUAGE)
-    include_plant_sensors = _opt(entry, CONF_PLANT_SENSORS, DEFAULT_PLANT_SENSORS)
     aq_monthly_limit = _opt(entry, CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT)
     pollen_monthly_limit = _opt(entry, CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT)
     weather_monthly_limit = _opt(entry, CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)
@@ -186,7 +183,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             language_code=language_code,
             enable_local_aqi=loc_local_aqi,
             local_aqi_code=loc_local_aqi_code,
-            include_plant_sensors=include_plant_sensors,
             aq_monthly_limit=aq_monthly_limit,
             pollen_monthly_limit=pollen_monthly_limit,
             weather_monthly_limit=weather_monthly_limit,

@@ -562,7 +562,6 @@ class PollenPlantSensor(_BasePollenSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0
     _attr_icon = "mdi:flower-pollen"
-    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: ParticleManCoordinator, pcode: str) -> None:
         super().__init__(coordinator)

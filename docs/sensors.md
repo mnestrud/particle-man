@@ -95,11 +95,9 @@ Use this for simple automations — trigger on `High` or `Very High` without che
 
 Three sensors covering the main pollen categories: **Grass**, **Tree**, and **Weed**. Each shows a 0–5 index value and category, plus a trend and 5-day daily forecast.
 
-### Pollen Plant Sensors *(optional)*
+### Pollen Plant Sensors
 
-Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information if plant details are enabled.
-
-Plant sensors are **disabled by default**.
+Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information.
 
 !!! note
     Pollen data is only available in regions covered by Google's Pollen API. [Coverage map](https://developers.google.com/maps/documentation/pollen/coverage) — primarily North America and Europe. If your location isn't covered, pollen sensors will remain unavailable.
@@ -118,19 +116,11 @@ Plant sensors are **disabled by default**.
 
 ## Particle Man Weather
 
-The weather device includes a native HA weather entity, a binary sensor, and several extra sensors. See [Weather](weather.md) for full details.
+The weather device includes a native HA weather entity and several extra sensors. See [Weather](weather.md) for full details.
 
 ### Weather Entity
 
 Current conditions and three forecast types (hourly 24h, daily 5-day, twice-daily 5-day). Works with all native HA weather cards and the `weather.get_forecasts` action.
-
-### Binary Sensors
-
-| Sensor | State | When true |
-|---|---|---|
-| Precipitation Now | `on` / `off` | Currently raining, snowing, sleeting, or hailing |
-
-`Precipitation Now` is derived from the existing weather condition field — no extra API calls. Use it to trigger automations when precipitation starts or stops.
 
 ### Extra Sensors
 
@@ -171,7 +161,7 @@ One sensor each for AQ, Pollen, and Weather API calls.
 | `projected_monthly` | Estimated calls by end of billing period at current rate |
 | `pct_of_limit` | Percentage of limit used so far |
 | `pct_projected` | Percentage of limit the projection will reach |
-| `status` | `ok` / `warning` (≥80% projected) / `critical` (≥95% projected) |
+| `status` | `ok` / `warning` (projected ≥95% of limit) / `critical` (projected ≥100% of limit) |
 | `billing_period` | Current period in YYYY-MM format (Pacific Time) |
 | `shared_total_calls` | Total across all entries sharing this API key |
 | `locations_sharing_key` | Number of locations sharing this key |

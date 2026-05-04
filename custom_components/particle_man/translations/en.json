@@ -53,9 +53,6 @@
     }
   },
   "entity": {
-    "binary_sensor": {
-      "precipitation_now": {"name": "Precipitation Now"}
-    },
     "sensor": {
       "aqi": {"name": "Universal AQI"},
       "aqi_level": {"name": "Universal AQI Level"},
@@ -169,16 +166,6 @@
           "language_code": "Language for pollutant names and health guidance — use a two-letter code like en, es, or fr.",
           "enable_local_aqi": "Adds a second AQI sensor using your region's health authority scale (e.g., US AQI) alongside the always-present Universal AQI (UAQI). [UAQI vs. regional standards →]({sensors_url})",
           "local_aqi_code": "The AQI standard used in your area. US users should typically choose US AQI. [Regional standards reference]({config_url})"
-        }
-      },
-      "pollen": {
-        "title": "Pollen Options",
-        "description": "Customize pollen sensors for this location.",
-        "data": {
-          "include_plant_sensors": "Individual plant species sensors"
-        },
-        "data_description": {
-          "include_plant_sensors": "Creates a separate sensor for each plant species in your area (e.g., Oak, Ragweed, Timothy Grass). Adds roughly 10–15 entities — useful for targeted automations or allergy tracking. Botanical details (family, genus, typical season, known cross-reactions) are always included as attributes."
         }
       },
       "weather": {

@@ -34,10 +34,9 @@ See [Google Maps Platform pricing](https://developers.google.com/maps/billing-an
 === "HACS (recommended)"
 
     1. Open HACS in Home Assistant
-    2. Go to **Integrations → three-dot menu → Custom repositories**
-    3. Add `https://github.com/mnestrud/particle-man` as an **Integration**
-    4. Find **Particle Man** and click **Download**
-    5. Restart Home Assistant
+    2. Go to **Integrations → Explore & Download Repositories**
+    3. Search for **Particle Man** and click **Download**
+    4. Restart Home Assistant
 
 === "Manual"
 
@@ -155,12 +154,6 @@ Disabling an API removes its sensors and stops counting calls for that service.
     | `sgp_nea` | Singapore (NEA) |
     | `kor_keco` | South Korea (KECO) |
     | `esp_calidad` | Spain (Calidad) |
-
-### Pollen options
-
-| Option | Default | Description |
-|---|---|---|
-| Individual plant species sensors | On | Creates a sensor for each plant species in your area (Oak, Ragweed, etc.) |
 
 ### Weather options
 

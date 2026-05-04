@@ -10,6 +10,7 @@ Real-time air quality, pollen, and weather for Home Assistant — powered by Goo
 - **Stay ahead of pollen season** — trigger morning pollen briefs or allergy reminders on high-pollen days
 - **Weather-aware automations** — combine AQI advisory, pollen level, and weather conditions to decide when outdoor activities are safe
 - **Stay within Google's free tier** — automatic quota enforcement keeps all three APIs within their monthly limits by default
+- **Automagic mode** — automatically calculates the optimal polling interval based on your enabled APIs, location count, and quiet hours window, so you get maximum data freshness while staying within Google's monthly limits
 
 ---
 
@@ -27,7 +28,7 @@ Then create an API key under **APIs & Services → Credentials → Create Creden
 
 **2. Install via HACS**
 
-In HACS: **Integrations → three-dot menu → Custom repositories** → add `https://github.com/mnestrud/particle-man` as an **Integration** → Download → restart Home Assistant.
+In HACS: **Integrations → Explore & Download Repositories** → search for **Particle Man** → Download → restart Home Assistant.
 
 **3. Add the integration**
 
@@ -61,7 +62,7 @@ For each monitored location:
     - No external Python package dependencies (`requirements: []`)
     - Actively maintained with a public [issue tracker](https://github.com/mnestrud/particle-man/issues)
 
-    **To install:** In HACS, go to **Integrations → three-dot menu → Custom repositories**, add `https://github.com/mnestrud/particle-man` as an Integration repository, then find and download Particle Man.
+    **To install:** In HACS, go to **Integrations → Explore & Download Repositories**, search for **Particle Man**, and download it.
 
 ??? success "Meets HA Integration Quality Scale criteria through Platinum tier"
 
@@ -120,7 +121,7 @@ For each monitored location:
     | dynamic-devices | ✅ New pollen plant sensors added per poll |
     | entity-category | ✅ `DIAGNOSTIC` on diagnostic entities |
     | entity-device-class | ✅ `SensorDeviceClass.AQI`, `TEMPERATURE`, `HUMIDITY`, etc. |
-    | entity-disabled-by-default | ✅ Pollutant and plant sensors disabled by default |
+    | entity-disabled-by-default | ✅ Pollutant sensors disabled by default |
     | entity-translations | ✅ `_attr_translation_key` on all entities |
     | exception-translations | ✅ `UpdateFailed` + `ConfigEntryAuthFailed` use translation keys |
     | icon-translations | ✅ `icons.json` |

@@ -76,17 +76,9 @@ The "feels like" temperature accounting for high humidity in warm conditions. On
 
 The "feels like" temperature accounting for wind in cold conditions. Only meaningful in cold weather; Google returns `null` otherwise.
 
----
+### UV Index Category
 
-## Precipitation Now Binary Sensor
-
-When the Weather API is enabled, Particle Man creates a **Precipitation Now** binary sensor that is `on` when precipitation is currently occurring.
-
-**State:** `on` when the current weather condition is any of: rainy, pouring, lightning-rainy, hail, snowy, or snowy-rainy. `off` for all other conditions (clear, cloudy, windy, fog, etc.).
-
-This sensor is derived from the existing weather condition — no extra API calls.
-
-**Use case:** trigger automations when it starts or stops raining (close windows, pause irrigation, etc.) without polling a numeric threshold.
+The current UV index expressed as a plain-language WHO category: **Low**, **Moderate**, **High**, **Very High**, or **Extreme**. The raw UV index value is available as the `uv_index` attribute. The numeric UV index is also available directly on the weather entity.
 
 ---
 

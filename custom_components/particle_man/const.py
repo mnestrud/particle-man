@@ -26,7 +26,6 @@ CONF_LANGUAGE = "language_code"
 CONF_LOCAL_AQI = "enable_local_aqi"
 CONF_LOCAL_AQI_CODE = "local_aqi_code"
 CONF_HEALTH_RECS = "include_health_recommendations"
-CONF_PLANT_SENSORS = "include_plant_sensors"
 CONF_PLANT_DESCRIPTIONS = "include_plant_descriptions"
 
 # API enable toggles
@@ -53,7 +52,6 @@ DEFAULT_FORECAST_DAYS = 5
 DEFAULT_LANGUAGE = "en"
 DEFAULT_LOCAL_AQI = False
 DEFAULT_LOCAL_AQI_CODE = "us_aqi"
-DEFAULT_PLANT_SENSORS = True
 
 DEFAULT_ENABLE_AIR_QUALITY = True
 DEFAULT_ENABLE_POLLEN = True

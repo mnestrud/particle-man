@@ -342,7 +342,6 @@ def test_pollen_type_level_sensor(coord: ParticleManCoordinator) -> None:
 def test_pollen_plant_sensor_state(coord: ParticleManCoordinator) -> None:
     s = PollenPlantSensor(coord, "alder")
     assert s.native_value == 1
-    assert s._attr_entity_registry_enabled_default is False
 
 
 # ---------------------------------------------------------------------------

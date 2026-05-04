@@ -1,10 +1,5 @@
 {
   "entity": {
-    "binary_sensor": {
-      "precipitation_now": {
-        "default": "mdi:weather-rainy"
-      }
-    },
     "sensor": {
       "aqi": {
         "default": "mdi:air-filter"

@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Plant species sensors are now always created and enabled by default; the "Individual plant species sensors" Configure option has been removed.
+
+### Removed
+
+- Precipitation Now binary sensor.
+
+---
+
 ## [1.5.1] — 2026-05-04
 
 ### Added
