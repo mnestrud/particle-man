@@ -161,6 +161,7 @@ Quality scale rules: https://developers.home-assistant.io/docs/core/integration-
 |------|-----|
 | HA entity API signatures, coordinator/flow patterns, HA breaking changes | `ha-dev` agent |
 | Google Environmental API (Air Quality, Pollen, Weather, Solar) field names, response structure, quota | `google-env-api` agent |
+| After robocopy deploy + restart confirmed | `ha-integration-validator` agent |
 | General Python/testing questions | Answer directly — no agent |
 
 Invoke agents with the Agent tool (`subagent_type: ha-dev` or `subagent_type: google-env-api`). Don't answer HA API questions from training data — HA APIs change frequently.
@@ -182,6 +183,13 @@ robocopy "C:\Users\micha\code\particle-man\custom_components\particle_man" "\\bo
 - **Python changes** (any `.py` file): full HA restart required — use `ha_restart` MCP call; do NOT poll after, tell user to confirm when ready
 - **Non-Python changes** (strings.json, translations, icons): reload only — `ha_reload_config component=core`
 - Samba is deploy target only — never edit `\\botworth\config\custom_components\particle_man\` directly
+
+### Step 2b — Validate on live HA (after user confirms restart complete)
+Invoke `ha-integration-validator` agent: "Validate particle_man on live HA"
+
+- PASS → proceed to commit
+- WARN → confirm with user whether unavailable entities are expected, then commit
+- FAIL → investigate errors before committing; do not push to git until resolved
 
 ### Step 3 — Commit and push
 ```bash
