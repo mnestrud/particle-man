@@ -135,7 +135,7 @@ Disabling an API removes its sensors and stops counting calls for that service.
 |---|---|---|
 | Forecast days | 5 | Days of forecast data (1–5) |
 | Language | en | Language for display names and health guidance ([BCP-47](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry)) |
-| Add regional AQI sensor | Off | Show a country-specific AQI alongside Universal AQI — see [About the two AQI types](sensors.md#about-the-two-aqi-types) |
+| Add regional AQI sensor | Off | Show a country-specific AQI alongside Universal AQI — see [About the two AQI types](sensors.md#particle-man-pollution) |
 | Regional AQI standard | us_aqi | Which regional standard to use |
 
 ??? "Supported regional AQI standards"
