@@ -328,7 +328,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     }],
                 }
                 return self.async_create_entry(
-                    title=f"Particle Man",
+                    title="Particle Man",
                     data={CONF_API_KEY: api_key},
                     options=seeded_options,
                 )
