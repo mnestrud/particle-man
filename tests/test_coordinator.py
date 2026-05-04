@@ -1347,17 +1347,19 @@ def test_build_weather_hourly_int_cloud_cover(coordinator: ParticleManCoordinato
 
 
 def test_build_weather_daily_with_data(coordinator: ParticleManCoordinator) -> None:
-    """Weather daily builder with day+night entries (lines 1200-1259)."""
+    """Weather daily builder with day+night entries (lines 1200-1269)."""
     daily: dict[str, Any] = {
         "forecastDays": [
             {
                 "displayDate": {"year": 2026, "month": 4, "day": 22},
                 "maxTemperature": {"degrees": 20.0},
                 "minTemperature": {"degrees": 10.0},
+                "feelsLikeMaxTemperature": {"degrees": 19.0},
+                "feelsLikeMinTemperature": {"degrees": 8.0},
                 "daytimeForecast": {
                     "weatherCondition": {"type": "CLEAR"},
                     "wind": {"speed": {"value": 12.0}, "direction": {"degrees": 270}, "gust": {"value": 18.0}},
-                    "precipitation": {"probability": {"percent": 10}},
+                    "precipitation": {"probability": {"percent": 10}, "qpf": {"quantity": 2.0}},
                     "relativeHumidity": 45,
                     "cloudCover": {"percent": 20},
                     "uvIndex": 5,
@@ -1365,7 +1367,7 @@ def test_build_weather_daily_with_data(coordinator: ParticleManCoordinator) -> N
                 "nighttimeForecast": {
                     "weatherCondition": {"type": "CLEAR"},
                     "wind": {"speed": {"value": 8.0}, "direction": {"degrees": 260}},
-                    "precipitation": {"probability": {"percent": 5}},
+                    "precipitation": {"probability": {"percent": 5}, "qpf": {"quantity": 3.5}},
                     "relativeHumidity": 60,
                     "cloudCover": 15,
                 },
@@ -1378,7 +1380,16 @@ def test_build_weather_daily_with_data(coordinator: ParticleManCoordinator) -> N
     daily_list, twice_daily_list = coordinator._build_weather_daily(daily)
     assert len(daily_list) == 1
     assert daily_list[0]["native_temperature"] == 20.0
+    # Apparent temperature comes from feelsLikeMaxTemperature at day level
+    assert daily_list[0]["native_apparent_temperature"] == 19.0
+    # Daily precipitation = daytime QPF + nighttime QPF
+    assert daily_list[0]["native_precipitation"] == pytest.approx(5.5)
     assert len(twice_daily_list) == 2
+    # Twice-daily daytime uses feelsLikeMax, nighttime uses feelsLikeMin
+    day_entry = next(e for e in twice_daily_list if e["is_daytime"])
+    night_entry = next(e for e in twice_daily_list if not e["is_daytime"])
+    assert day_entry["native_apparent_temperature"] == 19.0
+    assert night_entry["native_apparent_temperature"] == 8.0
 
 
 def test_build_weather_alerts_with_data(coordinator: ParticleManCoordinator) -> None:
@@ -1477,3 +1488,35 @@ def test_compute_peak_empty(coordinator: ParticleManCoordinator) -> None:
 def test_compute_peak_no_numeric_index(coordinator: ParticleManCoordinator) -> None:
     forecast = [{"index": None}, {"category": "Low"}]
     assert coordinator._compute_peak(forecast) is None
+
+
+# ---------------------------------------------------------------------------
+# Coordinator fetch interval instance attributes
+# ---------------------------------------------------------------------------
+
+
+def test_coordinator_default_fetch_intervals(coordinator: ParticleManCoordinator) -> None:
+    """Defaults: 60-min intervals from module constants."""
+    assert coordinator._aq_fetch_interval == timedelta(hours=1)
+    assert coordinator._pollen_fetch_interval == timedelta(hours=1)
+
+
+def test_coordinator_custom_fetch_intervals(hass: HomeAssistant, mock_config_entry) -> None:
+    """Custom fetch intervals are stored as instance attrs."""
+    mock_config_entry.add_to_hass(hass)
+    with patch("custom_components.particle_man.coordinator.Store", autospec=True) as ms:
+        ms.return_value.async_load = AsyncMock(return_value=None)
+        ms.return_value.async_save = AsyncMock()
+        c = ParticleManCoordinator(
+            hass=hass,
+            api_key=TEST_API_KEY,
+            latitude=TEST_LAT,
+            longitude=TEST_LON,
+            aq_fetch_interval=timedelta(minutes=90),
+            pollen_fetch_interval=timedelta(minutes=120),
+            weather_calls_per_poll=4,
+            config_entry=mock_config_entry,
+        )
+    assert c._aq_fetch_interval == timedelta(minutes=90)
+    assert c._pollen_fetch_interval == timedelta(minutes=120)
+    assert c.weather_calls_per_poll == 4

@@ -51,6 +51,7 @@ from .const import (
     POLLEN_API_URL,
     WEATHER_API_URL,
     _PACIFIC_TZ,
+    _WEATHER_CALLS_PER_POLL,
 )
 
 import logging
@@ -222,6 +223,9 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         quiet_hours_enabled: bool = DEFAULT_QUIET_HOURS_ENABLED,
         quiet_start: str = DEFAULT_QUIET_START,
         quiet_end: str = DEFAULT_QUIET_END,
+        aq_fetch_interval: timedelta = _AQ_FETCH_INTERVAL,
+        pollen_fetch_interval: timedelta = _POLLEN_FETCH_INTERVAL,
+        weather_calls_per_poll: int = _WEATHER_CALLS_PER_POLL,
         entry_id: str = "",
         config_entry: Any = None,
     ) -> None:
@@ -251,6 +255,9 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self._quiet_hours_enabled = quiet_hours_enabled
         self._quiet_start = quiet_start
         self._quiet_end = quiet_end
+        self._aq_fetch_interval = aq_fetch_interval
+        self._pollen_fetch_interval = pollen_fetch_interval
+        self.weather_calls_per_poll = weather_calls_per_poll
         self.entry_id = entry_id
 
         key_hash = hashlib.md5(api_key.encode()).hexdigest()[:12]
@@ -408,7 +415,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
         # --- Air Quality (fetched at most once per hour — Google updates hourly) ---
         if self.enable_air_quality:
-            aq_due = self._last_aq_fetch is None or (now - self._last_aq_fetch) >= _AQ_FETCH_INTERVAL
+            aq_due = self._last_aq_fetch is None or (now - self._last_aq_fetch) >= self._aq_fetch_interval
             if not aq_due:
                 _LOGGER.debug(
                     "Particle Man [%s]: AQ not due yet (last: %s), skipping",
@@ -512,7 +519,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         # --- Pollen (fetched at most once per hour — Google updates pollen models daily,
         #     but we match the AQ cadence to keep sensor freshness consistent) ---
         if self.enable_pollen:
-            pollen_due = self._last_pollen_fetch is None or (now - self._last_pollen_fetch) >= _POLLEN_FETCH_INTERVAL
+            pollen_due = self._last_pollen_fetch is None or (now - self._last_pollen_fetch) >= self._pollen_fetch_interval
             if not pollen_due:
                 _LOGGER.debug(
                     "Particle Man [%s]: Pollen not due yet (last: %s), skipping",
@@ -1222,6 +1229,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
             max_temp = _w_degrees(day.get("maxTemperature"))
             min_temp = _w_degrees(day.get("minTemperature"))
+            feels_max = _w_degrees(day.get("feelsLikeMaxTemperature"))
+            feels_min = _w_degrees(day.get("feelsLikeMinTemperature"))
             day_fc = day.get("daytimeForecast") or {}
             night_fc = day.get("nighttimeForecast") or {}
 
@@ -1231,6 +1240,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 is_daytime: bool,
                 temp: float | None,
                 templow: float | None,
+                apparent_temp: float | None = None,
             ) -> dict[str, Any]:
                 wind = fc.get("wind") or {}
                 precip = fc.get("precipitation") or {}
@@ -1246,6 +1256,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     "condition": _w_condition(fc.get("weatherCondition"), is_daytime),
                     "native_temperature": temp,
                     "native_templow": templow,
+                    "native_apparent_temperature": apparent_temp,
                     "precipitation_probability": prob,
                     "native_precipitation": (precip.get("qpf") or {}).get("quantity"),
                     "native_wind_speed": ((wind.get("speed") or {}).get("value")),
@@ -1257,13 +1268,18 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 }
 
             if day_fc:
-                entry = _parse_fc(day_fc, date_str, True, max_temp, min_temp)
+                entry = _parse_fc(day_fc, date_str, True, max_temp, min_temp, feels_max)
                 daily_entry = {k: v for k, v in entry.items() if k != "is_daytime"}
+                # Add nighttime QPF so the daily total covers the full 24 hours.
+                if night_fc:
+                    night_qpf = ((night_fc.get("precipitation") or {}).get("qpf") or {}).get("quantity")
+                    if night_qpf is not None:
+                        daily_entry["native_precipitation"] = (daily_entry.get("native_precipitation") or 0.0) + night_qpf
                 daily_list.append(daily_entry)
-                twice_daily_list.append(_parse_fc(day_fc, date_str, True, max_temp, None))
+                twice_daily_list.append(_parse_fc(day_fc, date_str, True, max_temp, None, feels_max))
             if night_fc:
                 twice_daily_list.append(
-                    _parse_fc(night_fc, date_str_night, False, min_temp, None)
+                    _parse_fc(night_fc, date_str_night, False, min_temp, None, feels_min)
                 )
 
         return daily_list, twice_daily_list

@@ -118,11 +118,19 @@ Plant sensors are **disabled by default**.
 
 ## Particle Man Weather
 
-The weather device includes a native HA weather entity and several extra sensors. See [Weather](weather.md) for full details.
+The weather device includes a native HA weather entity, a binary sensor, and several extra sensors. See [Weather](weather.md) for full details.
 
 ### Weather Entity
 
 Current conditions and three forecast types (hourly 24h, daily 5-day, twice-daily 5-day). Works with all native HA weather cards and the `weather.get_forecasts` action.
+
+### Binary Sensors
+
+| Sensor | State | When true |
+|---|---|---|
+| Precipitation Now | `on` / `off` | Currently raining, snowing, sleeting, or hailing |
+
+`Precipitation Now` is derived from the existing weather condition field — no extra API calls. Use it to trigger automations when precipitation starts or stops.
 
 ### Extra Sensors
 
@@ -131,10 +139,19 @@ Current conditions and three forecast types (hourly 24h, daily 5-day, twice-dail
 | Thunderstorm Probability | Probability (%) of a thunderstorm this hour |
 | Heat Index | Feels-like temperature in hot and humid conditions |
 | Wind Chill | Feels-like temperature in cold and windy conditions |
+| UV Index Category | WHO UV scale text: Low / Moderate / High / Very High / Extreme |
 
-### Weather Alerts *(optional)*
+### Weather Alert Sensors *(optional)*
 
-Count of currently active weather warnings. Enable in **Configure → Weather Options**. Attributes include full alert list with severity, event type, area, and instructions.
+Three sensors created together when **Enable weather alerts** is on in **Configure → Weather Options**:
+
+| Sensor | State | Notes |
+|---|---|---|
+| Alert Count | Integer | Number of active warnings. Attributes: full alert list, `highest_severity`, `active_event_types`. |
+| Alert Highest Severity | Text | `MINOR`, `MODERATE`, `SEVERE`, or `EXTREME`; `None` when no alerts. |
+| Alert Event Types | Text | Comma-separated sorted list of active alert codes, e.g. `FLOOD_WATCH, TORNADO_WARNING`; `None` when no alerts. |
+
+The Alert Count sensor retains the `highest_severity` and `active_event_types` attributes for automations already using them. The two new sensors expose those same values as first-class entity states.
 
 ---
 

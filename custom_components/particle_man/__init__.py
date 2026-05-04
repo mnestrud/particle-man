@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -53,14 +54,18 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
     DEFAULT_WEATHER_UNITS,
+    _AQ_CALLS_PER_POLL,
+    _POLLEN_CALLS_PER_POLL,
     _WEATHER_CALLS_PER_POLL,
+    _billing_month_days,
+    _quiet_active_minutes_per_month,
     safe_interval_minutes,
 )
 from .coordinator import ParticleManCoordinator, ParticleManGlobalState
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SENSOR, Platform.WEATHER, Platform.SWITCH]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.WEATHER, Platform.SWITCH]
 
 
 def _remove_stale_devices(
@@ -123,19 +128,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Compute effective update interval
     num_locations = len(locations)
+    weather_calls_per_poll = _WEATHER_CALLS_PER_POLL + (1 if enable_weather_alerts else 0)
+
+    # Effective polling minutes this billing month, accounting for quiet hours
+    if quiet_hours_enabled:
+        effective_minutes = _quiet_active_minutes_per_month(quiet_start, quiet_end)
+    else:
+        effective_minutes = _billing_month_days() * 24 * 60
+
     if automagic:
-        # AQ and pollen are always fetched hourly in the coordinator regardless of this interval.
-        # Only weather drives the coordinator polling cadence.
         enabled_apis: dict[str, tuple[int, int]] = {}
         if enable_weather:
-            enabled_apis["weather"] = (_WEATHER_CALLS_PER_POLL, weather_monthly_limit)
-        effective_interval = safe_interval_minutes(num_locations, enabled_apis)
+            enabled_apis["weather"] = (weather_calls_per_poll, weather_monthly_limit)
+        effective_interval = safe_interval_minutes(num_locations, enabled_apis, effective_minutes)
         _LOGGER.debug(
-            "Particle Man Automagic: %d location(s) → weather interval %d min",
-            num_locations, effective_interval,
+            "Particle Man Automagic: %d location(s), %d active min/month → weather interval %d min",
+            num_locations, effective_minutes, effective_interval,
         )
     else:
         effective_interval = _opt(entry, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+
+    # AQ and pollen fetch intervals — computed from location count and monthly limits.
+    # Floored at 60 min (Google's data refresh rate); stretched beyond 60 only at 7+ locations.
+    aq_safe_min = safe_interval_minutes(
+        num_locations, {"aq": (_AQ_CALLS_PER_POLL, aq_monthly_limit)}, effective_minutes
+    )
+    aq_fetch_interval = timedelta(minutes=max(60, aq_safe_min))
+
+    pollen_safe_min = safe_interval_minutes(
+        num_locations, {"pollen": (_POLLEN_CALLS_PER_POLL, pollen_monthly_limit)}, effective_minutes
+    )
+    pollen_fetch_interval = timedelta(minutes=max(60, pollen_safe_min))
 
     # Shared global state (quiet hours runtime override)
     global_state = ParticleManGlobalState()
@@ -175,6 +198,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             quiet_hours_enabled=quiet_hours_enabled,
             quiet_start=quiet_start,
             quiet_end=quiet_end,
+            aq_fetch_interval=aq_fetch_interval,
+            pollen_fetch_interval=pollen_fetch_interval,
+            weather_calls_per_poll=weather_calls_per_poll,
             entry_id=entry.entry_id,
             config_entry=entry,
         )

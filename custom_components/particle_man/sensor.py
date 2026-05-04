@@ -25,7 +25,11 @@ from .const import (
     POLLEN_ATTRIBUTION,
     POLLEN_COLORS,
     WEATHER_ATTRIBUTION,
+    _AQ_CALLS_PER_POLL,
     _PACIFIC_TZ,
+    _POLLEN_CALLS_PER_POLL,
+    _billing_month_days,
+    _quiet_active_minutes_per_month,
 )
 from .coordinator import ParticleManCoordinator
 
@@ -132,7 +136,11 @@ async def async_setup_entry(
         if coordinator.enable_pollen:
             entities.append(PollenAdvisorySensor(coordinator))
         if coordinator.enable_weather and coordinator.enable_weather_alerts:
-            entities.append(WeatherAlertsSensor(coordinator))
+            entities.extend([
+                WeatherAlertCountSensor(coordinator),
+                WeatherAlertSeveritySensor(coordinator),
+                WeatherAlertEventTypesSensor(coordinator),
+            ])
 
         # Dynamic entities — initial pass from first-refresh data
         _add_dynamic_entities(coordinator, coordinator.data or {}, known, entities)
@@ -596,13 +604,16 @@ class PollenPlantSensor(_BasePollenSensor):
 # Weather sensors
 # ---------------------------------------------------------------------------
 
-class WeatherAlertsSensor(_BaseWeatherSensor):
+_SEVERITY_ORDER: dict[str, int] = {"MINOR": 1, "MODERATE": 2, "SEVERE": 3, "EXTREME": 4}
+
+
+class WeatherAlertCountSensor(_BaseWeatherSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_translation_key = "weather_alerts"
+    _attr_translation_key = "weather_alert_count"
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.entry_id}_{coordinator.location_slug}_weather_alerts"
+        self._attr_unique_id = f"{coordinator.entry_id}_{coordinator.location_slug}_weather_alert_count"
 
     @property
     def native_value(self) -> int:
@@ -613,14 +624,53 @@ class WeatherAlertsSensor(_BaseWeatherSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         alerts = self.coordinator.data.get("weather_alerts", [])
         severities = [a.get("severity", "") for a in alerts if a.get("severity")]
-        _order = {"MINOR": 1, "MODERATE": 2, "SEVERE": 3, "EXTREME": 4}
-        highest = max(severities, key=lambda s: _order.get(s, 0), default=None) if severities else None
+        highest = max(severities, key=lambda s: _SEVERITY_ORDER.get(s, 0), default=None) if severities else None
         return {
             "alerts": alerts,
             "highest_severity": highest,
-            "active_event_types": list({a.get("event_type") for a in alerts if a.get("event_type")}),
+            "active_event_types": sorted({a.get("event_type") for a in alerts if a.get("event_type")}),
             ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
         }
+
+
+class WeatherAlertSeveritySensor(_BaseWeatherSensor):
+    _attr_translation_key = "weather_alert_highest_severity"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_{coordinator.location_slug}_weather_alert_highest_severity"
+
+    @property
+    def native_value(self) -> str | None:
+        alerts = self.coordinator.data.get("weather_alerts", [])
+        if not isinstance(alerts, list) or not alerts:
+            return None
+        severities = [a.get("severity") for a in alerts if a.get("severity")]
+        return max(severities, key=lambda s: _SEVERITY_ORDER.get(s, 0)) if severities else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION}
+
+
+class WeatherAlertEventTypesSensor(_BaseWeatherSensor):
+    _attr_translation_key = "weather_alert_active_event_types"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry_id}_{coordinator.location_slug}_weather_alert_active_event_types"
+
+    @property
+    def native_value(self) -> str | None:
+        alerts = self.coordinator.data.get("weather_alerts", [])
+        if not isinstance(alerts, list) or not alerts:
+            return None
+        event_types = sorted({a.get("event_type") for a in alerts if a.get("event_type")})
+        return ", ".join(event_types) if event_types else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION}
 
 
 class ThunderstormProbabilitySensor(_BaseWeatherSensor):
@@ -766,7 +816,9 @@ def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict
         today_pacific = _datetime.now(_PACIFIC_TZ).date()
         days_elapsed = max(1, (today_pacific - period_start).days + 1)
         days_in_month = _calendar.monthrange(year, month)[1]
+        days_remaining = max(0, days_in_month - days_elapsed)
         projected = round(calls * days_in_month / days_elapsed)
+        calls_per_day = round(calls / days_elapsed, 1)
         pct_used = round(calls / limit * 100, 1) if limit > 0 else 0.0
         pct_projected = round(projected / limit * 100, 1) if limit > 0 else 0.0
         if pct_projected >= 95:
@@ -777,6 +829,8 @@ def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict
             status = "ok"
     except (ValueError, TypeError, ZeroDivisionError):
         projected = 0
+        calls_per_day = 0.0
+        days_remaining = 0
         pct_used = 0.0
         pct_projected = 0.0
         status = "ok"
@@ -787,6 +841,39 @@ def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict
         "pct_projected": pct_projected,
         "status": status,
         "billing_period": period_month,
+        "days_remaining": days_remaining,
+        "calls_per_day": calls_per_day,
+    }
+
+
+def _automagic_assumption_attrs(
+    coordinator: ParticleManCoordinator,
+    calls_per_poll: int,
+    fetch_interval_minutes: int,
+) -> dict[str, Any]:
+    """Return the assumptions behind a monthly usage projection for a given API."""
+    c = coordinator
+    quiet_on = c._quiet_hours_enabled
+    days = _billing_month_days()
+    if quiet_on:
+        eff_min = _quiet_active_minutes_per_month(c._quiet_start, c._quiet_end)
+        active_hours = round(eff_min / days / 60, 1)
+        window = f"{c._quiet_start[:5]}–{c._quiet_end[:5]}"
+    else:
+        eff_min = days * 24 * 60
+        active_hours = 24.0
+        window = None
+    return {
+        "automagic_mode": c.automagic_mode,
+        "num_locations": c.num_locations,
+        "calls_per_poll": calls_per_poll,
+        "fetch_interval_minutes": fetch_interval_minutes,
+        "quiet_hours_enabled": quiet_on,
+        "quiet_hours_window": window,
+        "active_hours_per_day": active_hours,
+        "billing_month_days": days,
+        "effective_minutes_per_month": eff_min,
+        "safety_buffer_pct": 5,
     }
 
 
@@ -815,6 +902,10 @@ class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
         )
         attrs["shared_total_calls"] = tracking.get("aq_calls", 0)
         attrs["num_locations"] = c.num_locations
+        attrs.update(_automagic_assumption_attrs(
+            c, _AQ_CALLS_PER_POLL,
+            int(c._aq_fetch_interval.total_seconds() // 60),
+        ))
         attrs[ATTR_ATTRIBUTION] = ATTRIBUTION
         return attrs
 
@@ -844,6 +935,10 @@ class MonthlyPollenUsageSensor(_BaseDiagnosticSensor):
         )
         attrs["shared_total_calls"] = tracking.get("pollen_calls", 0)
         attrs["num_locations"] = c.num_locations
+        attrs.update(_automagic_assumption_attrs(
+            c, _POLLEN_CALLS_PER_POLL,
+            int(c._pollen_fetch_interval.total_seconds() // 60),
+        ))
         attrs[ATTR_ATTRIBUTION] = POLLEN_ATTRIBUTION
         return attrs
 
@@ -873,5 +968,9 @@ class MonthlyWeatherUsageSensor(_BaseDiagnosticSensor):
         )
         attrs["shared_total_calls"] = tracking.get("weather_calls", 0)
         attrs["num_locations"] = c.num_locations
+        weather_interval_min = int(c.update_interval.total_seconds() // 60) if c.update_interval else 0
+        attrs.update(_automagic_assumption_attrs(
+            c, c.weather_calls_per_poll, weather_interval_min,
+        ))
         attrs[ATTR_ATTRIBUTION] = WEATHER_ATTRIBUTION
         return attrs

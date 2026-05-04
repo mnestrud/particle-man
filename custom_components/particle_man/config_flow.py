@@ -77,6 +77,8 @@ from .const import (
     _MINUTES_PER_MONTH,
     _POLLEN_CALLS_PER_POLL,
     _WEATHER_CALLS_PER_POLL,
+    _billing_month_days,
+    _quiet_active_minutes_per_month,
     safe_interval_minutes,
 )
 
@@ -89,8 +91,13 @@ _ACTION_REMOVE = "remove"
 _ACTION_CONTINUE = "continue"
 
 
-def _projected_usage(interval: int, num_locations: int, calls_per_poll: int) -> int:
-    return round(_MINUTES_PER_MONTH / interval * calls_per_poll * num_locations)
+def _projected_usage(
+    interval: int,
+    num_locations: int,
+    calls_per_poll: int,
+    minutes_per_month: int = _MINUTES_PER_MONTH,
+) -> int:
+    return round(minutes_per_month / interval * calls_per_poll * num_locations)
 
 
 def _usage_summary(
@@ -103,22 +110,23 @@ def _usage_summary(
     aq_limit: int,
     pollen_limit: int,
     weather_limit: int,
+    weather_calls_per_poll: int = _WEATHER_CALLS_PER_POLL,
+    minutes_per_month: int = _MINUTES_PER_MONTH,
 ) -> str:
-    # AQ and pollen are always fetched hourly regardless of the weather interval.
     parts = []
     if enable_aq:
         parts.append(
-            f"Air Quality ~{_projected_usage(60, num_locations, _AQ_CALLS_PER_POLL)}"
+            f"Air Quality ~{_projected_usage(60, num_locations, _AQ_CALLS_PER_POLL, minutes_per_month)}"
             + (f"/{aq_limit}" if enforce else "")
         )
     if enable_pollen:
         parts.append(
-            f"Pollen ~{_projected_usage(60, num_locations, _POLLEN_CALLS_PER_POLL)}"
+            f"Pollen ~{_projected_usage(60, num_locations, _POLLEN_CALLS_PER_POLL, minutes_per_month)}"
             + (f"/{pollen_limit}" if enforce else "")
         )
     if enable_weather:
         parts.append(
-            f"Weather ~{_projected_usage(weather_interval, num_locations, _WEATHER_CALLS_PER_POLL)}"
+            f"Weather ~{_projected_usage(weather_interval, num_locations, weather_calls_per_poll, minutes_per_month)}"
             + (f"/{weather_limit}" if enforce else "")
         )
     if not parts:
@@ -779,13 +787,25 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             aq_limit = self._get(CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT)
             pollen_limit = self._get(CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT)
             weather_limit = self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)
+            enable_alerts = self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS)
+            weather_calls = _WEATHER_CALLS_PER_POLL + (1 if enable_alerts else 0)
+            qh_enabled = self._get(CONF_QUIET_HOURS_ENABLED, DEFAULT_QUIET_HOURS_ENABLED)
+            if qh_enabled:
+                eff_minutes = _quiet_active_minutes_per_month(
+                    self._get(CONF_QUIET_START, DEFAULT_QUIET_START),
+                    self._get(CONF_QUIET_END, DEFAULT_QUIET_END),
+                )
+            else:
+                eff_minutes = _billing_month_days() * 24 * 60
             enabled_apis: dict[str, tuple[int, int]] = {}
             if enable_weather:
-                enabled_apis["weather"] = (_WEATHER_CALLS_PER_POLL, DEFAULT_WEATHER_MONTHLY_LIMIT)
-            safe = safe_interval_minutes(num_loc, enabled_apis)
+                enabled_apis["weather"] = (weather_calls, DEFAULT_WEATHER_MONTHLY_LIMIT)
+            safe = safe_interval_minutes(num_loc, enabled_apis, eff_minutes)
             summary = _usage_summary(
                 interval, num_loc, enable_aq, enable_pollen, enable_weather,
                 True, aq_limit, pollen_limit, weather_limit,
+                weather_calls_per_poll=weather_calls,
+                minutes_per_month=eff_minutes,
             )
             usage_text = f"{summary} Suggested weather minimum: {safe} min."
             fields[vol.Required(CONF_UPDATE_INTERVAL)] = NumberSelector(
@@ -932,13 +952,23 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         enable_aq = self._options.get(CONF_ENABLE_AIR_QUALITY, self._get(CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY))
         enable_pollen = self._options.get(CONF_ENABLE_POLLEN, self._get(CONF_ENABLE_POLLEN, DEFAULT_ENABLE_POLLEN))
         enable_weather = self._options.get(CONF_ENABLE_WEATHER, self._get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER))
-
+        _alerts = self._options.get(CONF_ENABLE_WEATHER_ALERTS, self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS))
+        qh_enabled = self._get(CONF_QUIET_HOURS_ENABLED, DEFAULT_QUIET_HOURS_ENABLED)
+        if qh_enabled:
+            eff_minutes = _quiet_active_minutes_per_month(
+                self._get(CONF_QUIET_START, DEFAULT_QUIET_START),
+                self._get(CONF_QUIET_END, DEFAULT_QUIET_END),
+            )
+        else:
+            eff_minutes = _billing_month_days() * 24 * 60
         summary = _usage_summary(
             interval, num_loc, enable_aq, enable_pollen, enable_weather,
             False,
             self._get(CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT),
             self._get(CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT),
             self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT),
+            weather_calls_per_poll=_WEATHER_CALLS_PER_POLL + (1 if _alerts else 0),
+            minutes_per_month=eff_minutes,
         )
 
         fields: dict[Any, Any] = {}

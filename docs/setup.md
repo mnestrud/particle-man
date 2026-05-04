@@ -68,14 +68,56 @@ Accessed via **Configure** on the integration card. Settings span multiple pages
 
 Saving options automatically reloads the integration. API call counters are not reset on reload.
 
-### Polling & limits
+### Automagic mode (default)
+
+With **Automagic** on, Particle Man automatically calculates the safest polling interval for your setup. You don't set an interval manually — it's derived from:
+
+| Factor | What it does |
+|---|---|
+| **APIs enabled** | Determines how many calls are made per poll |
+| **Number of locations** | Multiplies calls (each location is polled separately) |
+| **Monthly API limits** | Sets the ceiling the interval must stay under |
+| **Quiet hours window** | Reduces effective polling time, so active polls are closer together |
+| **5% safety buffer** | Adds headroom so the projection doesn't land exactly at the limit |
+
+**Specific formula (weather interval):**
+
+```
+safe_interval = ⌈ active_minutes_per_month × calls_per_poll × num_locations × 1.05 / monthly_limit ⌉
+```
+
+The result is floored at 15 minutes. `active_minutes_per_month` uses the actual day count of the current billing month (not a fixed 30-day assumption), minus any quiet hours.
+
+**Air Quality and Pollen** are always fetched on a separate 60-minute cadence (matching Google's data refresh rate). At 7+ locations they scale above 60 minutes automatically.
+
+All of these assumptions are surfaced as attributes on the **Monthly AQ Calls**, **Monthly Pollen Calls**, and **Monthly Weather Calls** diagnostic sensors. Open any of these in Developer Tools → States to see exactly what interval and assumptions are in effect.
+
+**With Automagic on, the quiet hours and location settings from Configure are the only inputs you need.** The interval calculation is invisible unless you inspect the diagnostic sensors.
+
+### Manual mode
+
+Switch **Automagic** off to control the interval and limits yourself.
 
 | Option | Default | Description |
 |---|---|---|
-| Stay within Google's free tier | On | Pauses each API automatically when its monthly free quota is reached. Turn off to set custom limits |
-| Check every (minutes) | 60 | How often to fetch new data (15–1440 min) |
+| Check every (minutes) | 20 | How often to fetch new data (15–1440 min) |
+| Air Quality limit | 10,000 | Monthly AQ call ceiling before pausing |
+| Pollen limit | 5,000 | Monthly Pollen call ceiling before pausing |
+| Weather limit | 10,000 | Monthly Weather call ceiling before pausing |
 
-The options form shows **projected monthly usage** and a **suggested minimum interval** based on your enabled APIs and number of locations.
+The options form shows **projected monthly usage** and a **suggested minimum interval** for the current month, quiet hours, and location count.
+
+### Quiet hours
+
+Quiet hours pause all API fetches during a nightly window. They reduce API consumption and, in Automagic mode, allow a shorter daytime polling interval while still fitting within the monthly limit.
+
+| Option | Default | Description |
+|---|---|---|
+| Enable quiet hours | On | Pause polling overnight |
+| Pause from | 23:00 | Start of the quiet window |
+| Resume at | 05:00 | End of the quiet window |
+
+Quiet hours apply globally — all locations pause and resume together.
 
 ### APIs to enable
 
@@ -95,7 +137,6 @@ Disabling an API removes its sensors and stops counting calls for that service.
 | Language | en | Language for display names and health guidance ([BCP-47](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry)) |
 | Add regional AQI sensor | Off | Show a country-specific AQI alongside Universal AQI — see [About the two AQI types](sensors.md#about-the-two-aqi-types) |
 | Regional AQI standard | us_aqi | Which regional standard to use |
-| Include health guidance | Off | Adds per-population activity recommendations as sensor attributes |
 
 ??? "Supported regional AQI standards"
 
@@ -120,27 +161,13 @@ Disabling an API removes its sensors and stops counting calls for that service.
 | Option | Default | Description |
 |---|---|---|
 | Individual plant species sensors | On | Creates a sensor for each plant species in your area (Oak, Ragweed, etc.) |
-| Plant details | On | Adds family, genus, typical season, and cross-reactions as sensor attributes |
 
 ### Weather options
 
 | Option | Default | Description |
 |---|---|---|
 | Units | Metric | Temperature, wind, and precipitation units. HA can convert for display independently |
-| Weather alerts sensor | Off | Creates a sensor showing active weather warnings; shows 0 when none are active |
-
-### Custom limits & quiet hours
-
-*Only shown when "Stay within Google's free tier" is off.*
-
-| Option | Default | Description |
-|---|---|---|
-| Air Quality limit | 5,000 | Monthly AQ call ceiling |
-| Pollen limit | 5,000 | Monthly Pollen call ceiling |
-| Weather limit | 10,000 | Monthly Weather call ceiling |
-| Pause overnight | Off | Skip all API fetches during a configured window |
-| Pause from | 22:00 | Start of overnight pause |
-| Resume at | 06:00 | End of overnight pause |
+| Weather alerts sensors | Off | Creates three sensors: **Alert Count** (integer), **Alert Highest Severity** (MINOR/MODERATE/SEVERE/EXTREME), and **Alert Event Types** (comma-separated codes). All show empty/0 when no alerts are active |
 
 ### Locations
 
@@ -149,7 +176,7 @@ Multiple locations can be monitored using the same API key. Each location gets i
 Add, edit, or remove locations via **Configure → Locations**.
 
 !!! warning
-    Multiple locations multiply API call counts proportionally. The options form shows the combined projected usage. Consider increasing the polling interval when adding locations.
+    Multiple locations multiply API call counts proportionally. Automagic mode accounts for this automatically. In manual mode, the options form shows combined projected usage — increase the interval if you add locations.
 
 ---
 

@@ -4,41 +4,89 @@
 
 ## How data updates
 
-Particle Man polls Google's APIs on a configurable interval and enforces monthly quotas automatically.
+Particle Man polls Google's APIs on a schedule and enforces monthly quotas to keep usage within Google's free tier.
 
 ### API calls per poll
 
-| API | Calls | Endpoints |
+| API | Calls per poll | Endpoints hit |
 |---|---|---|
 | Air Quality | 2 | current conditions + forecast |
 | Pollen | 1 | daily forecast lookup |
 | Weather | 3 | current conditions + hourly + daily forecast |
-| Weather (with alerts) | +1 | public alerts lookup |
+| Weather alerts (optional) | +1 | public alerts lookup |
 
-### Monthly usage at common intervals (1 location, all APIs)
+### Polling cadence
+
+**Air Quality and Pollen** are fetched at most once per hour, matching Google's own data refresh rate. Polling faster would return the same data. At 7+ locations they scale automatically — see [Automagic interval calculation](#automagic-interval-calculation) below.
+
+**Weather** uses either the Automagic-calculated interval or a manually configured one.
+
+### Automagic interval calculation
+
+Automagic mode computes the minimum safe polling interval — the shortest interval that keeps total calls within the monthly limit over the billing period.
+
+**Inputs:**
+
+| Input | Source | Example |
+|---|---|---|
+| `calls_per_poll` | Fixed per API (weather = 3 or 4) | 4 (alerts on) |
+| `num_locations` | Number of configured locations | 2 |
+| `monthly_limit` | Google free tier or custom | 10,000 |
+| `billing_month_days` | Actual days in current month (Pacific Time) | 31 |
+| `active_minutes_per_month` | `billing_month_days × 24 × 60` minus quiet hours | 33,480 |
+| `safety_buffer` | Fixed 5% | 1.05 |
+
+**Formula:**
+
+```
+safe_interval_minutes = ⌈ active_minutes × calls_per_poll × num_locations × 1.05 / monthly_limit ⌉
+```
+
+Floored at 15 minutes. If the result would be less than 15, 15 is used.
+
+**Example** — 2 locations, alerts on (4 calls/poll), 10,000 weather limit, May (31 days), quiet hours 23:00–05:00 (18 active hours/day):
+
+```
+active_minutes = 31 × 18 × 60 = 33,480
+safe_interval  = ⌈ 33,480 × 4 × 2 × 1.05 / 10,000 ⌉ = ⌈ 28.1 ⌉ = 29 min
+```
+
+**Where to see the live assumptions:**
+
+Open any of the three monthly usage diagnostic sensors (**Monthly AQ Calls**, **Monthly Pollen Calls**, **Monthly Weather Calls**) in **Developer Tools → States**. The attributes include every input used in the current calculation:
+
+```
+automagic_mode: true
+num_locations: 2
+calls_per_poll: 4
+fetch_interval_minutes: 29
+quiet_hours_enabled: true
+quiet_hours_window: 23:00–05:00
+active_hours_per_day: 18.0
+billing_month_days: 31
+effective_minutes_per_month: 33480
+safety_buffer_pct: 5
+days_remaining: 14
+calls_per_day: 58.3
+```
+
+### Monthly usage at common intervals (1 location, all APIs, 31-day month, no quiet hours)
 
 | Interval | AQ calls | Pollen calls | Weather calls | Status |
 |---|---|---|---|---|
-| 60 min | 1,440 | 720 | 2,160 | ✅ All within free tier |
-| 30 min | 2,880 | 1,440 | 4,320 | ✅ All within free tier |
-| 15 min | 5,760 | 2,880 | 8,640 | ❌ AQ exceeds 5k limit |
+| 60 min | 1,488 | 744 | 2,232 | ✅ All within free tier |
+| 30 min | 2,976 | 1,488 | 4,464 | ✅ All within free tier |
+| 15 min | 5,952 | 2,976 | 8,928 | ❌ AQ exceeds 10k limit |
 
-Free tier limits: [Air Quality](https://developers.google.com/maps/documentation/air-quality/usage-and-billing) (5,000/mo), [Pollen](https://developers.google.com/maps/documentation/pollen/usage-and-billing) (5,000/mo), [Weather](https://developers.google.com/maps/documentation/weather/usage-and-billing) (10,000/mo).
+Free tier limits: [Air Quality](https://developers.google.com/maps/documentation/air-quality/usage-and-billing) (10,000/mo), [Pollen](https://developers.google.com/maps/documentation/pollen/usage-and-billing) (5,000/mo), [Weather](https://developers.google.com/maps/documentation/weather/usage-and-billing) (10,000/mo).
 
 ### Quota behavior
 
-- **Enforce mode on (default):** when an API reaches its monthly limit, Particle Man pauses only that API. Other APIs continue normally. Enforcement resumes automatically at the start of the next billing period (1st of the month, midnight Pacific time).
-- **Enforce mode off:** you can set custom limits and configure quiet hours. See [Setup — Custom limits](setup.md#custom-limits--quiet-hours).
-
-Multiple locations multiply call counts. The options form shows combined projected usage — see [Setup — Locations](setup.md#locations).
-
-### Google data refresh cadence
-
-AQ data is updated hourly by Google; pollen data is updated daily. Polling faster than these rates fetches the same data. The 60-minute default is aligned with the AQ refresh rate.
+When an API reaches its monthly limit, Particle Man pauses **only that API**. Other APIs continue normally. Tracking resets automatically on the 1st of the month (midnight Pacific Time).
 
 ### Quota tracking
 
-Particle Man tracks API calls locally using HA's persistent storage — it does not pull usage data from Google. Counts survive restarts and option changes. Tracking resets automatically each billing period.
+Particle Man tracks API calls locally using HA's persistent storage — it does not pull usage data from Google. Counts survive restarts and option changes.
 
 If counts get out of sync (e.g. after migrating to a new HA instance), remove and re-add the integration to reset tracking.
 

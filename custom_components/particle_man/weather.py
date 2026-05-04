@@ -17,6 +17,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -182,15 +183,24 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
         return int(val) if val is not None else None
 
     @property
-    def native_precipitation(self) -> float | None:
-        return self._current.get("precipitation")
+    def ozone(self) -> float | None:
+        return (self.coordinator.data.get("pollutant_o3") or {}).get("value")
 
     # -------------------------------------------------------------------------
     # Forecast methods
     # -------------------------------------------------------------------------
 
     async def async_forecast_hourly(self) -> list[Forecast] | None:
-        return self.coordinator.data.get("weather_hourly") or None
+        forecasts = self.coordinator.data.get("weather_hourly")
+        if not forecasts:
+            return None
+        now_hour = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+        result = [
+            f for f in forecasts
+            if (dt := dt_util.parse_datetime(f.get("datetime", ""))) is not None
+            and dt >= now_hour
+        ]
+        return result or None
 
     async def async_forecast_daily(self) -> list[Forecast] | None:
         return self.coordinator.data.get("weather_daily") or None

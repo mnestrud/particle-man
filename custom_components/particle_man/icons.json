@@ -1,5 +1,10 @@
 {
   "entity": {
+    "binary_sensor": {
+      "precipitation_now": {
+        "default": "mdi:weather-rainy"
+      }
+    },
     "sensor": {
       "aqi": {
         "default": "mdi:air-filter"
@@ -13,8 +18,14 @@
       "pollen_advisory": {
         "default": "mdi:flower-pollen"
       },
-      "weather_alerts": {
+      "weather_alert_count": {
         "default": "mdi:alert-circle-outline"
+      },
+      "weather_alert_highest_severity": {
+        "default": "mdi:alert-circle"
+      },
+      "weather_alert_active_event_types": {
+        "default": "mdi:format-list-bulleted"
       },
       "thunderstorm_probability": {
         "default": "mdi:weather-lightning"

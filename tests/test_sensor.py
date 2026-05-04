@@ -28,7 +28,9 @@ from custom_components.particle_man.sensor import (
     PollutantSensor,
     ThunderstormProbabilitySensor,
     WindChillSensor,
-    WeatherAlertsSensor,
+    WeatherAlertCountSensor,
+    WeatherAlertSeveritySensor,
+    WeatherAlertEventTypesSensor,
     _add_dynamic_entities,
 )
 from tests.conftest import ENTRY_ID, TEST_LAT, TEST_LON, TEST_LOCATION_NAME, TEST_API_KEY
@@ -413,9 +415,9 @@ def test_pollen_advisory_sensor(coord: ParticleManCoordinator) -> None:
     assert s.native_value == "Low"
 
 
-def test_weather_alerts_sensor(coord: ParticleManCoordinator) -> None:
+def test_weather_alert_count_sensor_zero(coord: ParticleManCoordinator) -> None:
     coord.data["weather_alerts"] = []
-    s = WeatherAlertsSensor(coord)
+    s = WeatherAlertCountSensor(coord)
     assert s.native_value == 0
 
 
@@ -587,3 +589,202 @@ def test_billing_projection_invalid_period(coord: ParticleManCoordinator) -> Non
     attrs = _billing_projection_attrs(50, 100, "not-a-valid-period")
     assert attrs["status"] == "ok"
     assert attrs["projected_monthly"] == 0
+
+
+# ---------------------------------------------------------------------------
+# _uv_category and UvIndexCategorySensor
+# ---------------------------------------------------------------------------
+
+
+def test_uv_category_none() -> None:
+    from custom_components.particle_man.sensor import _uv_category
+    assert _uv_category(None) is None
+
+
+@pytest.mark.parametrize("value,expected", [
+    (0.0, "Low"),
+    (2.0, "Low"),
+    (2.1, "Moderate"),
+    (5.0, "Moderate"),
+    (5.1, "High"),
+    (7.0, "High"),
+    (7.1, "Very High"),
+    (10.0, "Very High"),
+    (10.1, "Extreme"),
+    (15.0, "Extreme"),
+])
+def test_uv_category_branches(value: float, expected: str) -> None:
+    from custom_components.particle_man.sensor import _uv_category
+    assert _uv_category(value) == expected
+
+
+def test_uv_index_category_sensor_native_value(coord: ParticleManCoordinator) -> None:
+    from custom_components.particle_man.sensor import UvIndexCategorySensor
+    coord.data["weather_current"] = {"uv_index": 6}
+    s = UvIndexCategorySensor(coord)
+    assert s.native_value == "High"
+
+
+def test_uv_index_category_sensor_none_when_missing(coord: ParticleManCoordinator) -> None:
+    from custom_components.particle_man.sensor import UvIndexCategorySensor
+    coord.data["weather_current"] = {}
+    s = UvIndexCategorySensor(coord)
+    assert s.native_value is None
+
+
+def test_uv_index_category_sensor_attributes(coord: ParticleManCoordinator) -> None:
+    from custom_components.particle_man.sensor import UvIndexCategorySensor
+    coord.data["weather_current"] = {"uv_index": 3}
+    s = UvIndexCategorySensor(coord)
+    attrs = s.extra_state_attributes
+    assert attrs["uv_index"] == 3
+    assert "attribution" in attrs
+
+
+# ---------------------------------------------------------------------------
+# WeatherAlertCountSensor, WeatherAlertSeveritySensor, WeatherAlertEventTypesSensor
+# ---------------------------------------------------------------------------
+
+SAMPLE_ALERTS = [
+    {"severity": "SEVERE", "event_type": "TORNADO_WARNING"},
+    {"severity": "MODERATE", "event_type": "FLOOD_WATCH"},
+    {"severity": "SEVERE", "event_type": "TORNADO_WARNING"},
+]
+
+
+def test_weather_alert_count_with_alerts(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = SAMPLE_ALERTS
+    s = WeatherAlertCountSensor(coord)
+    assert s.native_value == 3
+
+
+def test_weather_alert_count_attributes(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = SAMPLE_ALERTS
+    s = WeatherAlertCountSensor(coord)
+    attrs = s.extra_state_attributes
+    assert attrs["highest_severity"] == "SEVERE"
+    assert set(attrs["active_event_types"]) == {"TORNADO_WARNING", "FLOOD_WATCH"}
+    assert "attribution" in attrs
+
+
+def test_weather_alert_count_no_alerts(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = []
+    s = WeatherAlertCountSensor(coord)
+    assert s.native_value == 0
+    assert s.extra_state_attributes["highest_severity"] is None
+
+
+def test_weather_alert_severity_returns_highest(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = SAMPLE_ALERTS
+    s = WeatherAlertSeveritySensor(coord)
+    assert s.native_value == "SEVERE"
+
+
+def test_weather_alert_severity_ordering(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = [
+        {"severity": "MINOR", "event_type": "WIND_ADVISORY"},
+        {"severity": "EXTREME", "event_type": "TORNADO_EMERGENCY"},
+        {"severity": "MODERATE", "event_type": "FLOOD_WARNING"},
+    ]
+    s = WeatherAlertSeveritySensor(coord)
+    assert s.native_value == "EXTREME"
+
+
+def test_weather_alert_severity_none_when_no_alerts(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = []
+    s = WeatherAlertSeveritySensor(coord)
+    assert s.native_value is None
+
+
+def test_weather_alert_severity_none_when_key_absent(coord: ParticleManCoordinator) -> None:
+    coord.data.pop("weather_alerts", None)
+    s = WeatherAlertSeveritySensor(coord)
+    assert s.native_value is None
+
+
+def test_weather_alert_event_types_sorted_unique(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = SAMPLE_ALERTS
+    s = WeatherAlertEventTypesSensor(coord)
+    assert s.native_value == "FLOOD_WATCH, TORNADO_WARNING"
+
+
+def test_weather_alert_event_types_none_when_no_alerts(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = []
+    s = WeatherAlertEventTypesSensor(coord)
+    assert s.native_value is None
+
+
+def test_weather_alert_event_types_none_when_key_absent(coord: ParticleManCoordinator) -> None:
+    coord.data.pop("weather_alerts", None)
+    s = WeatherAlertEventTypesSensor(coord)
+    assert s.native_value is None
+
+
+def test_weather_alert_sensors_attribution(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = SAMPLE_ALERTS
+    for sensor_cls in (WeatherAlertSeveritySensor, WeatherAlertEventTypesSensor):
+        s = sensor_cls(coord)
+        assert "attribution" in s.extra_state_attributes
+
+
+# ---------------------------------------------------------------------------
+# Monthly usage sensor assumption attributes
+# ---------------------------------------------------------------------------
+
+
+def test_monthly_aq_assumption_attrs_present(coord: ParticleManCoordinator) -> None:
+    coord._cached_tracking = {"aq_calls": 100, "period_month": "2026-05"}
+    sensor = MonthlyAqUsageSensor(coord)
+    attrs = sensor.extra_state_attributes
+    for key in (
+        "automagic_mode", "num_locations", "calls_per_poll", "fetch_interval_minutes",
+        "quiet_hours_enabled", "billing_month_days", "effective_minutes_per_month",
+        "safety_buffer_pct", "days_remaining", "calls_per_day",
+    ):
+        assert key in attrs, f"Missing key: {key}"
+
+
+def test_monthly_pollen_assumption_attrs_present(coord: ParticleManCoordinator) -> None:
+    coord._cached_tracking = {"pollen_calls": 50, "period_month": "2026-05"}
+    sensor = MonthlyPollenUsageSensor(coord)
+    attrs = sensor.extra_state_attributes
+    for key in (
+        "automagic_mode", "calls_per_poll", "fetch_interval_minutes",
+        "billing_month_days", "effective_minutes_per_month",
+    ):
+        assert key in attrs, f"Missing key: {key}"
+
+
+def test_monthly_weather_assumption_attrs_present(coord: ParticleManCoordinator) -> None:
+    coord._cached_tracking = {"weather_calls": 200, "period_month": "2026-05"}
+    sensor = MonthlyWeatherUsageSensor(coord)
+    attrs = sensor.extra_state_attributes
+    for key in (
+        "automagic_mode", "calls_per_poll", "fetch_interval_minutes",
+        "billing_month_days", "effective_minutes_per_month",
+        "days_remaining", "calls_per_day",
+    ):
+        assert key in attrs, f"Missing key: {key}"
+
+
+def test_monthly_aq_fetch_interval_reflected_in_attrs(coord: ParticleManCoordinator) -> None:
+    from datetime import timedelta
+    coord._aq_fetch_interval = timedelta(minutes=90)
+    coord._cached_tracking = {"aq_calls": 0, "period_month": "2026-05"}
+    attrs = MonthlyAqUsageSensor(coord).extra_state_attributes
+    assert attrs["fetch_interval_minutes"] == 90
+
+
+def test_monthly_billing_projection_days_remaining(coord: ParticleManCoordinator) -> None:
+    coord._cached_tracking = {"aq_calls": 200, "period_month": "2026-05"}
+    attrs = MonthlyAqUsageSensor(coord).extra_state_attributes
+    assert "days_remaining" in attrs
+    assert attrs["days_remaining"] >= 0
+
+
+def test_monthly_quiet_hours_window_none_when_disabled(coord: ParticleManCoordinator) -> None:
+    coord._quiet_hours_enabled = False
+    coord._cached_tracking = {"aq_calls": 0, "period_month": "2026-05"}
+    attrs = MonthlyAqUsageSensor(coord).extra_state_attributes
+    assert attrs["quiet_hours_window"] is None
+    assert attrs["active_hours_per_day"] == 24.0

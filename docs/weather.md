@@ -24,7 +24,7 @@ The weather entity appears as **Particle Man Weather** in your weather cards and
 | Visibility | Horizontal visibility distance |
 | UV Index | Current UV index |
 | Cloud Cover | Percentage of sky covered by clouds |
-| Precipitation | Liquid equivalent precipitation (1h) |
+| Ozone | Ozone concentration in ppb (from Air Quality API; `None` when Air Quality is disabled) |
 
 ### Forecast Types
 
@@ -36,7 +36,7 @@ The entity exposes three forecast types accessible via `weather.get_forecasts`:
 | `daily` | Next 5 days | 5 entries, daytime conditions |
 | `twice_daily` | Next 5 days | 10 entries (day + night per day) |
 
-Each forecast entry includes: condition, temperature, precipitation probability, wind speed/bearing/gust, humidity, pressure, cloud coverage, and UV index. Daily entries also include a low temperature.
+Each forecast entry includes: condition, temperature, apparent temperature, precipitation probability, precipitation amount, wind speed/bearing/gust, humidity, pressure, cloud coverage, and UV index. Daily and twice-daily entries also include a low temperature. Daily precipitation is the 24-hour total (daytime + overnight). Hourly entries additionally include dew point. Hourly entries are always filtered to start at the current hour — past hours are automatically excluded, so the list stays current even if data was fetched before quiet hours started.
 
 ### Condition Mapping
 
@@ -78,24 +78,48 @@ The "feels like" temperature accounting for wind in cold conditions. Only meanin
 
 ---
 
-## Weather Alerts Sensor
+## Precipitation Now Binary Sensor
 
-When weather alerts are enabled (Configure → Weather Options), Particle Man creates a **Weather Alerts** sensor.
+When the Weather API is enabled, Particle Man creates a **Precipitation Now** binary sensor that is `on` when precipitation is currently occurring.
 
-**State:** The count of currently active weather alerts (0 = no alerts).
+**State:** `on` when the current weather condition is any of: rainy, pouring, lightning-rainy, hail, snowy, or snowy-rainy. `off` for all other conditions (clear, cloudy, windy, fog, etc.).
+
+This sensor is derived from the existing weather condition — no extra API calls.
+
+**Use case:** trigger automations when it starts or stops raining (close windows, pause irrigation, etc.) without polling a numeric threshold.
+
+---
+
+## Weather Alert Sensors
+
+When weather alerts are enabled (**Configure → Weather Options**), Particle Man creates three sensors:
+
+### Alert Count
+
+**State:** The integer count of currently active warnings (0 = no alerts).
 
 **Attributes:**
 
 | Attribute | Description |
 |---|---|
-| `alerts` | List of active alerts, each with title, severity, event type, area, start/expiration time, description, and instructions |
-| `highest_severity` | Worst severity level among active alerts: `MINOR`, `MODERATE`, `SEVERE`, or `EXTREME` |
-| `active_event_types` | Unique list of event types (e.g. `TORNADO_WARNING`, `FLOOD_WATCH`) |
+| `alerts` | Full list of active alerts — each entry includes title, severity, event type, area, start/expiration time, description, and instructions |
+| `highest_severity` | Worst severity among active alerts: `MINOR`, `MODERATE`, `SEVERE`, or `EXTREME` |
+| `active_event_types` | Sorted unique list of active event type codes (e.g. `FLOOD_WATCH`, `TORNADO_WARNING`) |
 
-A value of 0 with empty attributes means no alerts are currently active — the sensor is working normally.
+### Alert Highest Severity
+
+**State:** The worst severity level across all active alerts: `MINOR`, `MODERATE`, `SEVERE`, or `EXTREME`. `None` when no alerts are active.
+
+Use directly in automations to trigger on severity level without reading attributes.
+
+### Alert Event Types
+
+**State:** Comma-separated sorted list of active alert type codes, e.g. `FLOOD_WATCH, TORNADO_WARNING`. `None` when no alerts are active.
 
 !!! note
     Weather alerts are only available in regions covered by Google's public alerts service, primarily the US and some international regions. ([Weather API coverage](https://developers.google.com/maps/documentation/weather/coverage))
+
+A count of 0 with `None` severity and event types means no alerts are currently active — the sensors are working normally.
 
 ---
 

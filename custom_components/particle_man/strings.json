@@ -53,12 +53,17 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "precipitation_now": {"name": "Precipitation Now"}
+    },
     "sensor": {
       "aqi": {"name": "Universal AQI"},
       "aqi_level": {"name": "Universal AQI Level"},
       "aq_advisory": {"name": "Air Quality Advisory"},
       "pollen_advisory": {"name": "Pollen Advisory"},
-      "weather_alerts": {"name": "Weather Alerts"},
+      "weather_alert_count": {"name": "Weather Alert Count"},
+      "weather_alert_highest_severity": {"name": "Weather Alert Highest Severity"},
+      "weather_alert_active_event_types": {"name": "Weather Alert Event Types"},
       "thunderstorm_probability": {"name": "Thunderstorm Probability"},
       "heat_index": {"name": "Heat Index"},
       "wind_chill": {"name": "Wind Chill"},
@@ -185,7 +190,7 @@
         },
         "data_description": {
           "weather_units": "Temperature and wind speed units for raw sensor values. Home Assistant can convert units for display independently.",
-          "enable_weather_alerts": "Creates a sensor showing active weather warnings for this area — tornadoes, floods, winter storms, and similar. Shows 0 when no alerts are active."
+          "enable_weather_alerts": "Creates three sensors: Alert Count (number of active warnings), Alert Highest Severity (MINOR/MODERATE/SEVERE/EXTREME), and Alert Event Types (comma-separated list of active alert codes). All show empty/0 when no alerts are active."
         }
       },
       "api_limits": {
