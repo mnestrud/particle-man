@@ -1,0 +1,1056 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://mnestrud.github.io/particle-man/">
+      
+      
+      
+        <link rel="next" href="setup/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Particle Man</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="light-blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#particle-man" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="Particle Man" class="md-header__button md-logo" aria-label="Particle Man" data-md-component="logo">
+      
+  <img src="assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Particle Man
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="light-blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mnestrud/particle-man" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnestrud/particle-man
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="sensors/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Sensors
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="weather/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Weather
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Reference
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="Particle Man" class="md-nav__button md-logo" aria-label="Particle Man" data-md-component="logo">
+      
+  <img src="assets/icon.png" alt="logo">
+
+    </a>
+    Particle Man
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mnestrud/particle-man" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnestrud/particle-man
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-can-do-with-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you can do with it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you get
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sensors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-can-do-with-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you can do with it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you get
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/mnestrud/particle-man/edit/main/docs/index.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="particle-man">Particle Man<a class="headerlink" href="#particle-man" title="Permanent link">&para;</a></h1>
+<p>Real-time air quality, pollen, and weather for Home Assistant — powered by Google's environmental APIs.  Particle Man is a RISK FREE Google API solution due to its novel Automagic mode, which maximizes data refreshing while keeping you within API limits based on your configuration.  </p>
+<hr />
+<h2 id="what-you-can-do-with-it">What you can do with it<a class="headerlink" href="#what-you-can-do-with-it" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>React to air quality events</strong> — automatically close HVAC fresh-air intakes, send alerts, or pause outdoor routines when AQI rises from wildfire smoke or traffic</li>
+<li><strong>Stay ahead of pollen season</strong> — trigger morning pollen briefs or allergy reminders on high-pollen days</li>
+<li><strong>Weather-aware automations</strong> — combine AQI advisory, pollen level, and weather conditions to decide when outdoor activities are safe</li>
+<li><strong>Automagic mode</strong> — automatically calculates the optimal polling interval based on your enabled APIs, location count, and quiet hours window, so you get maximum data freshness while staying within Google's monthly limits</li>
+</ul>
+<hr />
+<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<p><strong>1. Enable the Google APIs</strong></p>
+<p>In the <a href="https://console.cloud.google.com/apis/credentials">Google Cloud Console</a>, enable:</p>
+<ul>
+<li><a href="https://developers.google.com/maps/documentation/air-quality/overview">Air Quality API</a></li>
+<li><a href="https://developers.google.com/maps/documentation/pollen/overview">Pollen API</a></li>
+<li><a href="https://developers.google.com/maps/documentation/weather/overview">Weather API</a></li>
+</ul>
+<p>Then create an API key under <strong>APIs &amp; Services → Credentials → Create Credentials → API key</strong>.</p>
+<p><strong>2. Install via HACS</strong></p>
+<p>In HACS: <strong>Integrations → Explore &amp; Download Repositories</strong> → search for <strong>Particle Man</strong> → Download → restart Home Assistant.</p>
+<p><strong>3. Add the integration</strong></p>
+<p><strong>Settings → Devices &amp; Services → Add Integration → Particle Man</strong> — enter your API key and confirm your location.</p>
+<p>→ <a href="setup/">Full setup guide: manual install, all configuration options, and removal instructions</a></p>
+<hr />
+<h2 id="what-you-get">What you get<a class="headerlink" href="#what-you-get" title="Permanent link">&para;</a></h2>
+<p>For each monitored location:</p>
+<table>
+<thead>
+<tr>
+<th>Device</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Particle Man Pollution</strong></td>
+<td>Universal AQI, Air Quality Advisory, pollutant sensors (PM2.5, PM10, O3, NO2, CO, SO2), optional regional AQI</td>
+</tr>
+<tr>
+<td><strong>Particle Man Pollen</strong></td>
+<td>Pollen Advisory, grass/tree/weed sensors, optional plant-species sensors</td>
+</tr>
+<tr>
+<td><strong>Particle Man Weather</strong></td>
+<td>HA weather entity with hourly/daily/twice-daily forecasts, thunderstorm probability, heat index, wind chill, optional weather alerts</td>
+</tr>
+<tr>
+<td><strong>Particle Man Diagnostics</strong></td>
+<td>Monthly API call tracking for all three services</td>
+</tr>
+</tbody>
+</table>
+<p>→ <a href="sensors/">Sensors &amp; Entities</a> · <a href="weather/">Weather entity</a></p>
+<hr />
+<details class="success">
+<summary>HACS compatible</summary>
+<p>Particle Man meets all HACS custom integration requirements:</p>
+<ul>
+<li>Valid <code>manifest.json</code> with <code>domain</code>, <code>version</code>, <code>codeowners</code>, and <code>issue_tracker</code></li>
+<li>UI-based setup via <code>config_flow</code> — no YAML required</li>
+<li>No external Python package dependencies (<code>requirements: []</code>)</li>
+<li>Actively maintained with a public <a href="https://github.com/mnestrud/particle-man/issues">issue tracker</a></li>
+</ul>
+<p><strong>To install:</strong> In HACS, go to <strong>Integrations → Explore &amp; Download Repositories</strong>, search for <strong>Particle Man</strong>, and download it.</p>
+</details>
+<details class="success">
+<summary>Meets HA Integration Quality Scale criteria through Platinum tier</summary>
+<p>The <a href="https://developers.home-assistant.io/docs/core/integration-quality-scale/">HA Integration Quality Scale</a> defines 56 rules across Bronze, Silver, Gold, and Platinum tiers. Particle Man satisfies all applicable rules at every tier.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The official Platinum designation is awarded by Nabu Casa exclusively to integrations in the core HA repository. Particle Man is a custom integration — this documents compliance with the same criteria, not possession of the official award.</p>
+</div>
+<p><strong>🥉 Bronze — 16/16 applicable</strong></p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>appropriate-polling</td>
+<td>✅ Configurable interval, 15-min floor, quota-aware enforcement</td>
+</tr>
+<tr>
+<td>brands</td>
+<td>✅ icon.png + icon@2x.png</td>
+</tr>
+<tr>
+<td>common-modules</td>
+<td>✅ coordinator.py + const.py</td>
+</tr>
+<tr>
+<td>config-flow</td>
+<td>✅ Full UI setup, no YAML</td>
+</tr>
+<tr>
+<td>config-flow-test-coverage</td>
+<td>✅ 100%</td>
+</tr>
+<tr>
+<td>dependency-transparency</td>
+<td>✅ No external requirements</td>
+</tr>
+<tr>
+<td>docs-high-level-description</td>
+<td>✅ This page</td>
+</tr>
+<tr>
+<td>docs-installation-instructions</td>
+<td>✅ <a href="setup/">Setup</a></td>
+</tr>
+<tr>
+<td>docs-removal-instructions</td>
+<td>✅ <a href="setup/#removing-the-integration">Setup — Removing</a></td>
+</tr>
+<tr>
+<td>entity-event-setup</td>
+<td>✅ Coordinator-based updates</td>
+</tr>
+<tr>
+<td>entity-unique-id</td>
+<td>✅ All entities</td>
+</tr>
+<tr>
+<td>has-entity-name</td>
+<td>✅ <code>_attr_has_entity_name = True</code></td>
+</tr>
+<tr>
+<td>runtime-data</td>
+<td>✅ <code>entry.runtime_data</code></td>
+</tr>
+<tr>
+<td>test-before-configure</td>
+<td>✅ API key validated before entry created</td>
+</tr>
+<tr>
+<td>test-before-setup</td>
+<td>✅ Raises <code>ConfigEntryAuthFailed</code> / <code>ConfigEntryNotReady</code></td>
+</tr>
+<tr>
+<td>unique-config-entry</td>
+<td>✅ MD5(api_key) as unique_id</td>
+</tr>
+</tbody>
+</table>
+<p><strong>🥈 Silver — 9/9 applicable</strong></p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>config-entry-unloading</td>
+<td>✅ <code>async_unload_entry</code> implemented</td>
+</tr>
+<tr>
+<td>docs-configuration-parameters</td>
+<td>✅ <a href="setup/#options">Setup — Options</a></td>
+</tr>
+<tr>
+<td>docs-installation-parameters</td>
+<td>✅ <a href="setup/#initial-configuration">Setup — Initial configuration</a></td>
+</tr>
+<tr>
+<td>entity-unavailable</td>
+<td>✅ Marks unavailable on API failure</td>
+</tr>
+<tr>
+<td>integration-owner</td>
+<td>✅ codeowners: @mnestrud</td>
+</tr>
+<tr>
+<td>log-when-unavailable</td>
+<td>✅ Logs once on failure, once on recovery</td>
+</tr>
+<tr>
+<td>parallel-updates</td>
+<td>✅ <code>PARALLEL_UPDATES = 1</code> in all platforms</td>
+</tr>
+<tr>
+<td>reauthentication-flow</td>
+<td>✅ <code>async_step_reauth</code> + <code>async_step_reauth_confirm</code></td>
+</tr>
+<tr>
+<td>test-coverage</td>
+<td>✅ 99% overall (231 tests)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>🥇 Gold — 18/18 applicable</strong></p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>devices</td>
+<td>✅ Pollution, Pollen, Weather, Diagnostics devices</td>
+</tr>
+<tr>
+<td>diagnostics</td>
+<td>✅ <code>diagnostics.py</code> with API key redaction</td>
+</tr>
+<tr>
+<td>docs-data-update</td>
+<td>✅ <a href="reference/#how-data-updates">Reference — How data updates</a></td>
+</tr>
+<tr>
+<td>docs-examples</td>
+<td>✅ <a href="examples/">Examples</a> with published blueprints</td>
+</tr>
+<tr>
+<td>docs-known-limitations</td>
+<td>✅ <a href="reference/#known-limitations">Reference — Known limitations</a></td>
+</tr>
+<tr>
+<td>docs-supported-functions</td>
+<td>✅ <a href="sensors/">Sensors</a> + <a href="weather/">Weather</a></td>
+</tr>
+<tr>
+<td>docs-troubleshooting</td>
+<td>✅ <a href="reference/#troubleshooting">Reference — Troubleshooting</a></td>
+</tr>
+<tr>
+<td>docs-use-cases</td>
+<td>✅ This page</td>
+</tr>
+<tr>
+<td>dynamic-devices</td>
+<td>✅ New pollen plant sensors added per poll</td>
+</tr>
+<tr>
+<td>entity-category</td>
+<td>✅ <code>DIAGNOSTIC</code> on diagnostic entities</td>
+</tr>
+<tr>
+<td>entity-device-class</td>
+<td>✅ <code>SensorDeviceClass.AQI</code>, <code>TEMPERATURE</code>, <code>HUMIDITY</code>, etc.</td>
+</tr>
+<tr>
+<td>entity-disabled-by-default</td>
+<td>✅ Pollutant sensors disabled by default</td>
+</tr>
+<tr>
+<td>entity-translations</td>
+<td>✅ <code>_attr_translation_key</code> on all entities</td>
+</tr>
+<tr>
+<td>exception-translations</td>
+<td>✅ <code>UpdateFailed</code> + <code>ConfigEntryAuthFailed</code> use translation keys</td>
+</tr>
+<tr>
+<td>icon-translations</td>
+<td>✅ <code>icons.json</code></td>
+</tr>
+<tr>
+<td>reconfiguration-flow</td>
+<td>✅ <code>async_step_reconfigure</code></td>
+</tr>
+<tr>
+<td>repair-issues</td>
+<td>✅ <code>async_create_issue</code> for quota exhaustion</td>
+</tr>
+<tr>
+<td>stale-devices</td>
+<td>✅ <code>_remove_stale_devices</code> in <code>__init__.py</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>🏆 Platinum — 3/3</strong></p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>async-dependency</td>
+<td>✅ No blocking I/O; aiohttp throughout</td>
+</tr>
+<tr>
+<td>inject-websession</td>
+<td>✅ <code>hass.helpers.aiohttp_client</code></td>
+</tr>
+<tr>
+<td>strict-typing</td>
+<td>✅ <code>py.typed</code>, mypy strict mode, 0 errors</td>
+</tr>
+</tbody>
+</table>
+</details>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "search.suggest", "search.highlight", "content.action.edit", "content.tabs.link"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
