@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.5.2] — 2026-05-04
+
+### Changed
+
+- Plant species sensors are now always created and enabled by default; the "Individual plant species sensors" Configure option has been removed.
+- Air Quality Advisory sensor state is now the direct 6-level category string from Google (Good / Moderate / Unhealthy for Sensitive Groups / Unhealthy / Very Unhealthy / Hazardous), replacing the simplified 4-level mapping.
+
+### Removed
+
+- Precipitation Now binary sensor.
+
+---
+
+## [1.5.1] — 2026-05-04
+
+### Added
+
+- **Precipitation Now binary sensor** — `True` when it is currently raining or snowing; derived from the existing weather condition field, no additional API calls. Created automatically when the Weather API is enabled.
+- **Weather alert sensors expanded to three** — replaces the single Weather Alerts sensor with three focused sensors, all created when weather alerts are enabled:
+  - *Alert Count* — integer count of active warnings; full alert list, `highest_severity`, and `active_event_types` retained as attributes for backward-compatible automations.
+  - *Alert Highest Severity* — text state: `MINOR` / `MODERATE` / `SEVERE` / `EXTREME`; `None` when no alerts are active.
+  - *Alert Event Types* — comma-separated sorted list of active alert codes (e.g. `FLOOD_WATCH, TORNADO_WARNING`); `None` when no alerts are active.
+- **`ozone` on weather entity** — current ozone concentration (ppb) sourced from the Air Quality API's existing `o3` pollutant data; no additional API calls. Returns `None` gracefully when the Air Quality API is disabled.
+- **`native_apparent_temperature` in daily and twice-daily forecasts** — sourced from `feelsLikeMaxTemperature` (daytime) and `feelsLikeMinTemperature` (nighttime) from Google's daily forecast response.
+- **Diagnostics endpoint** (`diagnostics.py`) — exposes coordinator state, API failure counts, backoff timers, and monthly usage via the HA diagnostics download; API key is redacted. Satisfies Gold quality rule.
+- **Icon translations** (`icons.json`) — entity icons now declared via HA's translation system rather than `_attr_icon`, satisfying the Gold icon-translations rule.
+- **Strict typing markers** (`py.typed`, `mypy.ini`) — enables mypy strict mode and marks the package as typed, satisfying the Platinum strict-typing rule.
+- **Full test suite** — 280 tests at 99% overall coverage across 9 test files (`test_init`, `test_coordinator`, `test_config_flow`, `test_options_flow`, `test_sensor`, `test_binary_sensor`, `test_switch`, `test_weather`, `test_diagnostics`).
+
+### Fixed
+
+- **Automagic calculation uses actual billing month days** — interval was computed using a fixed 30-day month; it now uses `calendar.monthrange` on the current Pacific Time billing month (28–31 days), matching Google's quota reset cycle.
+- **AQ and pollen fetch intervals scale with location count** — at 7+ locations both were previously hardcoded to 60 min regardless of monthly limits. Both now use the same `safe_interval_minutes()` formula as weather, floored at 60 min (Google's data refresh rate). Coordinator stores these as instance attributes so they can be overridden independently.
+- **Quiet hours credited in automagic interval calculation** — the formula previously assumed 24/7 polling, so enabling quiet hours had no effect on the computed interval. Effective polling minutes per month are now reduced by the quiet hours window before computing the safe interval, giving fresher daytime data while still fitting within the limit.
+- **5% safety buffer applied consistently** — a single `_AUTOMAGIC_BUFFER = 1.05` constant is applied inside `safe_interval_minutes()`. Previously, fudge factors were scattered across callers.
+- **Projection sensors expose all interval assumptions as attributes** — the Monthly AQ Calls, Monthly Pollen Calls, and Monthly Weather Calls diagnostic sensors now include: `automagic_mode`, `num_locations`, `calls_per_poll`, `fetch_interval_minutes`, `quiet_hours_enabled`, `quiet_hours_window`, `active_hours_per_day`, `billing_month_days`, `effective_minutes_per_month`, `safety_buffer_pct`, `days_remaining`, and `calls_per_day`.
+- **Config flow usage projections now use actual active polling time** — projected monthly call counts in the options form previously used a 30-day constant. They now use the actual billing month days and, when quiet hours are enabled, the reduced active polling window.
+- **Weather alerts API call included in automagic calculation** — enabling weather alerts adds a 4th call per poll (`/publicAlerts`); this was not factored into the automagic interval or usage preview. The interval now uses 3 or 4 calls per poll depending on whether alerts are enabled.
+- **Hourly forecast staleness during quiet hours** — hourly forecast entries are now filtered at read time to start from the current hour; previously, data fetched before quiet hours began would include past hours for the rest of the overnight window.
+- **Daily forecast precipitation was daytime-only** — `native_precipitation` in daily forecast entries now sums daytime and nighttime QPF for a true 24-hour total; overnight rain and snow were previously dropped.
+- **Removed invalid `native_precipitation` entity property** — `WeatherEntity` has no entity-level `native_precipitation` attribute (only the `Forecast` TypedDict does); the property was dead code that HA never surfaced.
+- `resp.ok` usage replaced with `resp.status < 400` throughout `config_flow.py` and `coordinator.py` — `AiohttpClientMockResponse` has no `.ok` attribute, causing silent test failures with PHCC.
+- Weather unit handling updated for HA 2026.x — `UnitSystem.is_metric` / `UnitSystem.name` removed in 2026.x; code now uses the configured `DEFAULT_WEATHER_UNITS` option directly.
+- Quiet hours logic in automagic mode was silently dropped during a Samba deploy; restored the branch that gates polling when quiet hours are active regardless of mode.
+- `_automagic()` in `OptionsFlow` crashed with `ValueError` on direct instantiation because `_get()` was evaluated eagerly before `self._options` was populated; deferred to lazy access.
+
+### HA ADR Compliance
+
+- **Fixed config flow translation bug** — `strings.json` and `en.json` had a duplicate `"step"` key under `"config"`; JSON parsers silently drop the first occurrence, so the initial setup screen displayed raw key names (`api_key`, `name`, `latitude`, `longitude`) instead of human-readable labels. All three config steps (`user`, `reauth_confirm`, `reconfigure`) are now correctly merged under a single key.
+- **Added `integration_type: service` to manifest** — declares the integration as a cloud service, required for correct HACS and hassfest classification.
+- **Added `quality_scale: platinum` to manifest** — documents the achieved quality tier.
+- **Coordinator `_async_setup()` pattern** — renamed `async_load_tracking` to the standard `_async_setup()` hook introduced in HA 2024.8; the framework now calls it automatically before the first data fetch, and failures surface as `ConfigEntryNotReady` (with automatic retry) instead of a raw exception.
+- **`always_update=False` on coordinator** — entity listeners no longer fire during quiet hours or API backoff when cached data is returned unchanged, preventing unnecessary state writes.
+- **Fixed `EntityCategory` import paths** — both `sensor.py` and `switch.py` were importing from the deprecated `homeassistant.helpers.entity` path with a `# type: ignore` suppressor; updated to `homeassistant.const`.
+- **`hass.data[DOMAIN]` cleanup on unload** — shared coordinator locks are now removed from `hass.data` when the last config entry for the domain is unloaded.
+- **Parallel multi-location startup** — coordinator first-refresh calls are now run concurrently with `asyncio.gather()`; startup time for N locations is now ~1 API round-trip instead of N.
+
+---
+
 ## [1.5.0] — 2026-04-23
 
 ### Added

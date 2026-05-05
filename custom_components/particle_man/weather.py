@@ -1,9 +1,9 @@
 """Particle Man weather entity."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
-from homeassistant.components.weather import (
+from homeassistant.components.weather import (  # type: ignore[attr-defined]
     Forecast,
     WeatherEntity,
     WeatherEntityFeature,
@@ -17,6 +17,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -24,16 +25,23 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, WEATHER_ATTRIBUTION
 from .coordinator import ParticleManCoordinator
 
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the weather entity from a config entry."""
-    coordinator: ParticleManCoordinator = entry.runtime_data
-    if coordinator.enable_weather:
-        async_add_entities([ParticleManWeather(coordinator)], True)
+    """Set up weather entities from a config entry."""
+    runtime = entry.runtime_data
+    coordinators = runtime.get("coordinators", {})
+    entities = [
+        ParticleManWeather(coordinator)
+        for coordinator in coordinators.values()
+        if coordinator.enable_weather
+    ]
+    async_add_entities(entities, True)
 
 
 class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntity):
@@ -50,17 +58,24 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
         self.coordinator = coordinator
-        self._attr_unique_id = f"{coordinator.entry_id}_weather"
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_weather"
+        )
         self._attr_attribution = WEATHER_ATTRIBUTION
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self.coordinator.entry_id}_weather")},
-            name="Particle Man Weather",
+            identifiers={
+                (DOMAIN, f"{self.coordinator.entry_id}_{self.coordinator.location_slug}_weather")
+            },
+            name=f"{self.coordinator.location_name} Weather",
             manufacturer="Google",
             model="Weather API",
-            via_device=(DOMAIN, self.coordinator.entry_id),
+            via_device=(
+                DOMAIN,
+                f"{self.coordinator.entry_id}_{self.coordinator.location_slug}",
+            ),
         )
 
     @callback
@@ -114,7 +129,7 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
 
     @property
     def _current(self) -> dict[str, Any]:
-        return self.coordinator.data.get("weather_current", {})
+        return cast(dict[str, Any], self.coordinator.data.get("weather_current", {}))
 
     @property
     def condition(self) -> str | None:
@@ -129,7 +144,7 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
         return self._current.get("apparent_temperature")
 
     @property
-    def dew_point(self) -> float | None:
+    def native_dew_point(self) -> float | None:
         return self._current.get("dew_point")
 
     @property
@@ -168,15 +183,24 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
         return int(val) if val is not None else None
 
     @property
-    def native_precipitation(self) -> float | None:
-        return self._current.get("precipitation")
+    def ozone(self) -> float | None:
+        return (self.coordinator.data.get("pollutant_o3") or {}).get("value")
 
     # -------------------------------------------------------------------------
     # Forecast methods
     # -------------------------------------------------------------------------
 
     async def async_forecast_hourly(self) -> list[Forecast] | None:
-        return self.coordinator.data.get("weather_hourly") or None
+        forecasts = self.coordinator.data.get("weather_hourly")
+        if not forecasts:
+            return None
+        now_hour = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+        result = [
+            f for f in forecasts
+            if (dt := dt_util.parse_datetime(f.get("datetime", ""))) is not None
+            and dt >= now_hour
+        ]
+        return result or None
 
     async def async_forecast_daily(self) -> list[Forecast] | None:
         return self.coordinator.data.get("weather_daily") or None

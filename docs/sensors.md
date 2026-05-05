@@ -95,11 +95,9 @@ Use this for simple automations — trigger on `High` or `Very High` without che
 
 Three sensors covering the main pollen categories: **Grass**, **Tree**, and **Weed**. Each shows a 0–5 index value and category, plus a trend and 5-day daily forecast.
 
-### Pollen Plant Sensors *(optional)*
+### Pollen Plant Sensors
 
-Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information if plant details are enabled.
-
-Plant sensors are **disabled by default**.
+Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information.
 
 !!! note
     Pollen data is only available in regions covered by Google's Pollen API. [Coverage map](https://developers.google.com/maps/documentation/pollen/coverage) — primarily North America and Europe. If your location isn't covered, pollen sensors will remain unavailable.
@@ -131,18 +129,35 @@ Current conditions and three forecast types (hourly 24h, daily 5-day, twice-dail
 | Thunderstorm Probability | Probability (%) of a thunderstorm this hour |
 | Heat Index | Feels-like temperature in hot and humid conditions |
 | Wind Chill | Feels-like temperature in cold and windy conditions |
+| UV Index Category | WHO UV scale text: Low / Moderate / High / Very High / Extreme |
 
-### Weather Alerts *(optional)*
+### Weather Alert Sensors *(optional)*
 
-Count of currently active weather warnings. Enable in **Configure → Weather Options**. Attributes include full alert list with severity, event type, area, and instructions.
+Three sensors created together when **Enable weather alerts** is on in **Configure → Weather Options**:
+
+| Sensor | State | Notes |
+|---|---|---|
+| Alert Count | Integer | Number of active warnings. Attributes: full alert list, `highest_severity`, `active_event_types`. |
+| Alert Highest Severity | Text | `MINOR`, `MODERATE`, `SEVERE`, or `EXTREME`; `None` when no alerts. |
+| Alert Event Types | Text | Comma-separated sorted list of active alert codes, e.g. `FLOOD_WATCH, TORNADO_WARNING`; `None` when no alerts. |
+
+The Alert Count sensor retains the `highest_severity` and `active_event_types` attributes for automations already using them. The two new sensors expose those same values as first-class entity states.
 
 ---
 
 ## Particle Man Diagnostics
 
-### Last API Update
+### Fetch Timestamp Sensors
 
-Timestamp of when Google last refreshed the data for your location.
+Three sensors — one per API — showing when Particle Man last successfully called each Google API. Only created when the corresponding API is enabled.
+
+| Sensor | State | `data_timestamp` attribute |
+|---|---|---|
+| **AQ Last Fetched** | When the integration last called the Air Quality API | When Google generated that AQ observation |
+| **Pollen Last Fetched** | When the integration last called the Pollen API | — (not available from Pollen API) |
+| **Weather Last Fetched** | When the integration last called the Weather API | When Google generated that weather observation |
+
+The state and `data_timestamp` are typically different: the state is the actual poll time, while `data_timestamp` reflects when Google published the underlying data (usually rounded to the hour). Before the first poll after a restart, all three sensors are `unavailable`.
 
 ### API Call Sensors (Monthly)
 
@@ -154,7 +169,11 @@ One sensor each for AQ, Pollen, and Weather API calls.
 | `projected_monthly` | Estimated calls by end of billing period at current rate |
 | `pct_of_limit` | Percentage of limit used so far |
 | `pct_projected` | Percentage of limit the projection will reach |
-| `status` | `ok` / `warning` (≥80% projected) / `critical` (≥95% projected) |
+| `status` | `ok` / `warning` (projected ≥95% of limit) / `critical` (projected ≥100% of limit) |
 | `billing_period` | Current period in YYYY-MM format (Pacific Time) |
 | `shared_total_calls` | Total across all entries sharing this API key |
 | `locations_sharing_key` | Number of locations sharing this key |
+
+### HA Diagnostics download
+
+The full diagnostics payload (available via **Settings → Devices & Services → Particle Man → Download Diagnostics**) includes a `quiet_hours_active_now` field per location, indicating whether polling is currently paused due to quiet hours — distinct from `quiet_hours_enabled`, which only reflects whether the feature is turned on.

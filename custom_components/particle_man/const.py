@@ -1,5 +1,7 @@
 """Constants for Particle Man integration."""
+import calendar as _cal
 import math
+from datetime import datetime as _dt
 from zoneinfo import ZoneInfo
 
 DOMAIN = "particle_man"
@@ -24,7 +26,6 @@ CONF_LANGUAGE = "language_code"
 CONF_LOCAL_AQI = "enable_local_aqi"
 CONF_LOCAL_AQI_CODE = "local_aqi_code"
 CONF_HEALTH_RECS = "include_health_recommendations"
-CONF_PLANT_SENSORS = "include_plant_sensors"
 CONF_PLANT_DESCRIPTIONS = "include_plant_descriptions"
 
 # API enable toggles
@@ -51,7 +52,6 @@ DEFAULT_FORECAST_DAYS = 5
 DEFAULT_LANGUAGE = "en"
 DEFAULT_LOCAL_AQI = False
 DEFAULT_LOCAL_AQI_CODE = "us_aqi"
-DEFAULT_PLANT_SENSORS = True
 
 DEFAULT_ENABLE_AIR_QUALITY = True
 DEFAULT_ENABLE_POLLEN = True
@@ -72,21 +72,50 @@ DEFAULT_QUIET_END = "05:00:00"
 _AQ_CALLS_PER_POLL = 2
 _POLLEN_CALLS_PER_POLL = 1
 _WEATHER_CALLS_PER_POLL = 3
-_MINUTES_PER_MONTH = 30 * 24 * 60  # 43,200
+
+# Fallback constant (31-day worst case) used in tests and type stubs.
+# Live code always calls _billing_month_days() instead.
+_MINUTES_PER_MONTH = 31 * 24 * 60  # 44,640
 
 # Google data refresh cadence — AQ updates hourly; pollen models update once daily.
 # Both are fetched at the same 60-min interval to match the AQ refresh rate.
 _AQ_FETCH_INTERVAL_MINUTES = 60
 _POLLEN_FETCH_INTERVAL_MINUTES = 60
 
+# Single source of truth for the automagic safety margin.
+_AUTOMAGIC_BUFFER = 1.05
+
+
+def _billing_month_days() -> int:
+    """Actual days in the current Google billing month (Pacific Time)."""
+    today = _dt.now(_PACIFIC_TZ)
+    return _cal.monthrange(today.year, today.month)[1]
+
+
+def _quiet_active_minutes_per_month(quiet_start: str, quiet_end: str) -> int:
+    """Polling minutes available per month when quiet hours are enabled."""
+    days = _billing_month_days()
+
+    def _to_min(s: str) -> int:
+        parts = s.split(":")
+        return int(parts[0]) * 60 + int(parts[1])
+
+    start = _to_min(quiet_start)
+    end = _to_min(quiet_end)
+    quiet_min = (end - start) if end > start else (24 * 60 - start + end)
+    return days * (24 * 60 - quiet_min)
+
 
 def safe_interval_minutes(
     num_locations: int,
     enabled_apis: dict[str, tuple[int, int]],  # api → (calls_per_poll, monthly_limit)
+    minutes_per_month: int | None = None,
 ) -> int:
-    """Minimum safe polling interval to stay within free tier."""
+    """Minimum safe polling interval to stay within monthly limit (with 5% buffer)."""
+    if minutes_per_month is None:
+        minutes_per_month = _billing_month_days() * 24 * 60
     intervals = [
-        math.ceil(_MINUTES_PER_MONTH * calls * num_locations / limit)
+        math.ceil(minutes_per_month * calls * num_locations * _AUTOMAGIC_BUFFER / limit)
         for calls, limit in enabled_apis.values()
         if limit > 0
     ]

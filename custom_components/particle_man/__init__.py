@@ -1,11 +1,15 @@
 """Particle Man integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import timedelta
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     CONF_API_KEY,
@@ -23,7 +27,7 @@ from .const import (
     CONF_LOCATION_NAME,
     CONF_LOCATIONS,
     CONF_LONGITUDE,
-    CONF_PLANT_SENSORS,
+    DOMAIN,
     CONF_POLLEN_MONTHLY_LIMIT,
     CONF_QUIET_END,
     CONF_QUIET_HOURS_ENABLED,
@@ -41,7 +45,6 @@ from .const import (
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
     DEFAULT_LOCAL_AQI_CODE,
-    DEFAULT_PLANT_SENSORS,
     DEFAULT_POLLEN_MONTHLY_LIMIT,
     DEFAULT_QUIET_END,
     DEFAULT_QUIET_HOURS_ENABLED,
@@ -49,7 +52,11 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
     DEFAULT_WEATHER_UNITS,
+    _AQ_CALLS_PER_POLL,
+    _POLLEN_CALLS_PER_POLL,
     _WEATHER_CALLS_PER_POLL,
+    _billing_month_days,
+    _quiet_active_minutes_per_month,
     safe_interval_minutes,
 )
 from .coordinator import ParticleManCoordinator, ParticleManGlobalState
@@ -59,7 +66,31 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.WEATHER, Platform.SWITCH]
 
 
-def _opt(entry: ConfigEntry, key: str, default):
+def _remove_stale_devices(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinators: dict[str, ParticleManCoordinator],
+    enable_aq: bool,
+    enable_pollen: bool,
+    enable_weather: bool,
+) -> None:
+    """Remove device registry entries for locations/APIs no longer configured."""
+    dev_reg = dr.async_get(hass)
+    expected: set[tuple[str, str]] = {(DOMAIN, f"{entry.entry_id}_diagnostics")}
+    for coordinator in coordinators.values():
+        slug = coordinator.location_slug
+        expected.add((DOMAIN, f"{entry.entry_id}_{slug}"))
+        if enable_pollen:
+            expected.add((DOMAIN, f"{entry.entry_id}_{slug}_pollen"))
+        if enable_weather:
+            expected.add((DOMAIN, f"{entry.entry_id}_{slug}_weather"))
+
+    for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+        if not any(ident in expected for ident in device.identifiers):
+            dev_reg.async_remove_device(device.id)
+
+
+def _opt(entry: ConfigEntry, key: str, default: Any) -> Any:
     """Read option from options first, then data, then default."""
     return entry.options.get(key, entry.data.get(key, default))
 
@@ -85,7 +116,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     weather_units = _opt(entry, CONF_WEATHER_UNITS, DEFAULT_WEATHER_UNITS)
     forecast_days = _opt(entry, CONF_FORECAST_DAYS, DEFAULT_FORECAST_DAYS)
     language_code = _opt(entry, CONF_LANGUAGE, DEFAULT_LANGUAGE)
-    include_plant_sensors = _opt(entry, CONF_PLANT_SENSORS, DEFAULT_PLANT_SENSORS)
     aq_monthly_limit = _opt(entry, CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT)
     pollen_monthly_limit = _opt(entry, CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT)
     weather_monthly_limit = _opt(entry, CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)
@@ -95,19 +125,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Compute effective update interval
     num_locations = len(locations)
+    weather_calls_per_poll = _WEATHER_CALLS_PER_POLL + (1 if enable_weather_alerts else 0)
+
+    # Effective polling minutes this billing month, accounting for quiet hours
+    if quiet_hours_enabled:
+        effective_minutes = _quiet_active_minutes_per_month(quiet_start, quiet_end)
+    else:
+        effective_minutes = _billing_month_days() * 24 * 60
+
     if automagic:
-        # AQ and pollen are always fetched hourly in the coordinator regardless of this interval.
-        # Only weather drives the coordinator polling cadence.
         enabled_apis: dict[str, tuple[int, int]] = {}
         if enable_weather:
-            enabled_apis["weather"] = (_WEATHER_CALLS_PER_POLL, weather_monthly_limit)
-        effective_interval = safe_interval_minutes(num_locations, enabled_apis)
+            enabled_apis["weather"] = (weather_calls_per_poll, weather_monthly_limit)
+        effective_interval = safe_interval_minutes(num_locations, enabled_apis, effective_minutes)
         _LOGGER.debug(
-            "Particle Man Automagic: %d location(s) → weather interval %d min",
-            num_locations, effective_interval,
+            "Particle Man Automagic: %d location(s), %d active min/month → weather interval %d min",
+            num_locations, effective_minutes, effective_interval,
         )
     else:
         effective_interval = _opt(entry, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+
+    # AQ and pollen fetch intervals — computed from location count and monthly limits.
+    # Floored at 60 min (Google's data refresh rate); stretched beyond 60 only at 7+ locations.
+    aq_safe_min = safe_interval_minutes(
+        num_locations, {"aq": (_AQ_CALLS_PER_POLL, aq_monthly_limit)}, effective_minutes
+    )
+    aq_fetch_interval = timedelta(minutes=max(60, aq_safe_min))
+
+    pollen_safe_min = safe_interval_minutes(
+        num_locations, {"pollen": (_POLLEN_CALLS_PER_POLL, pollen_monthly_limit)}, effective_minutes
+    )
+    pollen_fetch_interval = timedelta(minutes=max(60, pollen_safe_min))
 
     # Shared global state (quiet hours runtime override)
     global_state = ParticleManGlobalState()
@@ -135,7 +183,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             language_code=language_code,
             enable_local_aqi=loc_local_aqi,
             local_aqi_code=loc_local_aqi_code,
-            include_plant_sensors=include_plant_sensors,
             aq_monthly_limit=aq_monthly_limit,
             pollen_monthly_limit=pollen_monthly_limit,
             weather_monthly_limit=weather_monthly_limit,
@@ -147,16 +194,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             quiet_hours_enabled=quiet_hours_enabled,
             quiet_start=quiet_start,
             quiet_end=quiet_end,
+            aq_fetch_interval=aq_fetch_interval,
+            pollen_fetch_interval=pollen_fetch_interval,
+            weather_calls_per_poll=weather_calls_per_poll,
             entry_id=entry.entry_id,
+            config_entry=entry,
         )
-        await coordinator.async_load_tracking()
-        await coordinator.async_config_entry_first_refresh()
         coordinators[loc_name] = coordinator
+
+    await asyncio.gather(
+        *(c.async_config_entry_first_refresh() for c in coordinators.values())
+    )
 
     entry.runtime_data = {
         "coordinators": coordinators,
         "global_state": global_state,
     }
+
+    _remove_stale_devices(hass, entry, coordinators, enable_aq, enable_pollen, enable_weather)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
@@ -170,4 +225,7 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok and not hass.config_entries.async_entries(DOMAIN):
+        hass.data.pop(DOMAIN, None)
+    return unload_ok

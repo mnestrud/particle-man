@@ -1,0 +1,59 @@
+{
+  "entity": {
+    "sensor": {
+      "aqi": {
+        "default": "mdi:air-filter"
+      },
+      "aqi_level": {
+        "default": "mdi:air-filter"
+      },
+      "aq_advisory": {
+        "default": "mdi:shield-alert-outline"
+      },
+      "pollen_advisory": {
+        "default": "mdi:flower-pollen"
+      },
+      "weather_alert_count": {
+        "default": "mdi:alert-circle-outline"
+      },
+      "weather_alert_highest_severity": {
+        "default": "mdi:alert-circle"
+      },
+      "weather_alert_active_event_types": {
+        "default": "mdi:format-list-bulleted"
+      },
+      "thunderstorm_probability": {
+        "default": "mdi:weather-lightning"
+      },
+      "heat_index": {
+        "default": "mdi:thermometer"
+      },
+      "wind_chill": {
+        "default": "mdi:thermometer"
+      },
+      "aq_last_fetch": {
+        "default": "mdi:clock-check-outline"
+      },
+      "pollen_last_fetch": {
+        "default": "mdi:clock-check-outline"
+      },
+      "weather_last_fetch": {
+        "default": "mdi:clock-check-outline"
+      },
+      "monthly_aq_calls": {
+        "default": "mdi:api"
+      },
+      "monthly_pollen_calls": {
+        "default": "mdi:flower-pollen-outline"
+      },
+      "monthly_weather_calls": {
+        "default": "mdi:weather-partly-cloudy"
+      }
+    },
+    "switch": {
+      "quiet_hours": {
+        "default": "mdi:weather-night"
+      }
+    }
+  }
+}
