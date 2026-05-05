@@ -429,6 +429,10 @@ action:
 
 ## Dashboard examples
 
+All examples use built-in Home Assistant cards and are compatible with the visual editor. Replace entity IDs with your own — find them under **Settings → Devices & Services → Particle Man → entities**.
+
+### Current conditions
+
 ??? "AQI Gauge"
 
     ```yaml
@@ -443,76 +447,270 @@ action:
     name: Air Quality
     ```
 
-??? "96-Hour AQI Forecast Chart"
-
-    Requires [mini-graph-card](https://github.com/kalkih/mini-graph-card) (available in HACS).
+??? "Weather Forecast — Hourly"
 
     ```yaml
-    type: custom:mini-graph-card
-    entity: sensor.universal_aqi
-    attribute: hourly_forecast
-    attribute_path: $.*.aqi
-    name: AQI — Next 96 Hours
-    hours_to_show: 96
-    points_per_hour: 1
-    line_color: "#2196f3"
-    show:
-      labels: true
-      points: false
+    type: weather-forecast
+    entity: weather.home_weather
+    forecast_type: hourly
     ```
 
-??? "5-Day Daily AQI Forecast"
+??? "Air Quality Now"
 
-    Requires [ApexCharts Card](https://github.com/RomRider/apexcharts-card) (available in HACS).
+    Pollutants only appear above the EPA "Good" upper boundary. Pollen type tiles appear when Google reports them as in-season (index ≥ 0).
 
     ```yaml
-    type: custom:apexcharts-card
-    header:
-      title: AQI Forecast — 5 Days
-      show: true
-    series:
-      - entity: sensor.universal_aqi
-        attribute: daily_forecast
-        data_generator: |
-          return entity.attributes.daily_forecast.map(d => [
-            new Date(d.datetime).getTime(),
-            d.aqi
-          ]);
-        name: Peak AQI
-        type: bar
-        color: "#2196f3"
+    type: vertical-stack
+    cards:
+      - type: tile
+        entity: sensor.air_quality_advisory
+      - type: grid
+        columns: 3
+        cards:
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.pm2_5
+                above: 9
+            card:
+              type: tile
+              entity: sensor.pm2_5_level
+              name: PM2.5
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.pm10
+                above: 54
+            card:
+              type: tile
+              entity: sensor.pm10_level
+              name: PM10
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.ozone_o3
+                above: 54
+            card:
+              type: tile
+              entity: sensor.ozone_o3_level
+              name: Ozone
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.nitrogen_dioxide_no2
+                above: 53
+            card:
+              type: tile
+              entity: sensor.nitrogen_dioxide_no2_level
+              name: NO2
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.carbon_monoxide_co
+                above: 4400
+            card:
+              type: tile
+              entity: sensor.carbon_monoxide_co_level
+              name: CO
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.sulfur_dioxide_so2
+                above: 35
+            card:
+              type: tile
+              entity: sensor.sulfur_dioxide_so2_level
+              name: SO2
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.tree_pollen
+                above: -1
+            card:
+              type: tile
+              entity: sensor.tree_pollen_level
+              name: Tree Pollen
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.grass_pollen
+                above: -1
+            card:
+              type: tile
+              entity: sensor.grass_pollen_level
+              name: Grass Pollen
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.weed_pollen
+                above: -1
+            card:
+              type: tile
+              entity: sensor.weed_pollen_level
+              name: Weed Pollen
     ```
 
-??? "Pollen Summary Glance"
+??? "Species Breakdown"
+
+    Each tile only appears when the species is in season (index ≥ 0). Available species vary by region.
 
     ```yaml
-    type: glance
-    title: Pollen Today
-    entities:
-      - entity: sensor.grass_pollen
-        name: Grass
-      - entity: sensor.tree_pollen
-        name: Tree
-      - entity: sensor.weed_pollen
-        name: Weed
+    type: grid
+    columns: 3
+    cards:
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.maple_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.maple_pollen
+          name: Maple
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.elm_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.elm_pollen
+          name: Elm
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.cottonwood_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.cottonwood_pollen
+          name: Cottonwood
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.alder_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.alder_pollen
+          name: Alder
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.birch_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.birch_pollen
+          name: Birch
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.ash_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.ash_pollen
+          name: Ash
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.pine_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.pine_pollen
+          name: Pine
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.oak_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.oak_pollen
+          name: Oak
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.juniper_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.juniper_pollen
+          name: Juniper
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.grasses_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.grasses_pollen
+          name: Grasses
+          state_content: category
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.ragweed_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.ragweed_pollen
+          name: Ragweed
+          state_content: category
     ```
 
-??? "Pollutant Overview"
+---
+
+### Forecasts
+
+??? "5-Day Weather Forecast"
 
     ```yaml
-    type: entities
-    title: Current Pollutants
-    entities:
-      - entity: sensor.pm2_5
-        name: PM2.5
-      - entity: sensor.pm10
-        name: PM10
-      - entity: sensor.ozone_o3
-        name: Ozone
-      - entity: sensor.nitrogen_dioxide_no2
-        name: NO2
-      - entity: sensor.carbon_monoxide_co
-        name: CO
-      - entity: sensor.sulfur_dioxide_so2
-        name: SO2
+    type: weather-forecast
+    entity: weather.home_weather
+    forecast_type: daily
+    ```
+
+??? "5-Day Pollen Forecast"
+
+    Shows pollen categories for Grass, Tree, and Weed over the next 5 days.
+
+    ```yaml
+    type: markdown
+    content: |
+      ## 5-Day Pollen Forecast
+      | Date | Grass | Tree | Weed |
+      |------|-------|------|------|
+      {% for i in range(5) %}
+      {% set g = state_attr('sensor.grass_pollen', 'daily_forecast')[i] %}
+      {% set t = state_attr('sensor.tree_pollen', 'daily_forecast')[i] %}
+      {% set w = state_attr('sensor.weed_pollen', 'daily_forecast')[i] %}
+      | {{ g.datetime[:10] }} | {{ g.category }} | {{ t.category }} | {{ w.category }} |
+      {% endfor %}
+    ```
+
+??? "5-Day AQI Forecast"
+
+    Pulls from the Universal AQI sensor's `daily_forecast` attribute.
+
+    ```yaml
+    type: markdown
+    content: |
+      ## 5-Day AQI Forecast
+      | Date | AQI | Category |
+      |------|-----|----------|
+      {% for d in state_attr('sensor.universal_aqi', 'daily_forecast') %}
+      | {{ d.datetime[:10] }} | {{ d.aqi }} | {{ d.category }} |
+      {% endfor %}
     ```
