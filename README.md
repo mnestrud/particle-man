@@ -27,7 +27,7 @@ Just Breathe.
 ### Air Quality
 
 - **Universal AQI (UAQI)** with health category, dominant pollutant, and trend
-- **Air Quality Advisory** — simplified `None` / `Caution` / `Warning` / `Alert` for easy automations
+- **Air Quality Advisory** — plain-language category for easy automations: Good / Moderate / Unhealthy for Sensitive Groups / Unhealthy / Very Unhealthy / Hazardous
 - **Pollutant sensors** — PM2.5, PM10, O3, NO2, CO, SO2 with concentration, EPA health category, and trend; additional pollutants vary by region
 - **Hourly AQI forecast** up to 96 hours; **daily AQI forecast** up to 5 days
 
@@ -71,14 +71,12 @@ Just Breathe.
 
 | | |
 |---|---|
-| [Getting Started](https://mnestrud.github.io/particle-man/) | Step-by-step setup for new users |
-| [What's Included](https://mnestrud.github.io/particle-man/sensors/) | Every sensor explained in plain language |
+| [Getting Started](https://mnestrud.github.io/particle-man/) | Quick start and HACS install |
+| [Setup](https://mnestrud.github.io/particle-man/setup/) | Full configuration walkthrough |
+| [Sensors](https://mnestrud.github.io/particle-man/sensors/) | Every sensor explained in plain language |
 | [Weather](https://mnestrud.github.io/particle-man/weather/) | Weather entity, extra sensors, and alerts |
-| [Dashboard Examples](https://mnestrud.github.io/particle-man/dashboard/) | Copy-paste card YAML for charts and gauges |
-| [Automations & Blueprints](https://mnestrud.github.io/particle-man/automations/) | AQI alerts, HVAC control, pollen and weather notifications |
-| [API Usage & Free Tier](https://mnestrud.github.io/particle-man/api-usage/) | How to stay within Google's free limits |
-| [Troubleshooting](https://mnestrud.github.io/particle-man/troubleshooting/) | Common issues and fixes |
-| [Configuration Reference](https://mnestrud.github.io/particle-man/configuration/) | Full options reference |
+| [Examples](https://mnestrud.github.io/particle-man/examples/) | Dashboard cards, automations, and blueprints |
+| [Reference](https://mnestrud.github.io/particle-man/reference/) | Polling math, level scales, troubleshooting |
 
 ---
 
