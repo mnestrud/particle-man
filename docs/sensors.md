@@ -97,7 +97,7 @@ Three sensors covering the main pollen categories: **Grass**, **Tree**, and **We
 
 ### Pollen Plant Sensors
 
-Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information.
+Individual sensors for specific plant species — Oak, Ragweed, Birch, and others depending on your region. Each includes the same index/category/trend data, plus family, genus, and cross-reaction information. Each species also has a corresponding **Level sensor** (e.g. "Oak Pollen Level") whose state is the category text, consistent with pollutant and pollen type sensors.
 
 !!! note
     Pollen data is only available in regions covered by Google's Pollen API. [Coverage map](https://developers.google.com/maps/documentation/pollen/coverage) — primarily North America and Europe. If your location isn't covered, pollen sensors will remain unavailable.

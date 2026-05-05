@@ -16,16 +16,20 @@ blueprint:
           domain: sensor
     alert_level:
       name: Alert when advisory reaches
-      default: Warning
+      default: Unhealthy for Sensitive Groups
       selector:
         select:
           options:
-            - label: "Caution (Unhealthy for Sensitive Groups)"
-              value: Caution
-            - label: "Warning (Unhealthy)"
-              value: Warning
-            - label: "Alert (Very Unhealthy or Hazardous)"
-              value: Alert
+            - label: "Moderate"
+              value: Moderate
+            - label: "Unhealthy for Sensitive Groups"
+              value: Unhealthy for Sensitive Groups
+            - label: "Unhealthy"
+              value: Unhealthy
+            - label: "Very Unhealthy"
+              value: Very Unhealthy
+            - label: "Hazardous"
+              value: Hazardous
     alert_actions:
       name: Actions on alert
       description: What to do when air quality reaches the alert level.
@@ -42,10 +46,14 @@ blueprint:
 
 variables:
   level: !input alert_level
-  levels_map:
-    Caution: ["Caution", "Warning", "Alert"]
-    Warning: ["Warning", "Alert"]
-    Alert: ["Alert"]
+  all_levels:
+    - Good
+    - Moderate
+    - Unhealthy for Sensitive Groups
+    - Unhealthy
+    - Very Unhealthy
+    - Hazardous
+  threshold_idx: "{{ all_levels.index(level) }}"
 
 triggers:
   - trigger: state
@@ -60,7 +68,9 @@ conditions:
           - condition: trigger
             id: changed
           - condition: template
-            value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+            value_template: >-
+              {{ trigger.to_state.state in all_levels
+                 and all_levels.index(trigger.to_state.state) >= threshold_idx | int }}
       - condition: and
         conditions:
           - condition: trigger
@@ -68,12 +78,16 @@ conditions:
           - condition: template
             value_template: >-
               {{ trigger.from_state is not none
-                 and trigger.from_state.state in levels_map[level]
-                 and trigger.to_state.state not in levels_map[level] }}
+                 and trigger.from_state.state in all_levels
+                 and all_levels.index(trigger.from_state.state) >= threshold_idx | int
+                 and (trigger.to_state.state not in all_levels
+                      or all_levels.index(trigger.to_state.state) < threshold_idx | int) }}
 
 actions:
   - if:
       - condition: template
-        value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+        value_template: >-
+          {{ trigger.to_state.state in all_levels
+             and all_levels.index(trigger.to_state.state) >= threshold_idx | int }}
     then: !input alert_actions
     else: !input clear_actions

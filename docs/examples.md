@@ -33,16 +33,20 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
               domain: sensor
         alert_level:
           name: Alert when advisory reaches
-          default: Warning
+          default: Unhealthy for Sensitive Groups
           selector:
             select:
               options:
-                - label: "Caution (Unhealthy for Sensitive Groups)"
-                  value: Caution
-                - label: "Warning (Unhealthy)"
-                  value: Warning
-                - label: "Alert (Very Unhealthy or Hazardous)"
-                  value: Alert
+                - label: "Moderate"
+                  value: Moderate
+                - label: "Unhealthy for Sensitive Groups"
+                  value: Unhealthy for Sensitive Groups
+                - label: "Unhealthy"
+                  value: Unhealthy
+                - label: "Very Unhealthy"
+                  value: Very Unhealthy
+                - label: "Hazardous"
+                  value: Hazardous
         alert_actions:
           name: Actions on alert
           description: What to do when air quality reaches the alert level.
@@ -57,10 +61,14 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
 
     variables:
       level: !input alert_level
-      levels_map:
-        Caution: ["Caution", "Warning", "Alert"]
-        Warning: ["Warning", "Alert"]
-        Alert: ["Alert"]
+      all_levels:
+        - Good
+        - Moderate
+        - Unhealthy for Sensitive Groups
+        - Unhealthy
+        - Very Unhealthy
+        - Hazardous
+      threshold_idx: "{{ all_levels.index(level) }}"
 
     triggers:
       - trigger: state
@@ -75,7 +83,9 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
               - condition: trigger
                 id: changed
               - condition: template
-                value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+                value_template: >-
+                  {{ trigger.to_state.state in all_levels
+                     and all_levels.index(trigger.to_state.state) >= threshold_idx | int }}
           - condition: and
             conditions:
               - condition: trigger
@@ -83,13 +93,17 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
               - condition: template
                 value_template: >-
                   {{ trigger.from_state is not none
-                     and trigger.from_state.state in levels_map[level]
-                     and trigger.to_state.state not in levels_map[level] }}
+                     and trigger.from_state.state in all_levels
+                     and all_levels.index(trigger.from_state.state) >= threshold_idx | int
+                     and (trigger.to_state.state not in all_levels
+                          or all_levels.index(trigger.to_state.state) < threshold_idx | int) }}
 
     actions:
       - if:
           - condition: template
-            value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+            value_template: >-
+              {{ trigger.to_state.state in all_levels
+                 and all_levels.index(trigger.to_state.state) >= threshold_idx | int }}
         then: !input alert_actions
         else: !input clear_actions
     ```
@@ -224,7 +238,7 @@ Morning summary combining current AQI advisory and weather conditions.
     !!! tip
         In your notification action, use template variables to build the message:
         ```
-        AQI: {{ states(aqi_advisory) }} — {{ state_attr(aqi_advisory, 'category') }}.
+        AQI: {{ states(aqi_advisory) }} ({{ state_attr(aqi_advisory, 'aqi') }}).
         Weather: {{ states(weather_entity) }}, {{ state_attr(weather_entity, 'temperature') }}°.
         ```
 
@@ -244,12 +258,15 @@ trigger:
   - trigger: state
     entity_id: sensor.air_quality_advisory
     to:
-      - Caution
-      - Warning
-      - Alert
+      - Unhealthy for Sensitive Groups
+      - Unhealthy
+      - Very Unhealthy
+      - Hazardous
   - trigger: state
     entity_id: sensor.air_quality_advisory
-    to: "None"
+    to:
+      - Good
+      - Moderate
     id: cleared
 action:
   - choose:
@@ -260,15 +277,14 @@ action:
           - action: notify.mobile_app_your_phone
             data:
               title: "✅ Air Quality Clear"
-              message: "AQI is back to {{ state_attr('sensor.air_quality_advisory', 'aqi') }}."
+              message: "Advisory is back to {{ states('sensor.air_quality_advisory') }} (AQI {{ state_attr('sensor.air_quality_advisory', 'aqi') }})."
       - conditions: []
         sequence:
           - action: notify.mobile_app_your_phone
             data:
               title: "⚠️ Air Quality {{ states('sensor.air_quality_advisory') }}"
               message: >
-                AQI {{ state_attr('sensor.air_quality_advisory', 'aqi') }} —
-                {{ state_attr('sensor.air_quality_advisory', 'category') }}.
+                AQI {{ state_attr('sensor.air_quality_advisory', 'aqi') }}.
                 Dominant pollutant: {{ state_attr('sensor.air_quality_advisory', 'dominant_pollutant') }}.
 ```
 
@@ -336,13 +352,15 @@ trigger:
   - trigger: state
     entity_id: sensor.air_quality_advisory
     to:
-      - Warning
-      - Alert
+      - Unhealthy
+      - Very Unhealthy
+      - Hazardous
   - trigger: state
     entity_id: sensor.air_quality_advisory
     to:
-      - "None"
-      - Caution
+      - Good
+      - Moderate
+      - Unhealthy for Sensitive Groups
     id: ok
 action:
   - action: >
@@ -411,7 +429,15 @@ action:
 
 ## Dashboard examples
 
-??? "AQI Gauge"
+All examples use built-in Home Assistant cards and are compatible with the visual editor. Replace entity IDs with your own — find them under **Settings → Devices & Services → Particle Man → entities**.
+
+### Current conditions
+
+#### AQI Gauge
+
+![AQI Gauge card](assets/cards/aqi_gauge.png)
+
+??? "View YAML"
 
     ```yaml
     type: gauge
@@ -425,76 +451,283 @@ action:
     name: Air Quality
     ```
 
-??? "96-Hour AQI Forecast Chart"
+#### Weather Forecast — Hourly
 
-    Requires [mini-graph-card](https://github.com/kalkih/mini-graph-card) (available in HACS).
+![Weather Forecast hourly card](assets/cards/weather_forecast_hourly.png)
+
+??? "View YAML"
 
     ```yaml
-    type: custom:mini-graph-card
-    entity: sensor.universal_aqi
-    attribute: hourly_forecast
-    attribute_path: $.*.aqi
-    name: AQI — Next 96 Hours
-    hours_to_show: 96
-    points_per_hour: 1
-    line_color: "#2196f3"
-    show:
-      labels: true
-      points: false
+    type: weather-forecast
+    entity: weather.home_weather
+    forecast_type: hourly
     ```
 
-??? "5-Day Daily AQI Forecast"
+#### Air Quality Now
 
-    Requires [ApexCharts Card](https://github.com/RomRider/apexcharts-card) (available in HACS).
+Pollutants only appear above the EPA "Good" upper boundary. Pollen type tiles appear when Google reports them as in-season (index ≥ 0).
+
+![Air Quality Now card](assets/cards/air_quality_now.png)
+
+??? "View YAML"
 
     ```yaml
-    type: custom:apexcharts-card
-    header:
-      title: AQI Forecast — 5 Days
-      show: true
-    series:
-      - entity: sensor.universal_aqi
-        attribute: daily_forecast
-        data_generator: |
-          return entity.attributes.daily_forecast.map(d => [
-            new Date(d.datetime).getTime(),
-            d.aqi
-          ]);
-        name: Peak AQI
-        type: bar
-        color: "#2196f3"
+    type: vertical-stack
+    cards:
+      - type: tile
+        entity: sensor.air_quality_advisory
+      - type: grid
+        columns: 3
+        cards:
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.pm2_5
+                above: 9
+            card:
+              type: tile
+              entity: sensor.pm2_5_level
+              name: PM2.5
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.pm10
+                above: 54
+            card:
+              type: tile
+              entity: sensor.pm10_level
+              name: PM10
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.ozone_o3
+                above: 54
+            card:
+              type: tile
+              entity: sensor.ozone_o3_level
+              name: Ozone
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.nitrogen_dioxide_no2
+                above: 53
+            card:
+              type: tile
+              entity: sensor.nitrogen_dioxide_no2_level
+              name: NO2
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.carbon_monoxide_co
+                above: 4400
+            card:
+              type: tile
+              entity: sensor.carbon_monoxide_co_level
+              name: CO
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.sulfur_dioxide_so2
+                above: 35
+            card:
+              type: tile
+              entity: sensor.sulfur_dioxide_so2_level
+              name: SO2
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.tree_pollen
+                above: -1
+            card:
+              type: tile
+              entity: sensor.tree_pollen_level
+              name: Tree Pollen
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.grass_pollen
+                above: -1
+            card:
+              type: tile
+              entity: sensor.grass_pollen_level
+              name: Grass Pollen
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.weed_pollen
+                above: -1
+            card:
+              type: tile
+              entity: sensor.weed_pollen_level
+              name: Weed Pollen
     ```
 
-??? "Pollen Summary Glance"
+#### Species Breakdown
+
+Each tile only appears when the species is in season (index ≥ 0). Available species vary by region.
+
+![Species Breakdown card](assets/cards/species_breakdown.png)
+
+??? "View YAML"
 
     ```yaml
-    type: glance
-    title: Pollen Today
-    entities:
-      - entity: sensor.grass_pollen
-        name: Grass
-      - entity: sensor.tree_pollen
-        name: Tree
-      - entity: sensor.weed_pollen
-        name: Weed
+    type: grid
+    columns: 3
+    cards:
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.maple_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.maple_pollen_level
+          name: Maple
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.elm_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.elm_pollen_level
+          name: Elm
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.cottonwood_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.cottonwood_pollen_level
+          name: Cottonwood
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.alder_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.alder_pollen_level
+          name: Alder
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.birch_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.birch_pollen_level
+          name: Birch
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.ash_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.ash_pollen_level
+          name: Ash
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.pine_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.pine_pollen_level
+          name: Pine
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.oak_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.oak_pollen_level
+          name: Oak
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.juniper_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.juniper_pollen_level
+          name: Juniper
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.grasses_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.grasses_pollen_level
+          name: Grasses
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.ragweed_pollen
+            above: -1
+        card:
+          type: tile
+          entity: sensor.ragweed_pollen_level
+          name: Ragweed
     ```
 
-??? "Pollutant Overview"
+---
+
+### Forecasts
+
+#### 5-Day Weather Forecast
+
+![5-Day Weather Forecast card](assets/cards/weather_forecast_daily.png)
+
+??? "View YAML"
 
     ```yaml
-    type: entities
-    title: Current Pollutants
-    entities:
-      - entity: sensor.pm2_5
-        name: PM2.5
-      - entity: sensor.pm10
-        name: PM10
-      - entity: sensor.ozone_o3
-        name: Ozone
-      - entity: sensor.nitrogen_dioxide_no2
-        name: NO2
-      - entity: sensor.carbon_monoxide_co
-        name: CO
-      - entity: sensor.sulfur_dioxide_so2
-        name: SO2
+    type: weather-forecast
+    entity: weather.home_weather
+    forecast_type: daily
+    ```
+
+#### 5-Day Pollen Forecast
+
+Shows pollen categories for Grass, Tree, and Weed over the next 5 days.
+
+![5-Day Pollen Forecast card](assets/cards/pollen_forecast.png)
+
+??? "View YAML"
+
+    ```yaml
+    type: markdown
+    content: |
+      ## Pollen Forecast
+      | Date | Grass | Tree | Weed |
+      |------|-------|------|------|
+      {% for i in range(state_attr('sensor.grass_pollen', 'daily_forecast') | length) -%}
+      {%- set g = state_attr('sensor.grass_pollen', 'daily_forecast')[i] -%}
+      {%- set t = state_attr('sensor.tree_pollen', 'daily_forecast')[i] -%}
+      {%- set w = state_attr('sensor.weed_pollen', 'daily_forecast')[i] -%}
+      | {{ g.datetime[:10] }} | {{ g.category }} | {{ t.category }} | {{ w.category }} |
+      {% endfor %}
+    ```
+
+#### 5-Day AQI Forecast
+
+Pulls from the Universal AQI sensor's `daily_forecast` attribute.
+
+![5-Day AQI Forecast card](assets/cards/aqi_forecast.png)
+
+??? "View YAML"
+
+    ```yaml
+    type: markdown
+    content: |
+      ## AQI Forecast
+      | Date | AQI | Category |
+      |------|-----|----------|
+      {% for d in state_attr('sensor.universal_aqi', 'daily_forecast') -%}
+      | {{ d.datetime[:10] }} | {{ d.aqi }} | {{ d.category }} |
+      {% endfor %}
     ```

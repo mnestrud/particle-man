@@ -32,8 +32,6 @@ This checklist is not optional. "Resume directly" does not skip it.
 | `tests/conftest.py` | Mock payloads, PHCC fixtures |
 | `tests/test_*.py` | One file per source module |
 | `.github/workflows/validate.yml` | CI: HACS, hassfest, ruff, mypy, pytest |
-| `.github/workflows/claude-code-review.yml` | Auto PR review on open/sync |
-| `.github/workflows/claude.yml` | @claude mentions in issues/PRs |
 | `.github/workflows/docs.yml` | Deploy docs to GitHub Pages on main push |
 
 Platforms: `SENSOR, SWITCH, WEATHER` | Min HA: `2025.1.0` | Repo: `https://github.com/mnestrud/particle-man`
@@ -101,8 +99,6 @@ Current baseline: 231 tests, 99% overall, 100% config_flow (2026-04-23).
 | Workflow | Trigger | What it checks |
 |----------|---------|----------------|
 | `validate.yml` | Every push + PR | HACS → hassfest → ruff → mypy → pytest |
-| `claude-code-review.yml` | PR open/sync | Automated Claude review comment |
-| `claude.yml` | @claude in issues/PRs | Responds to @claude mentions |
 | `docs.yml` | Push to main (docs/** or mkdocs.yml) | Deploys GitHub Pages |
 
 **Common CI failures:**
