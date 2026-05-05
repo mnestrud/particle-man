@@ -17,9 +17,9 @@ Particle Man polls Google's APIs on a schedule and enforces monthly quotas to ke
 
 ### Polling cadence
 
-**Air Quality and Pollen** are fetched at most once per hour, matching Google's own data refresh rate. Polling faster would return the same data. At 7+ locations they scale automatically — see [Automagic interval calculation](#automagic-interval-calculation) below.
+**Air Quality and Pollen** are fetched at most once per hour, matching Google's own data refresh rate. Polling faster would return the same data. At 7+ locations the interval scales longer than 1 hour — see [Automagic interval calculation](#automagic-interval-calculation) below.
 
-**Weather** uses either the Automagic-calculated interval or a manually configured one.
+**Weather** uses either the Automagic-calculated interval if enabled (DEFAULT) or a manually configured one for advanced / custom configurations.  
 
 ### Automagic interval calculation
 
@@ -29,9 +29,9 @@ Automagic mode computes the minimum safe polling interval — the shortest inter
 
 | Input | Source | Example |
 |---|---|---|
-| `calls_per_poll` | Fixed per API (weather = 3 or 4) | 4 (alerts on) |
+| `calls_per_poll` | Fixed per API (weather = 3 or 4) | 4 (weather alerts on) |
 | `num_locations` | Number of configured locations | 2 |
-| `monthly_limit` | Google free tier or custom | 10,000 |
+| `monthly_limit` | Google free tier (DEFAULT) or custom | 10,000 |
 | `billing_month_days` | Actual days in current month (Pacific Time) | 31 |
 | `active_minutes_per_month` | `billing_month_days × 24 × 60` minus quiet hours | 33,480 |
 | `safety_buffer` | Fixed 5% | 1.05 |
@@ -42,9 +42,9 @@ Automagic mode computes the minimum safe polling interval — the shortest inter
 safe_interval_minutes = ⌈ active_minutes × calls_per_poll × num_locations × 1.05 / monthly_limit ⌉
 ```
 
-Floored at 15 minutes. If the result would be less than 15, 15 is used.
+Floored at 15 minutes. If the result would be less than 15, 15 is used, because the weather model itself is on an approximately 15 minute update. 
 
-**Example** — 2 locations, alerts on (4 calls/poll), 10,000 weather limit, May (31 days), quiet hours 23:00–05:00 (18 active hours/day):
+**Example** — 2 locations, alerts on (4 calls/poll), 10,000 (DEFAULT API CALLS) weather limit, May (31 days), quiet hours 23:00–05:00 (18 active hours/day):
 
 ```
 active_minutes = 31 × 18 × 60 = 33,480
@@ -82,7 +82,7 @@ Free tier limits: [Air Quality](https://developers.google.com/maps/documentation
 
 ### Quota behavior
 
-When an API reaches its monthly limit, Particle Man pauses **only that API**. Other APIs continue normally. Tracking resets automatically on the 1st of the month (midnight Pacific Time).
+When an API reaches its monthly limit, Particle Man pauses **only that API**. Other APIs continue normally. Tracking resets automatically on the 1st of the month (midnight Pacific Time).  Reconfigure the integration to add quota. 
 
 ### Quota tracking
 

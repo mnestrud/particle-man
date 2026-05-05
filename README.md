@@ -3,20 +3,30 @@
 
   # PARTICLE MAN HELPS YOU FIGHT BAD AIR QUALITY
 
-  A Home Assistant custom integration that brings hyper-local air quality, pollen, and weather data into Home Assistant using Google's APIs — the same data behind health apps and smart HVAC automation worldwide.
+  A Home Assistant custom integration that brings hyper-local air quality, pollen, and weather data into Home Assistant using Google's APIs — the same data behind health apps and smart HVAC automation worldwide.  This integration intelligently manages API calls so that you can confidently stay within free-tier limits while allowing customization such as multiple locations. 
 
   [📖 Documentation](https://mnestrud.github.io/particle-man/)
 </div>
 
 ---
 
-## Why Air Quality Matters
+# Why Air Quality Matters
 
-I live in Chicago, where wildfires, traffic, industrial activity, and city living cause moment by moment changes to air quality.  I also have allergies, and until the wildfires a couple years ago didn't realize how sensitive I was to particulates.  That's when I started looking for air quality sources for home assistant.  
+Air pollution is the single greatest environmental threat to human health. The [World Health Organization](https://www.who.int/news-room/fact-sheets/detail/ambient-(outdoor)-air-quality-and-health) estimates that ambient air pollution alone causes **4.2 million premature deaths** worldwide each year, driven primarily by heart disease, stroke, chronic obstructive pulmonary disease (COPD), and lung cancer. The more comprehensive [State of Global Air 2024](https://www.stateofglobalair.org/resources/archived/state-global-air-report-2024) report — a joint effort by the Health Effects Institute (HEI), the Institute for Health Metrics and Evaluation (IHME), and UNICEF — found that when indoor sources are included, air pollution accounted for **8.1 million deaths** globally in 2021, making it the **second leading risk factor for death** worldwide. Nearly 90% of those deaths were from noncommunicable diseases: heart disease, stroke, diabetes, lung cancer, and COPD.
 
-The integrations that already existed weren't cutting it for me. Some had current conditions but no forecasts. Some covered a few pollutants but not all the ones I cared about.  Few surfaced the plain-language risk levels behind the numbers — the part that actually tells you what to do with the information. Hourly data was sparse.  I wanted one integration that did all of it, in a consistent format, so I could see what's happening right now and what's coming, without bouncing between apps or stitching together multiple data sources.  
+Children are especially vulnerable. In 2021, exposure to air pollution was linked to more than **700,000 deaths in children under five** — roughly 15% of all deaths in that age group globally ([State of Global Air 2024](https://www.stateofglobalair.org/resources/archived/state-global-air-report-2024)). Health effects in young children include premature birth, low birth weight, impaired lung development, and increased risk of asthma and respiratory infections.
 
-I also became impressed by Google's ML models, which include a lot of predictive inputs unavailable even by robust city air monitoring programs - traffic, historical monitoring, effects of weather, etc. both on current conditions but especially on forecasts.  Originally I thought this would be a paid-API only integration, but I happily discovered that all of this fits neatly within Google's free API limits for both the Pollen and Pollution features.  I also surface the API usage information for transparency and confidence that this is indeed free, as long as you set reasonable limits.
+The problem is not limited to developing nations. In the United States, the EPA's [Our Nation's Air 2025](https://gispub.epa.gov/air/trendsreport/2025/) report found that approximately **109 million Americans** lived in counties exceeding at least one National Ambient Air Quality Standard in 2024. The [American Lung Association's State of the Air 2026](https://www.lung.org/research/sota/key-findings) report — the 27th edition — found that **152 million people** (44% of the U.S. population) live in areas that received a failing grade for unhealthy levels of ozone or particle pollution, including **33.5 million children**. The EPA has documented that long-term and short-term exposures to fine particulate matter (PM2.5) cause premature death and cardiovascular harm, including increased hospital admissions for heart attacks and strokes ([EPA](https://www.epa.gov/clean-air-act-overview/air-pollution-current-and-future-challenges)). Wildfires — a growing source of particulate pollution — are making these trends worse, as the 2023 Canadian wildfire season demonstrated across the Midwest and Eastern states.
+
+The economic toll is staggering. The [World Bank](https://www.unep.org/news-and-stories/video/why-dirty-air-costs-us-trillions-every-year) and [UNEP](https://www.unep.org/topics/air) estimate that the global cost of health damages from air pollution amounts to **$8.1 trillion per year** — equivalent to 6.1% of global GDP. In 2022, the [United Nations General Assembly](https://www.unep.org/news-and-stories/story/historic-move-un-declares-healthy-environment-human-right) recognized clean air as a fundamental component of the universal human right to a clean, healthy, and sustainable environment (Resolution 76/300), passed with 161 votes in favor and zero against.
+
+Nearly every person on Earth breathes air that exceeds WHO guidelines. In 2024, [only seven countries](https://earth.org/all-but-7-countries-faced-unsafe-air-pollution-levels-in-2024-report/) met the WHO's recommended annual PM2.5 standard of 5 µg/m³. The data is clear: air quality is not an abstract environmental issue — it is a daily health decision.
+
+---
+
+I live in Chicago, where wildfires, traffic, industrial activity, and city living cause moment-by-moment changes to air quality. When I started to get serious about improving the air in our house, a few things were important: Reliable & free data, forecasts for not just weather, and plain language action levels built in to the sensors so that you can be informed on taking action.  Thus was born Particle Man. 
+
+Originally I thought this would be a paid-API only integration, but I happily discovered that all of this fits neatly within Google's free API limits for Pollen, Pollution, and Weather.  So I wrote some logic to enforce keeping within the free tier (default, but optional).  I also surface the API usage information for transparency and confidence that this is indeed free.
 
 Just Breathe.
 
@@ -47,9 +57,8 @@ Just Breathe.
 ### API Management
 
 - **Automagic mode** — automatically calculates the optimal polling interval based on your enabled APIs, number of locations, and quiet hours; no manual interval tuning needed to stay within the free tier
-- **Free-tier enforce mode** — each API pauses automatically when its monthly quota is reached
 - **Multi-location support** — shared quota tracking across all locations using the same API key
-- **Quiet hours** — skip fetches during a configured overnight window to stretch your monthly budget
+- **Quiet hours** — skip fetches during a configured overnight window to decrease your polling window during the day
 - **API usage sensors** — billing-period call counts with projected usage and status (`ok` / `warning` / `critical`)
 
 → [Full sensor details](https://mnestrud.github.io/particle-man/sensors/)
