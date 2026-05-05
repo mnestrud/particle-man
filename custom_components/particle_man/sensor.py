@@ -86,6 +86,7 @@ def _add_dynamic_entities(
             elif key.startswith("pollen_plant_") and key not in known:
                 pcode = key[len("pollen_plant_"):]
                 out.append(PollenPlantSensor(coordinator, pcode))
+                out.append(PollenPlantLevelSensor(coordinator, pcode))
                 known.add(key)
 
     if coordinator.enable_weather and "weather_current" in data and "weather_current" not in known:
@@ -415,7 +416,7 @@ class PollutantSensor(_BaseGaqSensor):
 
 class PollutantLevelSensor(_BaseGaqSensor):
     _attr_entity_category = None
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator: ParticleManCoordinator, code: str) -> None:
         super().__init__(coordinator)
@@ -526,7 +527,7 @@ class PollenTypeSensor(_BasePollenSensor):
 
 class PollenTypeLevelSensor(_BasePollenSensor):
     _attr_entity_category = None
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator: ParticleManCoordinator, ptype: str) -> None:
         super().__init__(coordinator)
@@ -601,6 +602,41 @@ class PollenPlantSensor(_BasePollenSensor):
             if info.get(k) is not None:
                 attrs[k] = info[k]
         return attrs
+
+
+class PollenPlantLevelSensor(_BasePollenSensor):
+    _attr_entity_category = None
+    _attr_entity_registry_enabled_default = True
+    _attr_icon = "mdi:flower-pollen"
+
+    def __init__(self, coordinator: ParticleManCoordinator, pcode: str) -> None:
+        super().__init__(coordinator)
+        self.pcode = pcode
+        self._attr_unique_id = f"{coordinator.entry_id}_{coordinator.location_slug}_pollen_plant_{pcode}_level"
+
+    @property
+    def _info(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.coordinator.data.get(f"pollen_plant_{self.pcode}", {}))
+
+    @property
+    def name(self) -> str:
+        return f"{self._info.get('display_name') or self.pcode.title()} Pollen Level"
+
+    @property
+    def native_value(self) -> str | None:
+        val = self._info.get("category")
+        return str(val) if val is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self._info
+        category = info.get("category")
+        return {
+            "index": info.get("value"),
+            "in_season": info.get("in_season"),
+            "color_hex": info.get("color_hex") or (POLLEN_COLORS.get(category) if category else None),
+            ATTR_ATTRIBUTION: POLLEN_ATTRIBUTION,
+        }
 
 
 # ---------------------------------------------------------------------------

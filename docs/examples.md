@@ -565,9 +565,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.maple_pollen
+          entity: sensor.maple_pollen_level
           name: Maple
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -575,9 +574,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.elm_pollen
+          entity: sensor.elm_pollen_level
           name: Elm
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -585,9 +583,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.cottonwood_pollen
+          entity: sensor.cottonwood_pollen_level
           name: Cottonwood
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -595,9 +592,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.alder_pollen
+          entity: sensor.alder_pollen_level
           name: Alder
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -605,9 +601,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.birch_pollen
+          entity: sensor.birch_pollen_level
           name: Birch
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -615,9 +610,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.ash_pollen
+          entity: sensor.ash_pollen_level
           name: Ash
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -625,9 +619,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.pine_pollen
+          entity: sensor.pine_pollen_level
           name: Pine
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -635,9 +628,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.oak_pollen
+          entity: sensor.oak_pollen_level
           name: Oak
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -645,9 +637,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.juniper_pollen
+          entity: sensor.juniper_pollen_level
           name: Juniper
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -655,9 +646,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.grasses_pollen
+          entity: sensor.grasses_pollen_level
           name: Grasses
-          state_content: category
       - type: conditional
         conditions:
           - condition: numeric_state
@@ -665,9 +655,8 @@ All examples use built-in Home Assistant cards and are compatible with the visua
             above: -1
         card:
           type: tile
-          entity: sensor.ragweed_pollen
+          entity: sensor.ragweed_pollen_level
           name: Ragweed
-          state_content: category
     ```
 
 ---

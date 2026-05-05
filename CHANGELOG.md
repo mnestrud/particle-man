@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.3] — 2026-05-05
+
+### Added
+
+- **Pollen plant level sensors** — each plant species sensor (Oak, Maple, Ragweed, etc.) now has a corresponding `*_level` entity whose state is the category text (Very Low / Low / Moderate / High / Very High), consistent with pollutant and pollen type level sensors.
+
+### Changed
+
+- Pollutant level sensors, pollen type level sensors, and pollen plant level sensors are now **enabled by default** — no manual entity-registry toggle needed.
+
+---
+
 ## [1.5.2] — 2026-05-04
 
 ### Changed
