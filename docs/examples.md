@@ -33,16 +33,20 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
               domain: sensor
         alert_level:
           name: Alert when advisory reaches
-          default: Warning
+          default: Unhealthy for Sensitive Groups
           selector:
             select:
               options:
-                - label: "Caution (Unhealthy for Sensitive Groups)"
-                  value: Caution
-                - label: "Warning (Unhealthy)"
-                  value: Warning
-                - label: "Alert (Very Unhealthy or Hazardous)"
-                  value: Alert
+                - label: "Moderate"
+                  value: Moderate
+                - label: "Unhealthy for Sensitive Groups"
+                  value: Unhealthy for Sensitive Groups
+                - label: "Unhealthy"
+                  value: Unhealthy
+                - label: "Very Unhealthy"
+                  value: Very Unhealthy
+                - label: "Hazardous"
+                  value: Hazardous
         alert_actions:
           name: Actions on alert
           description: What to do when air quality reaches the alert level.
@@ -57,10 +61,14 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
 
     variables:
       level: !input alert_level
-      levels_map:
-        Caution: ["Caution", "Warning", "Alert"]
-        Warning: ["Warning", "Alert"]
-        Alert: ["Alert"]
+      all_levels:
+        - Good
+        - Moderate
+        - Unhealthy for Sensitive Groups
+        - Unhealthy
+        - Very Unhealthy
+        - Hazardous
+      threshold_idx: "{{ all_levels.index(level) }}"
 
     triggers:
       - trigger: state
@@ -75,7 +83,9 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
               - condition: trigger
                 id: changed
               - condition: template
-                value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+                value_template: >-
+                  {{ trigger.to_state.state in all_levels
+                     and all_levels.index(trigger.to_state.state) >= threshold_idx | int }}
           - condition: and
             conditions:
               - condition: trigger
@@ -83,13 +93,17 @@ Notify when the Air Quality Advisory reaches a configured level; send a recovery
               - condition: template
                 value_template: >-
                   {{ trigger.from_state is not none
-                     and trigger.from_state.state in levels_map[level]
-                     and trigger.to_state.state not in levels_map[level] }}
+                     and trigger.from_state.state in all_levels
+                     and all_levels.index(trigger.from_state.state) >= threshold_idx | int
+                     and (trigger.to_state.state not in all_levels
+                          or all_levels.index(trigger.to_state.state) < threshold_idx | int) }}
 
     actions:
       - if:
           - condition: template
-            value_template: "{{ trigger.to_state.state in levels_map[level] }}"
+            value_template: >-
+              {{ trigger.to_state.state in all_levels
+                 and all_levels.index(trigger.to_state.state) >= threshold_idx | int }}
         then: !input alert_actions
         else: !input clear_actions
     ```
@@ -224,7 +238,7 @@ Morning summary combining current AQI advisory and weather conditions.
     !!! tip
         In your notification action, use template variables to build the message:
         ```
-        AQI: {{ states(aqi_advisory) }} — {{ state_attr(aqi_advisory, 'category') }}.
+        AQI: {{ states(aqi_advisory) }} ({{ state_attr(aqi_advisory, 'aqi') }}).
         Weather: {{ states(weather_entity) }}, {{ state_attr(weather_entity, 'temperature') }}°.
         ```
 
@@ -244,12 +258,15 @@ trigger:
   - trigger: state
     entity_id: sensor.air_quality_advisory
     to:
-      - Caution
-      - Warning
-      - Alert
+      - Unhealthy for Sensitive Groups
+      - Unhealthy
+      - Very Unhealthy
+      - Hazardous
   - trigger: state
     entity_id: sensor.air_quality_advisory
-    to: "None"
+    to:
+      - Good
+      - Moderate
     id: cleared
 action:
   - choose:
@@ -260,15 +277,14 @@ action:
           - action: notify.mobile_app_your_phone
             data:
               title: "✅ Air Quality Clear"
-              message: "AQI is back to {{ state_attr('sensor.air_quality_advisory', 'aqi') }}."
+              message: "Advisory is back to {{ states('sensor.air_quality_advisory') }} (AQI {{ state_attr('sensor.air_quality_advisory', 'aqi') }})."
       - conditions: []
         sequence:
           - action: notify.mobile_app_your_phone
             data:
               title: "⚠️ Air Quality {{ states('sensor.air_quality_advisory') }}"
               message: >
-                AQI {{ state_attr('sensor.air_quality_advisory', 'aqi') }} —
-                {{ state_attr('sensor.air_quality_advisory', 'category') }}.
+                AQI {{ state_attr('sensor.air_quality_advisory', 'aqi') }}.
                 Dominant pollutant: {{ state_attr('sensor.air_quality_advisory', 'dominant_pollutant') }}.
 ```
 
@@ -336,13 +352,15 @@ trigger:
   - trigger: state
     entity_id: sensor.air_quality_advisory
     to:
-      - Warning
-      - Alert
+      - Unhealthy
+      - Very Unhealthy
+      - Hazardous
   - trigger: state
     entity_id: sensor.air_quality_advisory
     to:
-      - "None"
-      - Caution
+      - Good
+      - Moderate
+      - Unhealthy for Sensitive Groups
     id: ok
 action:
   - action: >
