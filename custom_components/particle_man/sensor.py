@@ -607,7 +607,6 @@ class PollenPlantSensor(_BasePollenSensor):
 class PollenPlantLevelSensor(_BasePollenSensor):
     _attr_entity_category = None
     _attr_entity_registry_enabled_default = True
-    _attr_icon = "mdi:flower-pollen"
 
     def __init__(self, coordinator: ParticleManCoordinator, pcode: str) -> None:
         super().__init__(coordinator)
@@ -621,6 +620,10 @@ class PollenPlantLevelSensor(_BasePollenSensor):
     @property
     def name(self) -> str:
         return f"{self._info.get('display_name') or self.pcode.title()} Pollen Level"
+
+    @property
+    def icon(self) -> str:
+        return "mdi:flower-pollen"
 
     @property
     def native_value(self) -> str | None:

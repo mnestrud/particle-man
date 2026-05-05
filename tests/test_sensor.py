@@ -23,6 +23,7 @@ from custom_components.particle_man.sensor import (
     MonthlyPollenUsageSensor,
     MonthlyWeatherUsageSensor,
     PollenAdvisorySensor,
+    PollenPlantLevelSensor,
     PollenPlantSensor,
     PollenTypeLevelSensor,
     PollenTypeSensor,
@@ -186,6 +187,7 @@ def test_add_dynamic_entities_pollen(coord: ParticleManCoordinator) -> None:
     assert "PollenTypeSensor" in types
     assert "PollenTypeLevelSensor" in types
     assert "PollenPlantSensor" in types
+    assert "PollenPlantLevelSensor" in types
 
 
 def test_add_dynamic_entities_weather(coord: ParticleManCoordinator) -> None:
@@ -315,7 +317,7 @@ def test_pollutant_sensor_icon_unknown(coord: ParticleManCoordinator) -> None:
 def test_pollutant_level_sensor(coord: ParticleManCoordinator) -> None:
     s = PollutantLevelSensor(coord, "pm25")
     assert s.native_value == "Good"
-    assert s._attr_entity_registry_enabled_default is False
+    assert s._attr_entity_registry_enabled_default is True
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +334,7 @@ def test_pollen_type_sensor_state(coord: ParticleManCoordinator) -> None:
 def test_pollen_type_level_sensor(coord: ParticleManCoordinator) -> None:
     s = PollenTypeLevelSensor(coord, "tree")
     assert s.native_value == "Low"
-    assert s._attr_entity_registry_enabled_default is False
+    assert s._attr_entity_registry_enabled_default is True
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +345,19 @@ def test_pollen_type_level_sensor(coord: ParticleManCoordinator) -> None:
 def test_pollen_plant_sensor_state(coord: ParticleManCoordinator) -> None:
     s = PollenPlantSensor(coord, "alder")
     assert s.native_value == 1
+
+
+def test_pollen_plant_level_sensor(coord: ParticleManCoordinator) -> None:
+    s = PollenPlantLevelSensor(coord, "alder")
+    assert s.native_value == "Very Low"
+    assert s._attr_entity_registry_enabled_default is True
+
+
+def test_pollen_plant_level_sensor_attrs(coord: ParticleManCoordinator) -> None:
+    s = PollenPlantLevelSensor(coord, "alder")
+    attrs = s.extra_state_attributes
+    assert attrs["index"] == 1
+    assert attrs["in_season"] is True
 
 
 # ---------------------------------------------------------------------------

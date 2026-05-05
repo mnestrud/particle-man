@@ -433,7 +433,11 @@ All examples use built-in Home Assistant cards and are compatible with the visua
 
 ### Current conditions
 
-??? "AQI Gauge"
+#### AQI Gauge
+
+![AQI Gauge card](assets/cards/aqi_gauge.png)
+
+??? "View YAML"
 
     ```yaml
     type: gauge
@@ -447,7 +451,11 @@ All examples use built-in Home Assistant cards and are compatible with the visua
     name: Air Quality
     ```
 
-??? "Weather Forecast — Hourly"
+#### Weather Forecast — Hourly
+
+![Weather Forecast hourly card](assets/cards/weather_forecast_hourly.png)
+
+??? "View YAML"
 
     ```yaml
     type: weather-forecast
@@ -455,9 +463,13 @@ All examples use built-in Home Assistant cards and are compatible with the visua
     forecast_type: hourly
     ```
 
-??? "Air Quality Now"
+#### Air Quality Now
 
-    Pollutants only appear above the EPA "Good" upper boundary. Pollen type tiles appear when Google reports them as in-season (index ≥ 0).
+Pollutants only appear above the EPA "Good" upper boundary. Pollen type tiles appear when Google reports them as in-season (index ≥ 0).
+
+![Air Quality Now card](assets/cards/air_quality_now.png)
+
+??? "View YAML"
 
     ```yaml
     type: vertical-stack
@@ -550,9 +562,13 @@ All examples use built-in Home Assistant cards and are compatible with the visua
               name: Weed Pollen
     ```
 
-??? "Species Breakdown"
+#### Species Breakdown
 
-    Each tile only appears when the species is in season (index ≥ 0). Available species vary by region.
+Each tile only appears when the species is in season (index ≥ 0). Available species vary by region.
+
+![Species Breakdown card](assets/cards/species_breakdown.png)
+
+??? "View YAML"
 
     ```yaml
     type: grid
@@ -663,7 +679,11 @@ All examples use built-in Home Assistant cards and are compatible with the visua
 
 ### Forecasts
 
-??? "5-Day Weather Forecast"
+#### 5-Day Weather Forecast
+
+![5-Day Weather Forecast card](assets/cards/weather_forecast_daily.png)
+
+??? "View YAML"
 
     ```yaml
     type: weather-forecast
@@ -671,9 +691,13 @@ All examples use built-in Home Assistant cards and are compatible with the visua
     forecast_type: daily
     ```
 
-??? "5-Day Pollen Forecast"
+#### 5-Day Pollen Forecast
 
-    Shows pollen categories for Grass, Tree, and Weed over the next 5 days.
+Shows pollen categories for Grass, Tree, and Weed over the next 5 days.
+
+![5-Day Pollen Forecast card](assets/cards/pollen_forecast.png)
+
+??? "View YAML"
 
     ```yaml
     type: markdown
@@ -689,9 +713,13 @@ All examples use built-in Home Assistant cards and are compatible with the visua
       {% endfor %}
     ```
 
-??? "5-Day AQI Forecast"
+#### 5-Day AQI Forecast
 
-    Pulls from the Universal AQI sensor's `daily_forecast` attribute.
+Pulls from the Universal AQI sensor's `daily_forecast` attribute.
+
+![5-Day AQI Forecast card](assets/cards/aqi_forecast.png)
+
+??? "View YAML"
 
     ```yaml
     type: markdown
