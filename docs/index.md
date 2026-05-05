@@ -9,7 +9,6 @@ Real-time air quality, pollen, and weather for Home Assistant — powered by Goo
 - **React to air quality events** — automatically close HVAC fresh-air intakes, send alerts, or pause outdoor routines when AQI rises from wildfire smoke or traffic
 - **Stay ahead of pollen season** — trigger morning pollen briefs or allergy reminders on high-pollen days
 - **Weather-aware automations** — combine AQI advisory, pollen level, and weather conditions to decide when outdoor activities are safe
-- **Stay within Google's free tier** — automatic quota enforcement keeps all three APIs within their monthly limits by default
 - **Automagic mode** — automatically calculates the optimal polling interval based on your enabled APIs, location count, and quiet hours window, so you get maximum data freshness while staying within Google's monthly limits
 
 ---
