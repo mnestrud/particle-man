@@ -689,13 +689,13 @@ All examples use built-in Home Assistant cards and are compatible with the visua
     ```yaml
     type: markdown
     content: |
-      ## 5-Day Pollen Forecast
+      ## Pollen Forecast
       | Date | Grass | Tree | Weed |
       |------|-------|------|------|
-      {% for i in range(5) %}
-      {% set g = state_attr('sensor.grass_pollen', 'daily_forecast')[i] %}
-      {% set t = state_attr('sensor.tree_pollen', 'daily_forecast')[i] %}
-      {% set w = state_attr('sensor.weed_pollen', 'daily_forecast')[i] %}
+      {% for i in range(state_attr('sensor.grass_pollen', 'daily_forecast') | length) -%}
+      {%- set g = state_attr('sensor.grass_pollen', 'daily_forecast')[i] -%}
+      {%- set t = state_attr('sensor.tree_pollen', 'daily_forecast')[i] -%}
+      {%- set w = state_attr('sensor.weed_pollen', 'daily_forecast')[i] -%}
       | {{ g.datetime[:10] }} | {{ g.category }} | {{ t.category }} | {{ w.category }} |
       {% endfor %}
     ```
@@ -707,10 +707,10 @@ All examples use built-in Home Assistant cards and are compatible with the visua
     ```yaml
     type: markdown
     content: |
-      ## 5-Day AQI Forecast
+      ## AQI Forecast
       | Date | AQI | Category |
       |------|-----|----------|
-      {% for d in state_attr('sensor.universal_aqi', 'daily_forecast') %}
+      {% for d in state_attr('sensor.universal_aqi', 'daily_forecast') -%}
       | {{ d.datetime[:10] }} | {{ d.aqi }} | {{ d.category }} |
       {% endfor %}
     ```
