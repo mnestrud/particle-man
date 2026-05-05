@@ -1,6 +1,6 @@
 # Particle Man
 
-Real-time air quality, pollen, and weather for Home Assistant — powered by Google's environmental APIs.
+Real-time air quality, pollen, and weather for Home Assistant — powered by Google's environmental APIs.  Particle Man is a RISK FREE Google API solution due to its novel Automagic mode, which maximizes data refreshing while keeping you within API limits based on your configuration.  
 
 ---
 
