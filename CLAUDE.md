@@ -4,8 +4,8 @@
 
 Run ALL of these before responding to any user message.
 
-1. `git -C "C:/Users/micha/code/particle-man" status`
-2. `git -C "C:/Users/micha/code/particle-man" log --oneline -5`
+1. `git -C /home/ataraxia/code/particle-man status`
+2. `git -C /home/ataraxia/code/particle-man log --oneline -5`
 3. Read `custom_components/particle_man/manifest.json` → note version
 4. Read memory file `memory/particle_man_audit.md` → note quality tier and any unverified items
 
@@ -40,25 +40,25 @@ Platforms: `SENSOR, SWITCH, WEATHER` | Min HA: `2025.1.0` | Repo: `https://githu
 
 ## Running Tests Locally
 
-**Working directory: `C:/Users/micha/code/particle-man`**
+**Working directory: `/home/ataraxia/code/particle-man`**
 
 ```bash
 # First time — create venv
 python -m venv .venv
-.venv/Scripts/pip install -r requirements_test.txt
-.venv/Scripts/pip install mypy
+.venv/bin/pip install -r requirements_test.txt
+.venv/bin/pip install mypy
 
 # Type check (strict — config in pyproject.toml)
-.venv/Scripts/mypy custom_components/particle_man
+.venv/bin/mypy custom_components/particle_man
 
 # All tests
-.venv/Scripts/pytest tests/ -q
+.venv/bin/pytest tests/ -q
 
 # With coverage
-.venv/Scripts/pytest tests/ --cov=custom_components/particle_man --cov-report=term-missing -q
+.venv/bin/pytest tests/ --cov=custom_components/particle_man --cov-report=term-missing -q
 
 # Stop on first failure
-.venv/Scripts/pytest tests/ -x --tb=short -q
+.venv/bin/pytest tests/ -x --tb=short -q
 ```
 
 Target: ≥95% coverage overall; 100% on config_flow. Any PR to main must hit this.
@@ -130,13 +130,13 @@ Quality scale rules: https://developers.home-assistant.io/docs/core/integration-
 4. Add to `icons.json` under `entity.sensor.<key>` if custom icon needed — do **not** use `_attr_icon` on translated entities
 5. Update coordinator to populate the data field
 6. Write test covering entity properties and state
-7. Run: `.venv/Scripts/pytest tests/test_sensor.py -q --tb=short`
+7. Run: `.venv/bin/pytest tests/test_sensor.py -q --tb=short`
 
 ### Modify config/options flow
 1. Edit `config_flow.py` — all four flows live here (user, reauth, reconfigure, options)
 2. Update `strings.json` step schema and error keys; mirror to `translations/en.json`
 3. If adding config key: add to `const.py` with default, update `_opt()` helper in `__init__.py`
-4. Run: `.venv/Scripts/pytest tests/test_config_flow.py -q`
+4. Run: `.venv/bin/pytest tests/test_config_flow.py -q`
 
 ### Add an API endpoint
 1. Add URL/constants to `const.py`
@@ -145,7 +145,7 @@ Quality scale rules: https://developers.home-assistant.io/docs/core/integration-
 4. Write coordinator tests for success, HTTP error (4xx/5xx), and quota-block paths
 
 ### Fix a mypy error
-- Run: `.venv/Scripts/mypy custom_components/particle_man --strict --ignore-missing-imports`
+- Run: `.venv/bin/mypy custom_components/particle_man --strict --ignore-missing-imports`
 - Do not add `# type: ignore` without an explanatory comment
 - Common causes: dict access without guard, missing `| None`, no `from __future__ import annotations`
 
@@ -157,7 +157,7 @@ Quality scale rules: https://developers.home-assistant.io/docs/core/integration-
 |------|-----|
 | HA entity API signatures, coordinator/flow patterns, HA breaking changes | `ha-dev` agent |
 | Google Environmental API (Air Quality, Pollen, Weather, Solar) field names, response structure, quota | `google-env-api` agent |
-| After robocopy deploy + restart confirmed | `ha-integration-validator` agent |
+| After rsync deploy + restart confirmed | `ha-integration-validator` agent |
 | General Python/testing questions | Answer directly — no agent |
 
 Invoke agents with the Agent tool (`subagent_type: ha-dev` or `subagent_type: google-env-api`). Don't answer HA API questions from training data — HA APIs change frequently.
@@ -166,19 +166,19 @@ Invoke agents with the Agent tool (`subagent_type: ha-dev` or `subagent_type: go
 
 ## Development and Deploy Workflow
 
-**Source of truth: git repo. Test target: live HA via Samba. These are two separate steps.**
+**Source of truth: git repo. Test target: live HA via the /mnt/ha-config mount. These are two separate steps.**
 
 ### Step 1 — Edit and test locally
-1. Edit files in `C:/Users/micha/code/particle-man/custom_components/particle_man/`
-2. Run `.venv/Scripts/pytest tests/ -q --tb=short` to catch regressions
+1. Edit files in `/home/ataraxia/code/particle-man/custom_components/particle_man/`
+2. Run `.venv/bin/pytest tests/ -q --tb=short` to catch regressions
 
 ### Step 2 — Deploy to live HA for integration testing
 ```bash
-robocopy "C:\Users\micha\code\particle-man\custom_components\particle_man" "\\botworth\config\custom_components\particle_man" /MIR /NFL /NDL
+rsync -a --delete /home/ataraxia/code/particle-man/custom_components/particle_man/ /mnt/ha-config/custom_components/particle_man/
 ```
 - **Python changes** (any `.py` file): full HA restart required — use `ha_restart` MCP call; do NOT poll after, tell user to confirm when ready
 - **Non-Python changes** (strings.json, translations, icons): reload only — `ha_reload_config component=core`
-- Samba is deploy target only — never edit `\\botworth\config\custom_components\particle_man\` directly
+- the mount is deploy target only — never edit `/mnt/ha-config/custom_components/particle_man/` directly
 
 ### Step 2b — Validate on live HA (after user confirms restart complete)
 Invoke `ha-integration-validator` agent: "Validate particle_man on live HA"
@@ -196,5 +196,5 @@ git push origin dev
 Never commit to main directly. Open a PR (dev → main) when ready for release.
 
 ### What NOT to do
-- Do not edit Samba directly — git repo is source of truth; Samba is deploy target only
-- No `ha_write_file`, no patch subagents, no MCP file writes to Samba
+- Do not edit /mnt/ha-config directly — git repo is source of truth; the mount is deploy target only
+- No `ha_write_file`, no patch subagents, no MCP file writes to the mount
