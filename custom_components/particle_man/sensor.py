@@ -108,6 +108,8 @@ def _add_dynamic_entities(
             HeatIndexSensor(coordinator),
             WindChillSensor(coordinator),
             UvIndexCategorySensor(coordinator),
+            WeatherHourlyForecastSensor(coordinator),
+            WeatherDailyForecastSensor(coordinator),
         ])
         known.add("weather_current")
 
@@ -216,6 +218,9 @@ class _BaseGaqSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
 
 class _BasePollenSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
     _attr_has_entity_name = True
+    # Forecast arrays are large and rewritten on every update. Keeping them out
+    # of the recorder costs nothing — the frontend and templates still see them.
+    _unrecorded_attributes = frozenset({"daily_forecast", "hourly_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
@@ -276,7 +281,7 @@ class AqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_device_class = SensorDeviceClass.AQI
     _attr_translation_key = "aqi"
-    _unrecorded_attributes = frozenset({"hourly_forecast"})
+    _unrecorded_attributes = frozenset({"hourly_forecast", "daily_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
@@ -359,7 +364,7 @@ class LocalAqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_device_class = SensorDeviceClass.AQI
     _attr_icon = "mdi:air-filter"
-    _unrecorded_attributes = frozenset({"hourly_forecast"})
+    _unrecorded_attributes = frozenset({"hourly_forecast", "daily_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
@@ -395,7 +400,7 @@ class LocalAqiSensor(_BaseGaqSensor):
 
 class PollutantSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _unrecorded_attributes = frozenset({"hourly_forecast"})
+    _unrecorded_attributes = frozenset({"hourly_forecast", "daily_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator, code: str) -> None:
         super().__init__(coordinator)
@@ -1050,6 +1055,63 @@ class PrecipitationTypeSensor(PrecipitationIntensitySensor):
         if seg is None:
             return None
         return cast("str | None", seg.get("type"))
+
+
+class _BaseForecastArraySensor(_BaseWeatherSensor):
+    """Exposes a weather forecast list as an attribute.
+
+    Home Assistant removed the `forecast` attribute from weather entities in
+    2024.4, so templates can only reach forecast data by calling an action —
+    which Jinja cannot do outside a trigger-based template entity. Every user
+    who wants to template against a forecast therefore has to rebuild the same
+    scaffolding by hand. Air quality and pollen already expose their forecasts
+    this way; this brings weather in line.
+
+    The array is kept out of the recorder, so it costs nothing to store.
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "entries"
+    _attr_entity_registry_enabled_default = False
+    _unrecorded_attributes = frozenset({"forecast"})
+    _data_key = ""
+
+    @property
+    def _forecast(self) -> list[dict[str, Any]]:
+        return cast(list[dict[str, Any]], self.coordinator.data.get(self._data_key) or [])
+
+    @property
+    def native_value(self) -> int:
+        return len(self._forecast)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "forecast": self._forecast,
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class WeatherHourlyForecastSensor(_BaseForecastArraySensor):
+    _attr_translation_key = "weather_hourly_forecast"
+    _data_key = "weather_hourly"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_weather_hourly_forecast"
+        )
+
+
+class WeatherDailyForecastSensor(_BaseForecastArraySensor):
+    _attr_translation_key = "weather_daily_forecast"
+    _data_key = "weather_daily"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_weather_daily_forecast"
+        )
 
 
 # ---------------------------------------------------------------------------

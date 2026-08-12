@@ -320,3 +320,38 @@ async def test_runaway_token_is_capped(coord, aioclient_mock) -> None:
 
     assert seen["calls"] == coord._hourly_pages_effective == 5
     assert result.calls == 5
+
+
+# ---------------------------------------------------------------------------
+# Forecast array sensors
+# ---------------------------------------------------------------------------
+
+def test_forecast_array_sensors_expose_the_list(coord) -> None:
+    """Templates cannot call an action, so the array has to be an attribute."""
+    from custom_components.particle_man.sensor import (
+        WeatherDailyForecastSensor,
+        WeatherHourlyForecastSensor,
+    )
+
+    coord.data = {
+        "weather_hourly": [{"datetime": "2026-08-12T12:00:00Z"}] * 120,
+        "weather_daily": [{"datetime": "2026-08-12T12:00:00Z"}] * 10,
+    }
+    hourly = WeatherHourlyForecastSensor(coord)
+    daily = WeatherDailyForecastSensor(coord)
+
+    assert hourly.native_value == 120
+    assert len(hourly.extra_state_attributes["forecast"]) == 120
+    assert daily.native_value == 10
+
+    # Large and rewritten constantly — it must never reach the database.
+    assert "forecast" in WeatherHourlyForecastSensor._unrecorded_attributes
+
+
+def test_forecast_array_sensors_handle_missing_data(coord) -> None:
+    from custom_components.particle_man.sensor import WeatherHourlyForecastSensor
+
+    coord.data = {}
+    sensor = WeatherHourlyForecastSensor(coord)
+    assert sensor.native_value == 0
+    assert sensor.extra_state_attributes["forecast"] == []
