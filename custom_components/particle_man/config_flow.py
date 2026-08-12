@@ -16,6 +16,7 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -29,12 +30,12 @@ from .const import (
     _AQ_CALLS_PER_POLL,
     _MINUTES_PER_MONTH,
     _POLLEN_CALLS_PER_POLL,
-    _WEATHER_CALLS_PER_POLL,
     BASE_URL,
     CONF_API_KEY,
     CONF_AQ_MONTHLY_LIMIT,
     CONF_AUTOMAGIC_MODE,
     CONF_ENABLE_AIR_QUALITY,
+    CONF_ENABLE_MINUTECAST,
     CONF_ENABLE_POLLEN,
     CONF_ENABLE_WEATHER,
     CONF_ENABLE_WEATHER_ALERTS,
@@ -51,11 +52,13 @@ from .const import (
     CONF_QUIET_HOURS_ENABLED,
     CONF_QUIET_START,
     CONF_UPDATE_INTERVAL,
+    CONF_WEATHER_HOURLY_HOURS,
     CONF_WEATHER_MONTHLY_LIMIT,
     CONF_WEATHER_UNITS,
     DEFAULT_AQ_MONTHLY_LIMIT,
     DEFAULT_AUTOMAGIC_MODE,
     DEFAULT_ENABLE_AIR_QUALITY,
+    DEFAULT_ENABLE_MINUTECAST,
     DEFAULT_ENABLE_POLLEN,
     DEFAULT_ENABLE_WEATHER,
     DEFAULT_ENABLE_WEATHER_ALERTS,
@@ -68,15 +71,19 @@ from .const import (
     DEFAULT_QUIET_HOURS_ENABLED,
     DEFAULT_QUIET_START,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_WEATHER_HOURLY_HOURS,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
     DEFAULT_WEATHER_UNITS,
     DOMAIN,
     LOCAL_AQI_CODES,
     POLLEN_API_URL,
     WEATHER_API_URL,
+    WEATHER_HOURLY_HOURS_CHOICES,
+    WeatherPlan,
     _billing_month_days,
     _quiet_active_minutes_per_month,
-    safe_interval_minutes,
+    solve_weather_plan,
+    weather_hourly_pages,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,7 +114,7 @@ def _usage_summary(
     aq_limit: int,
     pollen_limit: int,
     weather_limit: int,
-    weather_calls_per_poll: int = _WEATHER_CALLS_PER_POLL,
+    weather_monthly_calls: int = 0,
     minutes_per_month: int = _MINUTES_PER_MONTH,
 ) -> str:
     parts = []
@@ -123,13 +130,30 @@ def _usage_summary(
         )
     if enable_weather:
         parts.append(
-            f"Weather ~{_projected_usage(weather_interval, num_locations, weather_calls_per_poll, minutes_per_month)}"
+            f"Weather ~{weather_monthly_calls}"
             + (f"/{weather_limit}" if enforce else "")
         )
     if not parts:
         return "No APIs enabled."
     loc_str = f"{num_locations} location(s)"
-    return f"With {loc_str} at {weather_interval} min — estimated monthly: {' · '.join(parts)} calls."
+    return (
+        f"With {loc_str}, weather waking every {weather_interval} min — "
+        f"estimated monthly: {' · '.join(parts)} calls."
+    )
+
+
+def _weather_summary(plan: WeatherPlan, limit: int) -> str:
+    """One-line description of the resolved per-endpoint refresh plan."""
+    parts = [
+        f"{name} {cadence} min"
+        + (f" x{plan.pages[name]} pages" if plan.pages[name] > 1 else "")
+        for name, cadence in plan.cadences.items()
+    ]
+    text = " · ".join(parts)
+    text += f" → ~{plan.total_monthly_calls:,} of {limit:,} calls/month"
+    if plan.dropped:
+        text += f" (disabled to fit: {', '.join(plan.dropped)})"
+    return text
 
 
 def _classify_api_error(status: int, body: dict[str, Any]) -> str:
@@ -529,14 +553,39 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             return bool(self._options[CONF_AUTOMAGIC_MODE])
         return bool(self._get(CONF_AUTOMAGIC_MODE, DEFAULT_AUTOMAGIC_MODE))
 
+    def _effective_minutes(self) -> int:
+        if self._get(CONF_QUIET_HOURS_ENABLED, DEFAULT_QUIET_HOURS_ENABLED):
+            return _quiet_active_minutes_per_month(
+                self._get(CONF_QUIET_START, DEFAULT_QUIET_START),
+                self._get(CONF_QUIET_END, DEFAULT_QUIET_END),
+            )
+        return _billing_month_days() * 24 * 60
+
+    def _resolve_weather_plan(self) -> WeatherPlan:
+        """Solve the plan from the options entered so far, for live previews."""
+        automagic = self._automagic()
+        return solve_weather_plan(
+            num_locations=self._num_locations(),
+            effective_minutes=self._effective_minutes(),
+            monthly_limit=int(self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)),
+            enable_alerts=bool(self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS)),
+            enable_minutecast=bool(self._get(CONF_ENABLE_MINUTECAST, DEFAULT_ENABLE_MINUTECAST)),
+            hourly_hours=int(self._get(CONF_WEATHER_HOURLY_HOURS, DEFAULT_WEATHER_HOURLY_HOURS)),
+            automagic=automagic,
+            manual_tick_minutes=(
+                None if automagic else int(self._get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))
+            ),
+        )
+
     def _next_step(self, after: str) -> str | None:
         """Return next step ID after `after`, or None to create entry."""
         automagic = self._automagic()
         order = ["apis", "air_quality", "weather", "api_limits"]
         # Detail steps and api_limits only shown in manual mode
         enable_map = {
-            "air_quality": (not automagic) and self._options.get(CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY),
-            "weather": (not automagic) and self._options.get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER),
+            "air_quality": self._options.get(CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY),
+            "weather": self._options.get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER),
+            # Custom limits stay manual-only; automagic derives them.
             "api_limits": not automagic,
         }
         found = False
@@ -734,8 +783,8 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             self._options.update(user_input)
-            if self._automagic():
-                return self._create_entry()
+            # Automagic used to jump straight to done here, which made the API,
+            # air-quality and weather steps unreachable at default settings.
             return await self.async_step_apis()
 
         schema = vol.Schema({
@@ -784,15 +833,21 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         }
 
         if automagic:
-            usage_text = "Air quality and pollen update hourly. Weather updates automatically based on your location count."
+            usage_text = (
+                "Air quality and pollen update hourly. Weather endpoints refresh "
+                "independently: "
+                + _weather_summary(
+                    self._resolve_weather_plan(),
+                    int(self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)),
+                )
+            )
         else:
             interval = self._get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
             num_loc = self._num_locations()
             aq_limit = self._get(CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT)
             pollen_limit = self._get(CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT)
             weather_limit = self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)
-            enable_alerts = self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS)
-            weather_calls = _WEATHER_CALLS_PER_POLL + (1 if enable_alerts else 0)
+            weather_plan = self._resolve_weather_plan()
             qh_enabled = self._get(CONF_QUIET_HOURS_ENABLED, DEFAULT_QUIET_HOURS_ENABLED)
             if qh_enabled:
                 eff_minutes = _quiet_active_minutes_per_month(
@@ -801,17 +856,13 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
                 )
             else:
                 eff_minutes = _billing_month_days() * 24 * 60
-            enabled_apis: dict[str, tuple[int, int]] = {}
-            if enable_weather:
-                enabled_apis["weather"] = (weather_calls, DEFAULT_WEATHER_MONTHLY_LIMIT)
-            safe = safe_interval_minutes(num_loc, enabled_apis, eff_minutes)
             summary = _usage_summary(
-                interval, num_loc, enable_aq, enable_pollen, enable_weather,
+                weather_plan.tick_minutes, num_loc, enable_aq, enable_pollen, enable_weather,
                 True, aq_limit, pollen_limit, weather_limit,
-                weather_calls_per_poll=weather_calls,
+                weather_monthly_calls=weather_plan.total_monthly_calls,
                 minutes_per_month=eff_minutes,
             )
-            usage_text = f"{summary} Suggested weather minimum: {safe} min."
+            usage_text = f"{summary} {_weather_summary(weather_plan, int(weather_limit))}"
             fields[vol.Required(CONF_UPDATE_INTERVAL)] = NumberSelector(
                 NumberSelectorConfig(
                     min=15, max=1440, step=5, unit_of_measurement="min",
@@ -891,6 +942,11 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
+            # SelectSelector returns strings; the rest of the code expects an int.
+            if CONF_WEATHER_HOURLY_HOURS in user_input:
+                user_input[CONF_WEATHER_HOURLY_HOURS] = int(
+                    user_input[CONF_WEATHER_HOURLY_HOURS]
+                )
             self._options.update(user_input)
             next_step = self._next_step("weather")
             if next_step:
@@ -904,15 +960,47 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
                     mode=SelectSelectorMode.DROPDOWN,
                 )
             ),
+            # A dropdown rather than a number box: Google caps pageSize at 24, so
+            # only multiples of 24 avoid paying for a page you barely use, and
+            # putting the cost in the label is the clearest quota UI available.
+            vol.Required(CONF_WEATHER_HOURLY_HOURS): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(
+                            value=str(hours),
+                            label=(
+                                f"{hours} hours "
+                                f"({weather_hourly_pages(hours)} API call"
+                                f"{'s' if weather_hourly_pages(hours) > 1 else ''} per refresh)"
+                                + (" — default" if hours == DEFAULT_WEATHER_HOURLY_HOURS else "")
+                            ),
+                        )
+                        for hours in WEATHER_HOURLY_HOURS_CHOICES
+                    ],
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Required(CONF_ENABLE_WEATHER_ALERTS): BooleanSelector(),
+            vol.Required(CONF_ENABLE_MINUTECAST): BooleanSelector(),
         })
         suggested = {
             CONF_WEATHER_UNITS: self._get(CONF_WEATHER_UNITS, DEFAULT_WEATHER_UNITS),
+            CONF_WEATHER_HOURLY_HOURS: str(
+                self._get(CONF_WEATHER_HOURLY_HOURS, DEFAULT_WEATHER_HOURLY_HOURS)
+            ),
             CONF_ENABLE_WEATHER_ALERTS: self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS),
+            CONF_ENABLE_MINUTECAST: self._get(CONF_ENABLE_MINUTECAST, DEFAULT_ENABLE_MINUTECAST),
         }
+        plan = self._resolve_weather_plan()
         return self.async_show_form(
             step_id="weather",
             data_schema=self.add_suggested_values_to_schema(schema, suggested),
+            description_placeholders={
+                "usage": _weather_summary(
+                    plan,
+                    int(self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)),
+                )
+            },
         )
 
     # -------------------------------------------------------------------------
@@ -926,27 +1014,19 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             self._options.update(user_input)
             return self._create_entry()
 
-        interval = self._options.get(CONF_UPDATE_INTERVAL, self._get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))
         num_loc = self._num_locations()
         enable_aq = self._options.get(CONF_ENABLE_AIR_QUALITY, self._get(CONF_ENABLE_AIR_QUALITY, DEFAULT_ENABLE_AIR_QUALITY))
         enable_pollen = self._options.get(CONF_ENABLE_POLLEN, self._get(CONF_ENABLE_POLLEN, DEFAULT_ENABLE_POLLEN))
         enable_weather = self._options.get(CONF_ENABLE_WEATHER, self._get(CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER))
-        _alerts = self._options.get(CONF_ENABLE_WEATHER_ALERTS, self._get(CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS))
-        qh_enabled = self._get(CONF_QUIET_HOURS_ENABLED, DEFAULT_QUIET_HOURS_ENABLED)
-        if qh_enabled:
-            eff_minutes = _quiet_active_minutes_per_month(
-                self._get(CONF_QUIET_START, DEFAULT_QUIET_START),
-                self._get(CONF_QUIET_END, DEFAULT_QUIET_END),
-            )
-        else:
-            eff_minutes = _billing_month_days() * 24 * 60
+        eff_minutes = self._effective_minutes()
+        weather_plan = self._resolve_weather_plan()
         summary = _usage_summary(
-            interval, num_loc, enable_aq, enable_pollen, enable_weather,
+            weather_plan.tick_minutes, num_loc, enable_aq, enable_pollen, enable_weather,
             False,
             self._get(CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT),
             self._get(CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT),
             self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT),
-            weather_calls_per_poll=_WEATHER_CALLS_PER_POLL + (1 if _alerts else 0),
+            weather_monthly_calls=weather_plan.total_monthly_calls,
             minutes_per_month=eff_minutes,
         )
 

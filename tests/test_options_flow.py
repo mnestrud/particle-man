@@ -1,28 +1,25 @@
 """Tests for particle_man options flow."""
 from __future__ import annotations
 
-import re
 from unittest.mock import patch
-
-import pytest
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.particle_man.const import (
     CONF_AQ_MONTHLY_LIMIT,
     CONF_AUTOMAGIC_MODE,
     CONF_ENABLE_AIR_QUALITY,
+    CONF_ENABLE_MINUTECAST,
     CONF_ENABLE_POLLEN,
     CONF_ENABLE_WEATHER,
     CONF_ENABLE_WEATHER_ALERTS,
     CONF_FORECAST_DAYS,
     CONF_LANGUAGE,
+    CONF_LATITUDE,
     CONF_LOCAL_AQI,
     CONF_LOCAL_AQI_CODE,
-    CONF_LATITUDE,
     CONF_LOCATION_NAME,
     CONF_LOCATIONS,
     CONF_LONGITUDE,
@@ -31,6 +28,7 @@ from custom_components.particle_man.const import (
     CONF_QUIET_HOURS_ENABLED,
     CONF_QUIET_START,
     CONF_UPDATE_INTERVAL,
+    CONF_WEATHER_HOURLY_HOURS,
     CONF_WEATHER_MONTHLY_LIMIT,
     CONF_WEATHER_UNITS,
     DEFAULT_AQ_MONTHLY_LIMIT,
@@ -40,7 +38,6 @@ from custom_components.particle_man.const import (
     DEFAULT_POLLEN_MONTHLY_LIMIT,
     DEFAULT_QUIET_END,
     DEFAULT_QUIET_START,
-    DEFAULT_UPDATE_INTERVAL,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
     DOMAIN,
 )
@@ -48,8 +45,8 @@ from tests.conftest import (
     MOCK_ENTRY_DATA,
     MOCK_ENTRY_OPTIONS,
     TEST_LAT,
-    TEST_LON,
     TEST_LOCATION_NAME,
+    TEST_LON,
 )
 
 _PATCH_COVERAGE = "custom_components.particle_man.config_flow._check_api_coverage"
@@ -90,7 +87,43 @@ async def test_options_automagic_complete_path(
             CONF_QUIET_END: DEFAULT_QUIET_END,
         },
     )
+    # Automagic used to finish here, which made every API and detail option
+    # unreachable at default settings.
+    assert result["step_id"] == "apis"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_ENABLE_AIR_QUALITY: True,
+            CONF_ENABLE_POLLEN: True,
+            CONF_ENABLE_WEATHER: True,
+        },
+    )
+    assert result["step_id"] == "air_quality"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_FORECAST_DAYS: DEFAULT_FORECAST_DAYS,
+            CONF_LANGUAGE: DEFAULT_LANGUAGE,
+            CONF_LOCAL_AQI: False,
+            CONF_LOCAL_AQI_CODE: DEFAULT_LOCAL_AQI_CODE,
+        },
+    )
+    assert result["step_id"] == "weather"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_WEATHER_UNITS: "METRIC",
+            CONF_WEATHER_HOURLY_HOURS: "120",
+            CONF_ENABLE_WEATHER_ALERTS: True,
+            CONF_ENABLE_MINUTECAST: False,
+        },
+    )
+    # api_limits stays manual-only, so automagic finishes here.
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_WEATHER_HOURLY_HOURS] == 120
 
 
 async def test_options_manual_all_apis_path(
@@ -145,7 +178,9 @@ async def test_options_manual_all_apis_path(
         result["flow_id"],
         {
             CONF_WEATHER_UNITS: "METRIC",
+            CONF_WEATHER_HOURLY_HOURS: "120",
             CONF_ENABLE_WEATHER_ALERTS: False,
+            CONF_ENABLE_MINUTECAST: False,
         },
     )
     assert result["step_id"] == "api_limits"
@@ -673,6 +708,11 @@ async def test_step_weather_create_entry_no_next_step(
     with patch.object(flow_obj, "_next_step", return_value=None):
         result = await hass.config_entries.options.async_configure(
             flow_id,
-            {CONF_WEATHER_UNITS: "METRIC", CONF_ENABLE_WEATHER_ALERTS: False},
+            {
+                CONF_WEATHER_UNITS: "METRIC",
+                CONF_WEATHER_HOURLY_HOURS: "120",
+                CONF_ENABLE_WEATHER_ALERTS: False,
+                CONF_ENABLE_MINUTECAST: False,
+            },
         )
     assert result["type"] == FlowResultType.CREATE_ENTRY
