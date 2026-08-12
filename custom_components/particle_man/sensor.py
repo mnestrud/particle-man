@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from datetime import date as _date
 from datetime import datetime as _datetime
+from datetime import timedelta
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
@@ -19,11 +20,14 @@ from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
     UnitOfTemperature,
+    UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     _AQ_CALLS_PER_POLL,
@@ -106,6 +110,17 @@ def _add_dynamic_entities(
             UvIndexCategorySensor(coordinator),
         ])
         known.add("weather_current")
+
+    # Nowcast entities appear the first time minutecast data lands, so enabling
+    # the option does not require a reload.
+    if coordinator.enable_weather and "weather_minute" in data and "weather_minute" not in known:
+        out.extend([
+            MinutesUntilPrecipitationSensor(coordinator),
+            PrecipitationEndsInSensor(coordinator),
+            PrecipitationIntensitySensor(coordinator),
+            PrecipitationTypeSensor(coordinator),
+        ])
+        known.add("weather_minute")
 
 
 async def async_setup_entry(
@@ -830,6 +845,211 @@ class UvIndexCategorySensor(_BaseWeatherSensor):
             "uv_index": val,
             ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
         }
+
+
+# ---------------------------------------------------------------------------
+# Minutecast (experimental 6-hour precipitation nowcast)
+# ---------------------------------------------------------------------------
+
+class _BaseMinutecastSensor(_BaseWeatherSensor):
+    """Nowcast sensor whose state is a function of the current time.
+
+    The coordinator refreshes at most every 15 minutes, but a countdown has to
+    tick every minute or it freezes and then jumps — useless for the "close the
+    windows" automation this exists for. State is therefore derived in
+    native_value from utcnow, and the entity re-renders itself on a timer.
+    """
+
+    _attr_entity_registry_enabled_default = True
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._async_tick, timedelta(minutes=1))
+        )
+
+    @callback
+    def _async_tick(self, _now: _datetime) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def _minute(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.coordinator.data.get("weather_minute") or {})
+
+    @property
+    def _is_stale(self) -> bool:
+        """True once the forecast window has run out.
+
+        A six-hour nowcast fetched six hours ago carries forward as data but
+        says nothing about now, so it must not be reported as fact.
+        """
+        end = dt_util.parse_datetime(self._minute.get("horizon_end") or "")
+        return end is None or dt_util.utcnow() > end
+
+    def _active_run(self) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Return (run covering now, next run starting later)."""
+        now = dt_util.utcnow()
+        current = upcoming = None
+        for run in self._minute.get("runs") or []:
+            start = dt_util.parse_datetime(run.get("start") or "")
+            end = dt_util.parse_datetime(run.get("end") or "")
+            if start is None or end is None:
+                continue
+            if start <= now < end:
+                current = run
+                break
+            if start > now:
+                upcoming = run
+                break
+        return current, upcoming
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._minute) and not self._is_stale
+
+
+class MinutesUntilPrecipitationSensor(_BaseMinutecastSensor):
+    _attr_translation_key = "minutes_until_precipitation"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _unrecorded_attributes = frozenset({"segments", "runs"})
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_minutes_until_precipitation"
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        if self._is_stale:
+            return None
+        current, upcoming = self._active_run()
+        if current is not None:
+            return 0
+        if upcoming is None:
+            return None
+        start = dt_util.parse_datetime(upcoming.get("start") or "")
+        if start is None:
+            return None
+        # Floor, so "0" reads as "already falling or starting within the
+        # minute"; is_precipitating disambiguates the two.
+        return max(0, int((start - dt_util.utcnow()).total_seconds() // 60))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self._minute
+        current, upcoming = self._active_run()
+        run = current or upcoming
+        return {
+            "is_precipitating": current is not None,
+            "starts_at": (run or {}).get("start"),
+            "ends_at": (run or {}).get("end"),
+            "type": (run or {}).get("type"),
+            "types": (run or {}).get("types", []),
+            "max_intensity": (run or {}).get("max_intensity"),
+            "max_probability": (run or {}).get("max_probability"),
+            "runs": info.get("runs", []),
+            "segments": info.get("segments", []),
+            "horizon_start": info.get("horizon_start"),
+            "horizon_end": info.get("horizon_end"),
+            "stale": self._is_stale,
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class PrecipitationEndsInSensor(_BaseMinutecastSensor):
+    _attr_translation_key = "precipitation_ends_in"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_precipitation_ends_in"
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        if self._is_stale:
+            return None
+        current, _ = self._active_run()
+        if current is None:
+            return None  # nothing falling, so nothing to end
+        end = dt_util.parse_datetime(current.get("end") or "")
+        if end is None:
+            return None
+        return max(0, int((end - dt_util.utcnow()).total_seconds() // 60))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        current, _ = self._active_run()
+        return {
+            "is_precipitating": current is not None,
+            "ends_at": (current or {}).get("end"),
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class PrecipitationIntensitySensor(_BaseMinutecastSensor):
+    _attr_translation_key = "precipitation_intensity"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_precipitation_intensity"
+        )
+
+    def _segment_now(self) -> dict[str, Any] | None:
+        now = dt_util.utcnow()
+        for seg in self._minute.get("segments") or []:
+            start = dt_util.parse_datetime(seg.get("start") or "")
+            end = dt_util.parse_datetime(seg.get("end") or "")
+            if start is not None and end is not None and start <= now < end:
+                return cast("dict[str, Any]", seg)
+        return None
+
+    @property
+    def native_value(self) -> str | None:
+        if self._is_stale:
+            return None
+        seg = self._segment_now()
+        if seg is None:
+            # Google's window can start a few minutes ahead of "now", leaving a
+            # brief uncovered gap. That is unknown, not clear.
+            return None
+        return cast("str | None", seg.get("intensity"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        seg = self._segment_now() or {}
+        return {
+            "probability": seg.get("probability"),
+            "qpf": seg.get("qpf"),
+            "snowfall": seg.get("snowfall"),
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class PrecipitationTypeSensor(PrecipitationIntensitySensor):
+    _attr_translation_key = "precipitation_type"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_precipitation_type"
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        if self._is_stale:
+            return None
+        seg = self._segment_now()
+        if seg is None:
+            return None
+        return cast("str | None", seg.get("type"))
 
 
 # ---------------------------------------------------------------------------

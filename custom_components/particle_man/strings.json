@@ -54,26 +54,80 @@
   },
   "entity": {
     "sensor": {
-      "aqi": {"name": "Universal AQI"},
-      "aqi_level": {"name": "Universal AQI Level"},
-      "aq_advisory": {"name": "Air Quality Advisory"},
-      "pollen_advisory": {"name": "Pollen Advisory"},
-      "weather_alert_count": {"name": "Weather Alert Count"},
-      "weather_alert_highest_severity": {"name": "Weather Alert Highest Severity"},
-      "weather_alert_active_event_types": {"name": "Weather Alert Event Types"},
-      "thunderstorm_probability": {"name": "Thunderstorm Probability"},
-      "heat_index": {"name": "Heat Index"},
-      "wind_chill": {"name": "Wind Chill"},
-      "uv_index_category": {"name": "UV Index Category"},
-      "aq_last_fetch": {"name": "AQ Last Fetched"},
-      "pollen_last_fetch": {"name": "Pollen Last Fetched"},
-      "weather_last_fetch": {"name": "Weather Last Fetched"},
-      "monthly_aq_calls": {"name": "AQ API Calls (Monthly)"},
-      "monthly_pollen_calls": {"name": "Pollen API Calls (Monthly)"},
-      "monthly_weather_calls": {"name": "Weather API Calls (Monthly)"}
+      "aqi": {
+        "name": "Universal AQI"
+      },
+      "aqi_level": {
+        "name": "Universal AQI Level"
+      },
+      "aq_advisory": {
+        "name": "Air Quality Advisory"
+      },
+      "pollen_advisory": {
+        "name": "Pollen Advisory"
+      },
+      "weather_alert_count": {
+        "name": "Weather Alert Count"
+      },
+      "weather_alert_highest_severity": {
+        "name": "Weather Alert Highest Severity"
+      },
+      "weather_alert_active_event_types": {
+        "name": "Weather Alert Event Types"
+      },
+      "thunderstorm_probability": {
+        "name": "Thunderstorm Probability"
+      },
+      "heat_index": {
+        "name": "Heat Index"
+      },
+      "wind_chill": {
+        "name": "Wind Chill"
+      },
+      "uv_index_category": {
+        "name": "UV Index Category"
+      },
+      "aq_last_fetch": {
+        "name": "AQ Last Fetched"
+      },
+      "pollen_last_fetch": {
+        "name": "Pollen Last Fetched"
+      },
+      "weather_last_fetch": {
+        "name": "Weather Last Fetched"
+      },
+      "monthly_aq_calls": {
+        "name": "AQ API Calls (Monthly)"
+      },
+      "monthly_pollen_calls": {
+        "name": "Pollen API Calls (Monthly)"
+      },
+      "monthly_weather_calls": {
+        "name": "Weather API Calls (Monthly)"
+      },
+      "minutes_until_precipitation": {
+        "name": "Minutes Until Precipitation"
+      },
+      "precipitation_ends_in": {
+        "name": "Precipitation Ends In"
+      },
+      "precipitation_intensity": {
+        "name": "Precipitation Intensity"
+      },
+      "precipitation_type": {
+        "name": "Precipitation Type"
+      },
+      "weather_hourly_forecast": {
+        "name": "Hourly Forecast"
+      },
+      "weather_daily_forecast": {
+        "name": "Daily Forecast"
+      }
     },
     "switch": {
-      "quiet_hours": {"name": "Quiet Hours"}
+      "quiet_hours": {
+        "name": "Quiet Hours"
+      }
     }
   },
   "options": {
@@ -210,6 +264,14 @@
     "api_quota_exhausted": {
       "title": "{api_name} API quota exhausted",
       "description": "The {api_name} API monthly call quota has been reached. Data updates are paused until the next billing cycle. To resume sooner, increase the monthly limit in the integration options or disable Automagic mode."
+    },
+    "minutecast_unavailable": {
+      "title": "Minute forecast unavailable for {location}",
+      "description": "Google returned no minute-by-minute forecast for {location}. This endpoint is experimental and is not available everywhere. The feature has been paused for this location and will be retried the next time Particle Man reloads. No other weather data is affected."
+    },
+    "weather_budget_degraded": {
+      "title": "Weather refresh reduced to stay within the API limit",
+      "description": "Your configured locations need more Google Weather API calls than the monthly limit allows, so refresh intervals have been lengthened. Hourly forecast horizon is now {hours} hours; disabled endpoints: {dropped}. Reduce the number of locations, shorten the hourly forecast, or raise the monthly limit to restore full speed."
     }
   }
 }

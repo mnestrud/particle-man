@@ -1,6 +1,7 @@
 """Particle Man weather entity."""
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, cast
 
 from homeassistant.components.weather import (  # type: ignore[attr-defined]
@@ -16,7 +17,13 @@ from homeassistant.const import (
     UnitOfSpeed,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -26,6 +33,8 @@ from .const import DOMAIN, WEATHER_ATTRIBUTION
 from .coordinator import ParticleManCoordinator
 
 PARALLEL_UPDATES = 1
+
+SERVICE_GET_MINUTE_FORECAST = "get_minute_forecast"
 
 
 async def async_setup_entry(
@@ -42,6 +51,16 @@ async def async_setup_entry(
         if coordinator.enable_weather
     ]
     async_add_entities(entities, True)
+
+    # Matches the convention core's OpenWeatherMap integration established and
+    # that nowcast-capable frontend cards look for, resolving the service
+    # domain from the entity's platform.
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        SERVICE_GET_MINUTE_FORECAST,
+        None,
+        "async_get_minute_forecast",
+        supports_response=SupportsResponse.ONLY,
+    )
 
 
 class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntity):
@@ -207,3 +226,50 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
 
     async def async_forecast_twice_daily(self) -> list[Forecast] | None:
         return self.coordinator.data.get("weather_twice_daily") or None
+
+    async def async_get_minute_forecast(self) -> ServiceResponse:
+        """Return the minute-by-minute precipitation nowcast.
+
+        The two canonical keys — `datetime` and `precipitation` in mm/h — match
+        what core's OpenWeatherMap integration returns, so cards built against
+        that convention work unmodified. Richer fields are added alongside them,
+        never instead of them.
+
+        Only the first hour is returned. Consumers of this convention expect a
+        roughly 60-minute window, and the full six hours is available on the
+        nowcast sensor's attributes for anything that wants it.
+
+        `precipitation` is derived by dividing each segment's forecast quantity
+        by its duration. Google does not document whether that quantity is an
+        accumulation for the bucket or already a rate; this assumes the former.
+        """
+        info = self.coordinator.data.get("weather_minute") or {}
+        now = dt_util.utcnow()
+        cutoff = now + timedelta(hours=1)
+        forecast: list[dict[str, Any]] = []
+
+        for seg in info.get("segments") or []:
+            start = dt_util.parse_datetime(seg.get("start") or "")
+            end = dt_util.parse_datetime(seg.get("end") or "")
+            if start is None or end is None or start >= cutoff:
+                continue
+
+            hours = (end - start).total_seconds() / 3600
+            qpf = seg.get("qpf")
+            if isinstance(qpf, (int, float)) and hours > 0:
+                rate: float | None = round(qpf / hours, 4)
+            else:
+                rate = 0.0 if qpf is None else None
+
+            forecast.append({
+                "datetime": seg["start"],
+                # A dry segment is 0, not absent — omitting it would make
+                # consumers draw a gap where there is simply no rain.
+                "precipitation": rate if seg.get("precipitation") else 0.0,
+                "type": seg.get("type"),
+                "probability": seg.get("probability"),
+                "intensity": seg.get("intensity"),
+                "end": seg.get("end"),
+            })
+
+        return {"forecast": cast("list[Any]", forecast)}
