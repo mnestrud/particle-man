@@ -848,14 +848,7 @@ class ParticleManOptionsFlow(config_entries.OptionsFlow):
             pollen_limit = self._get(CONF_POLLEN_MONTHLY_LIMIT, DEFAULT_POLLEN_MONTHLY_LIMIT)
             weather_limit = self._get(CONF_WEATHER_MONTHLY_LIMIT, DEFAULT_WEATHER_MONTHLY_LIMIT)
             weather_plan = self._resolve_weather_plan()
-            qh_enabled = self._get(CONF_QUIET_HOURS_ENABLED, DEFAULT_QUIET_HOURS_ENABLED)
-            if qh_enabled:
-                eff_minutes = _quiet_active_minutes_per_month(
-                    self._get(CONF_QUIET_START, DEFAULT_QUIET_START),
-                    self._get(CONF_QUIET_END, DEFAULT_QUIET_END),
-                )
-            else:
-                eff_minutes = _billing_month_days() * 24 * 60
+            eff_minutes = self._effective_minutes()
             summary = _usage_summary(
                 weather_plan.tick_minutes, num_loc, enable_aq, enable_pollen, enable_weather,
                 True, aq_limit, pollen_limit, weather_limit,

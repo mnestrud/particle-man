@@ -36,6 +36,10 @@ This checklist is not optional. "Resume directly" does not skip it.
 
 Platforms: `SENSOR, SWITCH, WEATHER` | Min HA: `2025.1.0` | Repo: `https://github.com/mnestrud/particle-man`
 
+Ruff is **pinned** in `validate.yml` — an unpinned linter turns every upstream
+release into a CI break with no code change. Install it locally with
+`.venv/bin/pip install ruff==0.16.2` to match CI.
+
 ---
 
 ## Running Tests Locally
@@ -62,7 +66,7 @@ python -m venv .venv
 ```
 
 Target: ≥95% coverage overall; 100% on config_flow. Any PR to main must hit this.
-Current baseline: 231 tests, 99% overall, 100% config_flow (2026-04-23).
+Current baseline: 523 tests, 98% overall, 100% config_flow (2026-08-12).
 
 ---
 

@@ -1,7 +1,9 @@
 {
   "domain": "particle_man",
   "name": "Particle Man",
-  "codeowners": ["@mnestrud"],
+  "codeowners": [
+    "@mnestrud"
+  ],
   "config_flow": true,
   "documentation": "https://mnestrud.github.io/particle-man/",
   "integration_type": "service",
@@ -9,5 +11,5 @@
   "issue_tracker": "https://github.com/mnestrud/particle-man/issues",
   "quality_scale": "platinum",
   "requirements": [],
-  "version": "1.5.3"
+  "version": "1.6.0"
 }

@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.6.0] — 2026-08-12
+
+### Added
+
+- **Longer hourly forecasts** — the hourly forecast now reaches up to 240 hours, configurable in Configure → Weather Options (24 / 48 / 72 / 120 / 240, default **120**). Google returns at most 24 hours per API call, so each choice states its per-refresh cost.
+- **Minute-by-minute precipitation nowcast** (opt-in, experimental) — a six-hour precipitation forecast refreshed every 15 minutes, adding **Minutes Until Precipitation**, **Precipitation Ends In**, **Precipitation Intensity** and **Precipitation Type** sensors. These update every minute independently of the API refresh, so countdowns stay accurate between fetches.
+- **`particle_man.get_minute_forecast` action** — returns the next hour of nowcast data in the same shape as Home Assistant's OpenWeatherMap integration, so nowcast-capable dashboard cards work against it.
+- **Hourly Forecast and Daily Forecast sensors** (disabled by default) — expose the full forecast list as an attribute, so templates can reach forecast data without building a trigger-based template sensor. Matches how the air quality and pollen sensors already work.
+- Weather diagnostics now report the resolved plan: per-endpoint cadences, page counts, projected monthly calls, scale factor, and which endpoints (if any) were disabled to fit the budget.
+
+### Changed
+
+- **Weather endpoints now refresh on independent cadences** instead of all firing on every poll. Current conditions every 15 min, hourly forecast every 60, daily every 180, alerts every 30. At one location this projects **6,324 calls/month against the 10,000 free tier, down from 8,928** — while extending the hourly forecast from 24 to 120 hours.
+- **Quota exhaustion now degrades instead of stopping dead.** Past 95% of the monthly weather limit only alerts and current conditions keep running; below that, endpoints drop in reverse priority order until the refresh fits the remaining quota.
+- **Billable calls are now counted on any HTTP response**, including errors. A failed request still consumes quota, so reported usage may be slightly higher than before — it is more accurate, not higher in reality.
+- **`calls_per_poll` on the weather diagnostic sensor is now an average** (a float) rather than a fixed integer, because endpoints refresh at different rates. The relationship it always satisfied still holds: `calls_per_poll × (effective_minutes ÷ fetch_interval_minutes) ≈ projected_monthly_calls`.
+- **The options flow no longer skips the API and detail steps in Automagic mode.** Weather units, alerts, forecast length, air-quality and language options were previously unreachable at default settings.
+- Air quality and pollen forecast arrays are no longer written to the recorder database. Nothing is lost — the frontend and templates still see them.
+
+### Fixed
+
+- **Quiet hours used the host's timezone rather than the one Home Assistant is configured for.** On any install where those differ, quiet hours started and ended at the wrong time — and since quiet hours feed the polling budget, so did the usage projection.
+- A malformed response from one weather endpoint no longer aborts the whole update; the other endpoints, and air quality and pollen, keep their data.
+- Weather endpoints no longer share a single error/backoff bucket, so a failure on one cannot suppress the others.
+- CI: the Ruff job installed an unpinned version and had been failing since an upstream release changed its default rules. Pinned, with the findings fixed.
+- Tests: the mock for the public alerts endpoint never matched its URL, so every test using it silently exercised the failure path.
+
+---
+
 ## [1.5.3] — 2026-05-05
 
 ### Added
