@@ -27,6 +27,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     _AQ_CALLS_PER_POLL,
+    _AUTOMAGIC_BUFFER,
     _PACIFIC_TZ,
     _POLLEN_CALLS_PER_POLL,
     ATTRIBUTION,
@@ -936,8 +937,9 @@ def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict
 
 def _automagic_assumption_attrs(
     coordinator: ParticleManCoordinator,
-    calls_per_poll: int,
+    calls_per_poll: float,
     fetch_interval_minutes: int,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the assumptions behind a monthly usage projection for a given API."""
     c = coordinator
@@ -951,7 +953,7 @@ def _automagic_assumption_attrs(
         eff_min = days * 24 * 60
         active_hours = 24.0
         window = None
-    return {
+    attrs = {
         "automagic_mode": c.automagic_mode,
         "num_locations": c.num_locations,
         "calls_per_poll": calls_per_poll,
@@ -961,8 +963,11 @@ def _automagic_assumption_attrs(
         "active_hours_per_day": active_hours,
         "billing_month_days": days,
         "effective_minutes_per_month": eff_min,
-        "safety_buffer_pct": 5,
+        "safety_buffer_pct": round((_AUTOMAGIC_BUFFER - 1) * 100),
     }
+    if extra:
+        attrs.update(extra)
+    return attrs
 
 
 class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
@@ -1057,8 +1062,27 @@ class MonthlyWeatherUsageSensor(_BaseDiagnosticSensor):
         attrs["shared_total_calls"] = tracking.get("weather_calls", 0)
         attrs["num_locations"] = c.num_locations
         weather_interval_min = int(c.update_interval.total_seconds() // 60) if c.update_interval else 0
+        plan = c.weather_plan
         attrs.update(_automagic_assumption_attrs(
             c, c.weather_calls_per_poll, weather_interval_min,
+            extra={
+                # Endpoints refresh independently now, so the single-interval
+                # view above is only the coordinator wake rate. These describe
+                # what actually gets fetched and how often.
+                "endpoint_cadences": dict(plan.cadences),
+                "endpoint_pages": dict(plan.pages),
+                "endpoint_calls_per_month": dict(plan.monthly_calls),
+                "endpoint_last_fetch": {
+                    name: ts.isoformat()
+                    for name, ts in c._last_weather_endpoint_fetch.items()
+                },
+                "projected_monthly_calls": plan.total_monthly_calls,
+                "cadence_scale_factor": plan.scale_factor,
+                "hourly_forecast_hours": plan.hourly_hours,
+                "minutecast_enabled": c.enable_minutecast and not c._minutecast_unavailable,
+                "dropped_endpoints": list(plan.dropped),
+                "plan_degraded": plan.degraded,
+            },
         ))
         attrs[ATTR_ATTRIBUTION] = WEATHER_ATTRIBUTION
         return attrs

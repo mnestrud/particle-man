@@ -10,15 +10,20 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.issue_registry import (
+    IssueSeverity,
+    async_create_issue,
+    async_delete_issue,
+)
 
 from .const import (
     _AQ_CALLS_PER_POLL,
     _POLLEN_CALLS_PER_POLL,
-    _WEATHER_CALLS_PER_POLL,
     CONF_API_KEY,
     CONF_AQ_MONTHLY_LIMIT,
     CONF_AUTOMAGIC_MODE,
     CONF_ENABLE_AIR_QUALITY,
+    CONF_ENABLE_MINUTECAST,
     CONF_ENABLE_POLLEN,
     CONF_ENABLE_WEATHER,
     CONF_ENABLE_WEATHER_ALERTS,
@@ -35,11 +40,13 @@ from .const import (
     CONF_QUIET_HOURS_ENABLED,
     CONF_QUIET_START,
     CONF_UPDATE_INTERVAL,
+    CONF_WEATHER_HOURLY_HOURS,
     CONF_WEATHER_MONTHLY_LIMIT,
     CONF_WEATHER_UNITS,
     DEFAULT_AQ_MONTHLY_LIMIT,
     DEFAULT_AUTOMAGIC_MODE,
     DEFAULT_ENABLE_AIR_QUALITY,
+    DEFAULT_ENABLE_MINUTECAST,
     DEFAULT_ENABLE_POLLEN,
     DEFAULT_ENABLE_WEATHER,
     DEFAULT_ENABLE_WEATHER_ALERTS,
@@ -52,12 +59,14 @@ from .const import (
     DEFAULT_QUIET_HOURS_ENABLED,
     DEFAULT_QUIET_START,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_WEATHER_HOURLY_HOURS,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
     DEFAULT_WEATHER_UNITS,
     DOMAIN,
     _billing_month_days,
     _quiet_active_minutes_per_month,
     safe_interval_minutes,
+    solve_weather_plan,
 )
 from .coordinator import ParticleManCoordinator, ParticleManGlobalState
 
@@ -114,6 +123,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     enable_weather = _opt(entry, CONF_ENABLE_WEATHER, DEFAULT_ENABLE_WEATHER)
     enable_weather_alerts = _opt(entry, CONF_ENABLE_WEATHER_ALERTS, DEFAULT_ENABLE_WEATHER_ALERTS)
     weather_units = _opt(entry, CONF_WEATHER_UNITS, DEFAULT_WEATHER_UNITS)
+    hourly_hours = int(_opt(entry, CONF_WEATHER_HOURLY_HOURS, DEFAULT_WEATHER_HOURLY_HOURS))
+    enable_minutecast = _opt(entry, CONF_ENABLE_MINUTECAST, DEFAULT_ENABLE_MINUTECAST)
     forecast_days = _opt(entry, CONF_FORECAST_DAYS, DEFAULT_FORECAST_DAYS)
     language_code = _opt(entry, CONF_LANGUAGE, DEFAULT_LANGUAGE)
     aq_monthly_limit = _opt(entry, CONF_AQ_MONTHLY_LIMIT, DEFAULT_AQ_MONTHLY_LIMIT)
@@ -123,9 +134,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     quiet_start = _opt(entry, CONF_QUIET_START, DEFAULT_QUIET_START)
     quiet_end = _opt(entry, CONF_QUIET_END, DEFAULT_QUIET_END)
 
-    # Compute effective update interval
     num_locations = len(locations)
-    weather_calls_per_poll = _WEATHER_CALLS_PER_POLL + (1 if enable_weather_alerts else 0)
 
     # Effective polling minutes this billing month, accounting for quiet hours
     if quiet_hours_enabled:
@@ -133,17 +142,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         effective_minutes = _billing_month_days() * 24 * 60
 
-    if automagic:
-        enabled_apis: dict[str, tuple[int, int]] = {}
-        if enable_weather:
-            enabled_apis["weather"] = (weather_calls_per_poll, weather_monthly_limit)
-        effective_interval = safe_interval_minutes(num_locations, enabled_apis, effective_minutes)
-        _LOGGER.debug(
-            "Particle Man Automagic: %d location(s), %d active min/month → weather interval %d min",
-            num_locations, effective_minutes, effective_interval,
+    # Weather resolves to a per-endpoint refresh plan rather than one interval.
+    weather_plan = solve_weather_plan(
+        num_locations=num_locations,
+        effective_minutes=effective_minutes,
+        monthly_limit=weather_monthly_limit,
+        enable_alerts=enable_weather_alerts,
+        enable_minutecast=enable_minutecast,
+        hourly_hours=hourly_hours,
+        automagic=automagic,
+        manual_tick_minutes=(
+            None if automagic else _opt(entry, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        ),
+    )
+
+    if enable_weather:
+        _LOGGER.info(
+            "Particle Man weather plan (%d location(s), %d active min/month): %s "
+            "→ ~%d of %d calls/month, tick %d min",
+            num_locations,
+            effective_minutes,
+            ", ".join(
+                f"{name} {cadence}m"
+                + (f" x{weather_plan.pages[name]}" if weather_plan.pages[name] > 1 else "")
+                for name, cadence in weather_plan.cadences.items()
+            ),
+            weather_plan.total_monthly_calls,
+            weather_monthly_limit,
+            weather_plan.tick_minutes,
         )
-    else:
-        effective_interval = _opt(entry, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        if weather_plan.degraded:
+            async_create_issue(
+                hass, DOMAIN, f"weather_budget_degraded_{entry.entry_id}",
+                is_fixable=False, severity=IssueSeverity.WARNING,
+                translation_key="weather_budget_degraded",
+                translation_placeholders={
+                    "hours": str(weather_plan.hourly_hours),
+                    "dropped": ", ".join(weather_plan.dropped) or "none",
+                },
+            )
+        else:
+            async_delete_issue(hass, DOMAIN, f"weather_budget_degraded_{entry.entry_id}")
 
     # AQ and pollen fetch intervals — computed from location count and monthly limits.
     # Floored at 60 min (Google's data refresh rate); stretched beyond 60 only at 7+ locations.
@@ -156,6 +195,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         num_locations, {"pollen": (_POLLEN_CALLS_PER_POLL, pollen_monthly_limit)}, effective_minutes
     )
     pollen_fetch_interval = timedelta(minutes=max(60, pollen_safe_min))
+
+    # The coordinator tick is the only wake-up for AQ and pollen too, so it must
+    # be at least as fast as the fastest thing gated on it. Without this clamp a
+    # slow weather tick at high location counts would starve the AQ gate.
+    ticks = [weather_plan.tick_minutes] if enable_weather else []
+    if enable_aq:
+        ticks.append(int(aq_fetch_interval.total_seconds() // 60))
+    if enable_pollen:
+        ticks.append(int(pollen_fetch_interval.total_seconds() // 60))
+    effective_interval = min(ticks) if ticks else DEFAULT_UPDATE_INTERVAL
 
     # Shared global state (quiet hours runtime override)
     global_state = ParticleManGlobalState()
@@ -196,7 +245,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             quiet_end=quiet_end,
             aq_fetch_interval=aq_fetch_interval,
             pollen_fetch_interval=pollen_fetch_interval,
-            weather_calls_per_poll=weather_calls_per_poll,
+            weather_plan=weather_plan,
+            enable_minutecast=enable_minutecast,
             entry_id=entry.entry_id,
             config_entry=entry,
         )

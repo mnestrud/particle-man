@@ -6,6 +6,7 @@ import hashlib
 import logging
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from datetime import time as _time
 from typing import Any, cast
@@ -24,8 +25,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    _MINUTECAST_HORIZON_MINUTES,
+    _MINUTECAST_INTENSITY_ORDER,
+    _MINUTECAST_PROBABILITY_THRESHOLD,
     _PACIFIC_TZ,
-    _WEATHER_CALLS_PER_POLL,
+    _WEATHER_HOURLY_MAX_PAGES,
+    _WEATHER_HOURLY_PAGE_SIZE,
+    _WEATHER_PRIORITY,
     BASE_URL,
     CONDITION_MAP,
     CURRENT_EXTRA_COMPUTATIONS_BASE,
@@ -52,7 +58,16 @@ from .const import (
     GAS_MW,
     MOLAR_VOL,
     POLLEN_API_URL,
+    W_ALERTS,
+    W_CURRENT,
+    W_DAYS,
+    W_HOURS,
+    W_MINUTES,
     WEATHER_API_URL,
+    WeatherPlan,
+    _billing_month_days,
+    _quiet_active_minutes_per_month,
+    solve_weather_plan,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,6 +78,89 @@ _STORAGE_KEY = "particle_man"
 # Google AQ data refreshes every hour; pollen models update daily but we match AQ cadence.
 _AQ_FETCH_INTERVAL = timedelta(hours=1)
 _POLLEN_FETCH_INTERVAL = timedelta(hours=1)
+
+# Each weather endpoint gets its own error/backoff namespace. Sharing one bucket
+# would let an expected minutecast 404 back off the entire weather stack.
+_WEATHER_ERROR_API: dict[str, str] = {
+    W_CURRENT: "weather_current",
+    W_HOURS: "weather_hours",
+    W_DAYS: "weather_days",
+    W_ALERTS: "weather_alerts",
+    W_MINUTES: "weather_minutes",
+}
+
+# Above this fraction of the monthly limit, only the endpoints that matter for
+# safety keep running.
+_WEATHER_QUOTA_RESERVE = 0.95
+
+
+@dataclass
+class _WeatherFetchResult:
+    """Outcome of one weather fetch, carrying the call count even on failure.
+
+    Pagination means a run can fail partway through having already spent
+    billable events. Raising would lose that count, so expected HTTP and
+    transport failures are returned in-band instead.
+    """
+
+    payload: dict[str, Any] | None = None
+    calls: int = 0
+    status: int | None = None
+    error: BaseException | None = None
+    partial: bool = False
+
+
+
+def _minutecast_runs(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse segments into contiguous precipitation blocks.
+
+    Buckets are not guaranteed to abut exactly, so allow a small gap before
+    treating a run as ended. Typically yields 0-3 entries, which is what
+    automations and templates actually want to reason about.
+    """
+    runs: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+
+    for seg in segments:
+        if not seg["precipitation"]:
+            current = None
+            continue
+        start = dt_util.parse_datetime(seg["start"])
+        end = dt_util.parse_datetime(seg["end"])
+        if start is None or end is None:
+            continue
+        if current is not None:
+            prev_end = dt_util.parse_datetime(current["end"])
+            contiguous = prev_end is not None and (start - prev_end) <= timedelta(seconds=60)
+        else:
+            contiguous = False
+
+        if current is None or not contiguous:
+            current = {
+                "start": seg["start"],
+                "end": seg["end"],
+                "type": seg["type"],
+                "types": [seg["type"]] if seg["type"] else [],
+                "max_intensity": seg["intensity"],
+                "max_probability": seg["probability"],
+            }
+            runs.append(current)
+            continue
+
+        current["end"] = seg["end"]
+        if seg["type"] and seg["type"] not in current["types"]:
+            current["types"].append(seg["type"])
+        if _MINUTECAST_INTENSITY_ORDER.get(
+            str(seg["intensity"]), 0
+        ) > _MINUTECAST_INTENSITY_ORDER.get(str(current["max_intensity"]), 0):
+            current["max_intensity"] = seg["intensity"]
+        if seg["probability"] is not None and (
+            current["max_probability"] is None
+            or seg["probability"] > current["max_probability"]
+        ):
+            current["max_probability"] = seg["probability"]
+
+    return runs
 
 
 class ParticleManGlobalState:
@@ -214,7 +312,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         quiet_end: str = DEFAULT_QUIET_END,
         aq_fetch_interval: timedelta = _AQ_FETCH_INTERVAL,
         pollen_fetch_interval: timedelta = _POLLEN_FETCH_INTERVAL,
-        weather_calls_per_poll: int = _WEATHER_CALLS_PER_POLL,
+        weather_plan: WeatherPlan | None = None,
+        enable_minutecast: bool = False,
         entry_id: str = "",
         config_entry: Any = None,
     ) -> None:
@@ -245,8 +344,31 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self._quiet_end = quiet_end
         self._aq_fetch_interval = aq_fetch_interval
         self._pollen_fetch_interval = pollen_fetch_interval
-        self.weather_calls_per_poll = weather_calls_per_poll
+        self.enable_minutecast = enable_minutecast
         self.entry_id = entry_id
+
+        if quiet_hours_enabled:
+            self._effective_minutes = _quiet_active_minutes_per_month(quiet_start, quiet_end)
+        else:
+            self._effective_minutes = _billing_month_days() * 24 * 60
+
+        # Callers normally hand in a solved plan; solve a matching one when they
+        # do not, so a directly-constructed coordinator still behaves sanely.
+        if weather_plan is None:
+            weather_plan = solve_weather_plan(
+                num_locations=num_locations,
+                effective_minutes=self._effective_minutes,
+                monthly_limit=int(weather_monthly_limit),
+                enable_alerts=enable_weather_alerts,
+                enable_minutecast=enable_minutecast,
+                automagic=automagic_mode,
+                manual_tick_minutes=None if automagic_mode else update_interval_minutes,
+            )
+        self._weather_plan = weather_plan
+        self._hourly_pages_effective = weather_plan.pages.get(W_HOURS, 1)
+        self._hourly_partial_failures = 0
+        self._minutecast_unavailable = False
+        self._last_weather_endpoint_fetch: dict[str, datetime] = {}
 
         key_hash = hashlib.md5(api_key.encode()).hexdigest()[:12]
         self._key_hash = key_hash
@@ -273,6 +395,113 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             config_entry=config_entry,
             always_update=False,
         )
+
+    @property
+    def weather_plan(self) -> WeatherPlan:
+        """Resolved per-endpoint refresh plan."""
+        return self._weather_plan
+
+    @property
+    def weather_calls_per_poll(self) -> float:
+        """Average billable events per coordinator tick.
+
+        Endpoints refresh at different cadences, so this is no longer a fixed
+        integer. The invariant a template can rely on still holds:
+        calls_per_poll * (effective_minutes / tick) ~= projected monthly calls.
+        """
+        plan = self._weather_plan
+        return round(
+            sum(
+                plan.pages[name] * plan.tick_minutes / cadence
+                for name, cadence in plan.cadences.items()
+            ),
+            2,
+        )
+
+    def _weather_slack(self) -> timedelta:
+        """Tolerance absorbing the coordinator's sub-second early scheduling.
+
+        HA computes the next refresh as int(loop.time()) + microsecond +
+        interval, which lands slightly early every tick. Without slack that
+        drift accumulates and a 60-minute cadence silently becomes 75. Cadences
+        are tick multiples, so a quarter-tick can never fire one early.
+        """
+        interval = self.update_interval or timedelta(minutes=15)
+        return max(timedelta(seconds=30), interval / 4)
+
+    def _weather_endpoint_enabled(self, name: str) -> bool:
+        if name in self._weather_plan.dropped:
+            return False
+        if name == W_ALERTS:
+            return self.enable_weather_alerts
+        if name == W_MINUTES:
+            return self.enable_minutecast and not self._minutecast_unavailable
+        return True
+
+    def _weather_endpoints_due(self, now: datetime) -> list[str]:
+        """Endpoints whose cadence has elapsed, in priority order."""
+        slack = self._weather_slack()
+        due: list[str] = []
+        for name in _WEATHER_PRIORITY:
+            cadence_minutes = self._weather_plan.cadences.get(name)
+            if cadence_minutes is None or not self._weather_endpoint_enabled(name):
+                continue
+            last = self._last_weather_endpoint_fetch.get(name)
+            if last is None or (now - last) >= (timedelta(minutes=cadence_minutes) - slack):
+                due.append(name)
+        return due
+
+    def _weather_endpoint_cost(self, name: str) -> int:
+        return self._hourly_pages_effective if name == W_HOURS else 1
+
+    def _weather_quota_filter(self, due: list[str]) -> tuple[list[str], bool]:
+        """Trim `due` to what the remaining monthly quota can pay for.
+
+        Drops in reverse priority order, so a nearly exhausted quota keeps
+        alerts and current conditions alive longest instead of failing all
+        weather at once.
+        """
+        if not self.automagic_mode or self.weather_monthly_limit <= 0:
+            return due, False
+
+        used = self._cached_tracking.get("weather_calls", 0)
+        remaining = max(0, self.weather_monthly_limit - used)
+        allowed = list(due)
+        blocked = False
+
+        if used >= self.weather_monthly_limit * _WEATHER_QUOTA_RESERVE:
+            keep = {W_ALERTS, W_CURRENT}
+            if any(name not in keep for name in allowed):
+                blocked = True
+            allowed = [name for name in allowed if name in keep]
+
+        while allowed and sum(self._weather_endpoint_cost(n) for n in allowed) > remaining:
+            for name in reversed(_WEATHER_PRIORITY):
+                if name in allowed:
+                    allowed.remove(name)
+                    blocked = True
+                    break
+        return allowed, blocked
+
+    def _weather_fetch(
+        self, name: str, session: aiohttp.ClientSession
+    ) -> Any:
+        return {
+            W_CURRENT: self._fetch_weather_current,
+            W_HOURS: self._fetch_weather_hourly,
+            W_DAYS: self._fetch_weather_daily,
+            W_ALERTS: self._fetch_weather_alerts,
+            W_MINUTES: self._fetch_weather_minutes,
+        }[name](session)
+
+    def _weather_build(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            W_CURRENT: self._build_weather_current_data,
+            W_HOURS: self._build_weather_hourly_data,
+            W_DAYS: self._build_weather_daily_data,
+            W_ALERTS: self._build_weather_alerts_data,
+            W_MINUTES: self._build_weather_minute_data,
+        }[name](payload)
 
     def _current_billing_month(self) -> str:
         return datetime.now(_PACIFIC_TZ).strftime("%Y-%m")
@@ -451,13 +680,14 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                         _LOGGER.debug("Air Quality fetch exception: %s", err)
 
         # --- Weather ---
+        # Each endpoint refreshes on its own cadence, so a tick typically fetches
+        # a subset. Endpoints not fetched keep their previous data via the
+        # carry-forward above.
         if self.enable_weather:
-            weather_blocked = (
-                self.automagic_mode
-                and self.weather_monthly_limit > 0
-                and self._cached_tracking.get("weather_calls", 0) >= self.weather_monthly_limit
-            )
-            if weather_blocked:
+            due, quota_blocked = self._weather_quota_filter(self._weather_endpoints_due(now))
+            due = [n for n in due if not self._is_backed_off(_WEATHER_ERROR_API[n])]
+
+            if quota_blocked:
                 async_create_issue(
                     self.hass, DOMAIN, f"weather_quota_{self.entry_id}",
                     is_fixable=False, severity=IssueSeverity.WARNING,
@@ -465,49 +695,47 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     translation_placeholders={"api_name": "Weather"},
                 )
                 _LOGGER.debug(
-                    "Weather monthly limit reached (%d/%d), skipping",
+                    "Weather quota nearly exhausted (%d/%d), running %s only",
                     self._cached_tracking.get("weather_calls", 0),
                     self.weather_monthly_limit,
+                    due or "nothing",
                 )
-            elif self._is_backed_off("weather"):
-                _LOGGER.debug("Weather API backed off until %s, skipping", self._api_backoff.get("weather"))
-            else:
-                try:
-                    weather_tasks: list[Any] = [
-                        self._fetch_weather_current(session),
-                        self._fetch_weather_hourly(session),
-                        self._fetch_weather_daily(session),
-                    ]
-                    if self.enable_weather_alerts:
-                        weather_tasks.append(self._fetch_weather_alerts(session))
 
-                    results = await asyncio.gather(*weather_tasks, return_exceptions=True)
+            if due:
+                coros = {name: self._weather_fetch(name, session) for name in due}
+                gathered = await asyncio.gather(*coros.values(), return_exceptions=True)
 
-                    w_current: dict[str, Any] = results[0] if not isinstance(results[0], Exception) else {}  # type: ignore[assignment]
-                    w_hourly: dict[str, Any] = results[1] if not isinstance(results[1], Exception) else {}  # type: ignore[assignment]
-                    w_daily: dict[str, Any] = results[2] if not isinstance(results[2], Exception) else {}  # type: ignore[assignment]
-                    w_alerts: dict[str, Any] | None = None
-                    if self.enable_weather_alerts and len(results) > 3:
-                        w_alerts = results[3] if not isinstance(results[3], Exception) else {}  # type: ignore[assignment]
+                for name, res in zip(coros.keys(), gathered, strict=True):
+                    api = _WEATHER_ERROR_API[name]
+                    if isinstance(res, BaseException):
+                        # Not an expected HTTP/transport failure — those come
+                        # back in-band — so this is a bug worth recording.
+                        self._record_api_error(api)
+                        _LOGGER.debug("Weather %s fetch raised: %s", name, res)
+                        continue
 
-                    any_failed = False
-                    for i, res in enumerate(results):
-                        if isinstance(res, Exception):
-                            any_failed = True
-                            _LOGGER.debug("Weather fetch task %d failed: %s", i, res)
+                    weather_inc += res.calls
+                    if res.error is not None or res.payload is None:
+                        if name == W_MINUTES and res.status in (400, 404):
+                            self._handle_minutecast_unavailable(res.status)
                         else:
-                            weather_inc += 1
+                            self._record_api_error(api, res.status)
+                        continue
 
-                    weather_data = self._build_weather_data(w_current, w_hourly, w_daily, w_alerts)
-                    data.update(weather_data)
-                    if not any_failed:
-                        self._last_weather_fetch = now
-                        self._clear_api_error("weather")
-                except aiohttp.ClientResponseError as err:
-                    self._record_api_error("weather", err.status)
-                except Exception as err:  # noqa: BLE001
-                    self._record_api_error("weather")
-                    _LOGGER.debug("Weather fetch exception: %s", err)
+                    try:
+                        data.update(self._weather_build(name, res.payload))
+                    except Exception as err:  # noqa: BLE001
+                        # A malformed payload must not take down the rest of the
+                        # update — the other endpoints, and AQ/pollen, already
+                        # have good data by this point.
+                        self._record_api_error(api)
+                        _LOGGER.debug("Weather %s build failed: %s", name, err)
+                        continue
+                    self._last_weather_endpoint_fetch[name] = now
+                    self._clear_api_error(api)
+
+                if self._last_weather_endpoint_fetch:
+                    self._last_weather_fetch = max(self._last_weather_endpoint_fetch.values())
 
         # --- Pollen (fetched at most once per hour — Google updates pollen models daily,
         #     but we match the AQ cadence to keep sensor freshness consistent) ---
@@ -661,84 +889,217 @@ class ParticleManCoordinator(DataUpdateCoordinator):
     # Weather fetch
     # -------------------------------------------------------------------------
 
-    async def _fetch_weather_current(self, session: aiohttp.ClientSession) -> dict[str, Any]:
-        url = f"{WEATHER_API_URL}/currentConditions:lookup"
-        params: dict[str, Any] = {
+    @property
+    def _weather_location_params(self) -> dict[str, Any]:
+        return {
             "key": self.api_key,
             "location.latitude": f"{self.latitude:.6f}",
             "location.longitude": f"{self.longitude:.6f}",
-            "unitsSystem": self.weather_units,
         }
-        async with session.get(
-            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
-        ) as resp:
-            if resp.status >= 400:
-                error_body = await resp.text()
-                _LOGGER.warning(
-                    "Google Weather currentConditions error %s: %s", resp.status, error_body[:300]
-                )
-                resp.raise_for_status()
-            return cast(dict[str, Any], await resp.json())
 
-    async def _fetch_weather_hourly(self, session: aiohttp.ClientSession) -> dict[str, Any]:
+    async def _weather_get(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        params: dict[str, Any],
+        label: str,
+    ) -> _WeatherFetchResult:
+        """One weather GET, returning failures in-band with their call cost.
+
+        A 4xx/5xx still crossed the wire and is still billed, so it counts. A
+        transport failure never got a response, so it does not.
+        """
+        try:
+            async with session.get(
+                url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                if resp.status >= 400:
+                    error_body = await resp.text()
+                    _LOGGER.warning(
+                        "Google Weather %s error %s: %s", label, resp.status, error_body[:300]
+                    )
+                    return _WeatherFetchResult(
+                        calls=1,
+                        status=resp.status,
+                        error=RuntimeError(f"{label} HTTP {resp.status}"),
+                    )
+                return _WeatherFetchResult(
+                    payload=cast(dict[str, Any], await resp.json()), calls=1
+                )
+        except (aiohttp.ClientError, TimeoutError) as err:
+            _LOGGER.debug("Google Weather %s transport failure: %s", label, err)
+            return _WeatherFetchResult(calls=0, error=err)
+
+    async def _fetch_weather_current(
+        self, session: aiohttp.ClientSession
+    ) -> _WeatherFetchResult:
+        return await self._weather_get(
+            session,
+            f"{WEATHER_API_URL}/currentConditions:lookup",
+            {**self._weather_location_params, "unitsSystem": self.weather_units},
+            "currentConditions",
+        )
+
+    async def _fetch_weather_daily(
+        self, session: aiohttp.ClientSession
+    ) -> _WeatherFetchResult:
+        return await self._weather_get(
+            session,
+            f"{WEATHER_API_URL}/forecast/days:lookup",
+            {
+                **self._weather_location_params,
+                "days": 10,
+                "pageSize": 10,
+                "unitsSystem": self.weather_units,
+            },
+            "forecast/days",
+        )
+
+    async def _fetch_weather_alerts(
+        self, session: aiohttp.ClientSession
+    ) -> _WeatherFetchResult:
+        return await self._weather_get(
+            session,
+            f"{WEATHER_API_URL}/publicAlerts:lookup",
+            dict(self._weather_location_params),
+            "publicAlerts",
+        )
+
+    async def _fetch_weather_minutes(
+        self, session: aiohttp.ClientSession
+    ) -> _WeatherFetchResult:
+        """Experimental 6-hour precipitation nowcast.
+
+        Explicitly requests a page large enough for the whole window and never
+        follows nextPageToken: paginating a ~180-segment response would multiply
+        the budgeted cost, and the onset is always on the first page anyway.
+        """
+        return await self._weather_get(
+            session,
+            f"{WEATHER_API_URL}/forecast/minutes:lookup",
+            {
+                **self._weather_location_params,
+                "unitsSystem": self.weather_units,
+                "pageSize": _MINUTECAST_HORIZON_MINUTES,
+            },
+            "forecast/minutes",
+        )
+
+    def _handle_minutecast_unavailable(self, status: int | None) -> None:
+        """Disable minutecast for this run when Google says it is not available.
+
+        The endpoint is pre-GA and its coverage is undocumented, so a 400/404 is
+        an expected answer outside the covered area rather than an outage. The
+        flag is runtime-only and re-arms on reload, so a later rollout is picked
+        up without the user touching anything — and the option itself is never
+        rewritten, which would fight them.
+        """
+        if not self._minutecast_unavailable:
+            _LOGGER.warning(
+                "Particle Man [%s]: minute forecast unavailable (HTTP %s); "
+                "disabling until reload",
+                self.location_name,
+                status,
+            )
+        self._minutecast_unavailable = True
+        async_create_issue(
+            self.hass, DOMAIN, f"minutecast_unavailable_{self.entry_id}",
+            is_fixable=False, severity=IssueSeverity.WARNING,
+            translation_key="minutecast_unavailable",
+            translation_placeholders={"location": self.location_name},
+        )
+
+    def _hourly_partial(
+        self, merged: dict[str, Any], hours: list[dict[str, Any]], calls: int, pages_done: int
+    ) -> _WeatherFetchResult:
+        """Keep the pages that did arrive when pagination breaks partway.
+
+        The list is time-ordered, so a fresh 72-hour forecast beats a stale
+        120-hour one. After repeated truncation stop paying for the page that
+        keeps failing.
+        """
+        self._hourly_partial_failures += 1
+        if self._hourly_partial_failures >= 3 and pages_done >= 1:
+            if pages_done < self._hourly_pages_effective:
+                _LOGGER.warning(
+                    "Particle Man [%s]: hourly forecast truncated %d times; "
+                    "reducing to %d page(s)",
+                    self.location_name,
+                    self._hourly_partial_failures,
+                    pages_done,
+                )
+                self._hourly_pages_effective = pages_done
+            self._hourly_partial_failures = 0
+        merged["forecastHours"] = hours
+        return _WeatherFetchResult(payload=merged, calls=calls, partial=True)
+
+    async def _fetch_weather_hourly(
+        self, session: aiohttp.ClientSession
+    ) -> _WeatherFetchResult:
+        """Paginated hourly forecast.
+
+        Google caps pageSize at 24, so anything past 24 hours costs one extra
+        billable event per page. Every page is counted, including ones that
+        return an error — an invalid pageToken still consumes quota.
+        """
         url = f"{WEATHER_API_URL}/forecast/hours:lookup"
-        params: dict[str, Any] = {
-            "key": self.api_key,
-            "location.latitude": f"{self.latitude:.6f}",
-            "location.longitude": f"{self.longitude:.6f}",
-            "hours": 24,
-            "pageSize": 24,
+        base = {
+            **self._weather_location_params,
+            "hours": self._weather_plan.hourly_hours,
+            "pageSize": _WEATHER_HOURLY_PAGE_SIZE,
             "unitsSystem": self.weather_units,
         }
-        async with session.get(
-            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
-        ) as resp:
-            if resp.status >= 400:
-                error_body = await resp.text()
-                _LOGGER.warning(
-                    "Google Weather forecast/hours error %s: %s", resp.status, error_body[:300]
-                )
-                resp.raise_for_status()
-            return cast(dict[str, Any], await resp.json())
+        max_pages = min(self._hourly_pages_effective, _WEATHER_HOURLY_MAX_PAGES)
+        merged: dict[str, Any] = {}
+        hours_out: list[dict[str, Any]] = []
+        token: str | None = None
+        calls = 0
 
-    async def _fetch_weather_daily(self, session: aiohttp.ClientSession) -> dict[str, Any]:
-        url = f"{WEATHER_API_URL}/forecast/days:lookup"
-        params: dict[str, Any] = {
-            "key": self.api_key,
-            "location.latitude": f"{self.latitude:.6f}",
-            "location.longitude": f"{self.longitude:.6f}",
-            "days": 10,
-            "pageSize": 10,
-            "unitsSystem": self.weather_units,
-        }
-        async with session.get(
-            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
-        ) as resp:
-            if resp.status >= 400:
-                error_body = await resp.text()
-                _LOGGER.warning(
-                    "Google Weather forecast/days error %s: %s", resp.status, error_body[:300]
-                )
-                resp.raise_for_status()
-            return cast(dict[str, Any], await resp.json())
+        for page in range(max_pages):
+            params = dict(base)
+            if token:
+                params["pageToken"] = token
+            try:
+                async with session.get(
+                    url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+                ) as resp:
+                    calls += 1
+                    if resp.status >= 400:
+                        error_body = await resp.text()
+                        _LOGGER.warning(
+                            "Google Weather forecast/hours page %d/%d error %s: %s",
+                            page + 1, max_pages, resp.status, error_body[:300],
+                        )
+                        if page == 0:
+                            return _WeatherFetchResult(
+                                calls=calls,
+                                status=resp.status,
+                                error=RuntimeError(f"forecast/hours HTTP {resp.status}"),
+                            )
+                        # A token can expire mid-run when data availability
+                        # changes. That is a data condition, not an outage, so
+                        # keep what arrived and do not trip the backoff.
+                        return self._hourly_partial(merged, hours_out, calls, page)
+                    payload = cast(dict[str, Any], await resp.json())
+            except (aiohttp.ClientError, TimeoutError) as err:
+                _LOGGER.debug("Google Weather forecast/hours transport failure: %s", err)
+                if page == 0:
+                    return _WeatherFetchResult(calls=calls, error=err)
+                return self._hourly_partial(merged, hours_out, calls, page)
 
-    async def _fetch_weather_alerts(self, session: aiohttp.ClientSession) -> dict[str, Any]:
-        url = f"{WEATHER_API_URL}/publicAlerts:lookup"
-        params: dict[str, Any] = {
-            "key": self.api_key,
-            "location.latitude": f"{self.latitude:.6f}",
-            "location.longitude": f"{self.longitude:.6f}",
-        }
-        async with session.get(
-            url, params=params, timeout=aiohttp.ClientTimeout(total=15)
-        ) as resp:
-            if resp.status >= 400:
-                error_body = await resp.text()
-                _LOGGER.warning(
-                    "Google Weather publicAlerts error %s: %s", resp.status, error_body[:300]
-                )
-                resp.raise_for_status()
-            return cast(dict[str, Any], await resp.json())
+            if page == 0:
+                merged = {
+                    k: v for k, v in payload.items()
+                    if k not in ("forecastHours", "nextPageToken")
+                }
+            hours_out.extend(payload.get("forecastHours") or [])
+            token = payload.get("nextPageToken")
+            if not token:
+                break
+
+        merged["forecastHours"] = hours_out
+        self._hourly_partial_failures = 0
+        return _WeatherFetchResult(payload=merged, calls=calls)
 
     # -------------------------------------------------------------------------
     # Air Quality data builders
@@ -1189,6 +1550,68 @@ class ParticleManCoordinator(DataUpdateCoordinator):
 
     def _build_weather_alerts_data(self, alerts: dict[str, Any]) -> dict[str, Any]:
         return {"weather_alerts": self._build_weather_alerts(alerts)}
+
+    def _build_weather_minute_data(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {"weather_minute": self._build_weather_minute(payload)}
+
+    def _build_weather_minute(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Normalize the nowcast payload into time-independent facts.
+
+        Everything here is static; the countdown is derived in the sensor from
+        the current time, so it stays correct between coordinator updates.
+        """
+        horizon = payload.get("overallPredictionTimeframe") or {}
+        now = dt_util.utcnow()
+
+        segments: list[dict[str, Any]] = []
+        for seg in payload.get("segments") or []:
+            frame = seg.get("timeFrame") or {}
+            start = dt_util.parse_datetime(frame.get("startTime") or "")
+            end = dt_util.parse_datetime(frame.get("endTime") or "")
+            if start is None or end is None:
+                continue
+            if end <= now:
+                continue  # already in the past; stale payload hygiene
+
+            # This endpoint reports a bare integer, unlike every other Google
+            # weather field, which nests it as {"percent": n}.
+            raw_prob = seg.get("probability")
+            probability = (
+                raw_prob.get("percent") if isinstance(raw_prob, dict) else raw_prob
+            )
+
+            ptype = str(seg.get("type") or "").upper()
+            intensity = str(seg.get("intensity") or "").upper()
+            qpf = (seg.get("qpf") or {}).get("quantity")
+            snow = (seg.get("snowfallAmount") or {}).get("quantity")
+
+            precipitating = (
+                ptype not in ("", "NONE")
+                and intensity != "NO_INTENSITY"
+                and (probability is None or probability >= _MINUTECAST_PROBABILITY_THRESHOLD)
+            )
+            segments.append({
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "type": ptype or None,
+                "probability": probability,
+                "intensity": intensity or None,
+                "qpf": qpf,
+                "snowfall": snow,
+                "precipitation": precipitating,
+            })
+
+        segments.sort(key=lambda s: s["start"])
+        return {
+            "segments": segments,
+            "runs": _minutecast_runs(segments),
+            "horizon_start": horizon.get("startTime"),
+            "horizon_end": horizon.get("endTime"),
+            "time_zone": (payload.get("timeZone") or {}).get("id"),
+            # An empty segment list on a 200 means "clear", not "unavailable" —
+            # only the 400/404 path marks the location uncovered.
+            "covered": True,
+        }
 
     def _build_weather_hourly(self, hourly: dict[str, Any]) -> list[dict[str, Any]]:
         entries = []

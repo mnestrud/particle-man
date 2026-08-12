@@ -679,32 +679,38 @@ async def test_update_data_weather_backed_off(
 async def test_update_data_weather_client_response_error(
     hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
 ) -> None:
-    """ClientResponseError from weather build hits line 503-504."""
+    """A build failure is recorded against that endpoint alone."""
     import aiohttp
     register_api_mocks(aioclient_mock)
     err = aiohttp.ClientResponseError(request_info=MagicMock(), history=(), status=503)
-    with patch.object(coordinator, "_build_weather_data", side_effect=err):
+    with patch.object(coordinator, "_build_weather_current_data", side_effect=err):
         coordinator.enable_air_quality = False
         coordinator.enable_pollen = False
         coordinator._save_tracking = AsyncMock()
         coordinator.data = {"weather_current": {}}
         await coordinator._async_update_data()
-    assert coordinator._api_failures.get("weather") == 1
+    assert coordinator._api_failures.get("weather_current") == 1
+    # Siblings are unaffected — error namespaces are per endpoint.
+    assert coordinator._api_failures.get("weather_hours") is None
 
 
 @pytest.mark.asyncio
 async def test_update_data_weather_generic_exception(
     hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
 ) -> None:
-    """Generic exception from weather build hits lines 505-507."""
+    """A generic build exception does not take down the whole update."""
     register_api_mocks(aioclient_mock)
-    with patch.object(coordinator, "_build_weather_data", side_effect=RuntimeError("build error")):
+    with patch.object(
+        coordinator, "_build_weather_current_data", side_effect=RuntimeError("build error")
+    ):
         coordinator.enable_air_quality = False
         coordinator.enable_pollen = False
         coordinator._save_tracking = AsyncMock()
         coordinator.data = {"weather_current": {}}
-        await coordinator._async_update_data()
-    assert coordinator._api_failures.get("weather") == 1
+        result = await coordinator._async_update_data()
+    assert coordinator._api_failures.get("weather_current") == 1
+    # The endpoints that parsed fine still landed.
+    assert "weather_hourly" in result
 
 
 # ---------------------------------------------------------------------------
@@ -1526,9 +1532,13 @@ def test_coordinator_custom_fetch_intervals(hass: HomeAssistant, mock_config_ent
             longitude=TEST_LON,
             aq_fetch_interval=timedelta(minutes=90),
             pollen_fetch_interval=timedelta(minutes=120),
-            weather_calls_per_poll=4,
             config_entry=mock_config_entry,
         )
     assert c._aq_fetch_interval == timedelta(minutes=90)
     assert c._pollen_fetch_interval == timedelta(minutes=120)
-    assert c.weather_calls_per_poll == 4
+    # A coordinator built without an explicit plan solves its own.
+    assert c.weather_plan.cadences
+    # calls_per_poll is now the average billable events per tick, not a fixed
+    # integer, because endpoints refresh at different cadences.
+    assert isinstance(c.weather_calls_per_poll, float)
+    assert 0 < c.weather_calls_per_poll < sum(c.weather_plan.pages.values())
