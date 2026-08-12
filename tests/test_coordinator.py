@@ -268,9 +268,9 @@ def test_is_quiet_hours_normal_range(coordinator: ParticleManCoordinator) -> Non
     coordinator._quiet_end = "12:00:00"
     # Time at 11:00 is inside range
     fake_now = datetime(2026, 4, 22, 11, 0, 0)
-    with patch("custom_components.particle_man.coordinator.datetime") as mock_dt:
-        mock_dt.now.return_value = fake_now
-        mock_dt.fromisoformat = datetime.fromisoformat
+    with patch(
+        "custom_components.particle_man.coordinator.dt_util.now", return_value=fake_now
+    ):
         assert coordinator._is_quiet_hours() is True
 
 
@@ -282,13 +282,13 @@ def test_is_quiet_hours_spans_midnight(coordinator: ParticleManCoordinator) -> N
     fake_2am = datetime(2026, 4, 22, 2, 0, 0)
     # 14:00 is outside
     fake_2pm = datetime(2026, 4, 22, 14, 0, 0)
-    with patch("custom_components.particle_man.coordinator.datetime") as mock_dt:
-        mock_dt.now.return_value = fake_2am
-        mock_dt.fromisoformat = datetime.fromisoformat
+    with patch(
+        "custom_components.particle_man.coordinator.dt_util.now", return_value=fake_2am
+    ):
         assert coordinator._is_quiet_hours() is True
-    with patch("custom_components.particle_man.coordinator.datetime") as mock_dt:
-        mock_dt.now.return_value = fake_2pm
-        mock_dt.fromisoformat = datetime.fromisoformat
+    with patch(
+        "custom_components.particle_man.coordinator.dt_util.now", return_value=fake_2pm
+    ):
         assert coordinator._is_quiet_hours() is False
 
 

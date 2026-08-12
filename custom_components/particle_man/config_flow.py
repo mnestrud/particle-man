@@ -1,14 +1,13 @@
 """Config flow for Particle Man integration."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from typing import Any, cast
 
-import asyncio
 import aiohttp
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -27,6 +26,10 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    _AQ_CALLS_PER_POLL,
+    _MINUTES_PER_MONTH,
+    _POLLEN_CALLS_PER_POLL,
+    _WEATHER_CALLS_PER_POLL,
     BASE_URL,
     CONF_API_KEY,
     CONF_AQ_MONTHLY_LIMIT,
@@ -71,10 +74,6 @@ from .const import (
     LOCAL_AQI_CODES,
     POLLEN_API_URL,
     WEATHER_API_URL,
-    _AQ_CALLS_PER_POLL,
-    _MINUTES_PER_MONTH,
-    _POLLEN_CALLS_PER_POLL,
-    _WEATHER_CALLS_PER_POLL,
     _billing_month_days,
     _quiet_active_minutes_per_month,
     safe_interval_minutes,
@@ -170,7 +169,9 @@ async def _check_api_coverage(
                     return "ok", [c for c in codes if c]
                 try:
                     body_data = await resp.json()
-                except Exception:
+                except (aiohttp.ContentTypeError, ValueError):
+                    # Error responses are not always JSON; fall back to the
+                    # status code alone rather than masking the real failure.
                     body_data = {}
                 if resp.status == 404:
                     return "not_covered", []
@@ -193,7 +194,9 @@ async def _check_api_coverage(
                     return "ok"
                 try:
                     body_data = await resp.json()
-                except Exception:
+                except (aiohttp.ContentTypeError, ValueError):
+                    # Error responses are not always JSON; fall back to the
+                    # status code alone rather than masking the real failure.
                     body_data = {}
                 if resp.status == 404:
                     return "not_covered"
@@ -217,7 +220,9 @@ async def _check_api_coverage(
                     return "ok"
                 try:
                     body_data = await resp.json()
-                except Exception:
+                except (aiohttp.ContentTypeError, ValueError):
+                    # Error responses are not always JSON; fall back to the
+                    # status code alone rather than masking the real failure.
                     body_data = {}
                 if resp.status == 404:
                     return "not_covered"
@@ -291,7 +296,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         if status in ("invalid_auth", "cannot_connect"):
                             errors["base"] = status
                             break
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Unexpected error validating Particle Man key")
                 errors["base"] = "unknown"
 
@@ -401,7 +406,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         if status in ("invalid_auth", "cannot_connect"):
                             errors["base"] = status
                             break
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Unexpected error during Particle Man reauthentication")
                 errors["base"] = "unknown"
 
@@ -452,7 +457,7 @@ class ParticleManConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         if status in ("invalid_auth", "cannot_connect"):
                             errors["base"] = status
                             break
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Unexpected error during Particle Man reconfiguration")
                 errors["base"] = "unknown"
 

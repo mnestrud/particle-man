@@ -3,21 +3,32 @@ from __future__ import annotations
 
 import calendar as _calendar
 import logging
+from collections.abc import Callable
 from datetime import date as _date
 from datetime import datetime as _datetime
-from collections.abc import Callable
 from typing import Any, cast
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ATTRIBUTION, PERCENTAGE, UnitOfTemperature
+from homeassistant.const import (
+    ATTR_ATTRIBUTION,
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    _AQ_CALLS_PER_POLL,
+    _PACIFIC_TZ,
+    _POLLEN_CALLS_PER_POLL,
     ATTRIBUTION,
     DOMAIN,
     EPA_BREAKPOINT_POLLUTANTS,
@@ -25,9 +36,6 @@ from .const import (
     POLLEN_ATTRIBUTION,
     POLLEN_COLORS,
     WEATHER_ATTRIBUTION,
-    _AQ_CALLS_PER_POLL,
-    _PACIFIC_TZ,
-    _POLLEN_CALLS_PER_POLL,
     _billing_month_days,
     _quiet_active_minutes_per_month,
 )

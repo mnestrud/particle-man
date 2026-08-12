@@ -12,6 +12,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    _AQ_CALLS_PER_POLL,
+    _POLLEN_CALLS_PER_POLL,
+    _WEATHER_CALLS_PER_POLL,
     CONF_API_KEY,
     CONF_AQ_MONTHLY_LIMIT,
     CONF_AUTOMAGIC_MODE,
@@ -27,7 +30,6 @@ from .const import (
     CONF_LOCATION_NAME,
     CONF_LOCATIONS,
     CONF_LONGITUDE,
-    DOMAIN,
     CONF_POLLEN_MONTHLY_LIMIT,
     CONF_QUIET_END,
     CONF_QUIET_HOURS_ENABLED,
@@ -52,9 +54,7 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_WEATHER_MONTHLY_LIMIT,
     DEFAULT_WEATHER_UNITS,
-    _AQ_CALLS_PER_POLL,
-    _POLLEN_CALLS_PER_POLL,
-    _WEATHER_CALLS_PER_POLL,
+    DOMAIN,
     _billing_month_days,
     _quiet_active_minutes_per_month,
     safe_interval_minutes,

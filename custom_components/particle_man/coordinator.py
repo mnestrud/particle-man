@@ -3,35 +3,38 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import re
 from collections import defaultdict
-from datetime import datetime, time as _time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
+from datetime import time as _time
 from typing import Any, cast
 
 import aiohttp
-
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.issue_registry import (
     IssueSeverity,
     async_create_issue,
     async_delete_issue,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    _PACIFIC_TZ,
+    _WEATHER_CALLS_PER_POLL,
     BASE_URL,
     CONDITION_MAP,
     CURRENT_EXTRA_COMPUTATIONS_BASE,
     DEFAULT_AQ_MONTHLY_LIMIT,
+    DEFAULT_AUTOMAGIC_MODE,
     DEFAULT_ENABLE_AIR_QUALITY,
     DEFAULT_ENABLE_POLLEN,
     DEFAULT_ENABLE_WEATHER,
     DEFAULT_ENABLE_WEATHER_ALERTS,
-    DEFAULT_AUTOMAGIC_MODE,
     DEFAULT_FORECAST_DAYS,
     DEFAULT_LANGUAGE,
     DEFAULT_LOCAL_AQI,
@@ -50,11 +53,8 @@ from .const import (
     MOLAR_VOL,
     POLLEN_API_URL,
     WEATHER_API_URL,
-    _PACIFIC_TZ,
-    _WEATHER_CALLS_PER_POLL,
 )
 
-import logging
 _LOGGER = logging.getLogger(__name__)
 
 _STORAGE_VERSION = 1
@@ -285,7 +285,10 @@ class ParticleManCoordinator(DataUpdateCoordinator):
     def _is_quiet_hours(self) -> bool:
         if not self._effective_quiet_hours_enabled():
             return False
-        now = datetime.now().time()
+        # Quiet hours are wall-clock local time. dt_util.now() follows the
+        # timezone Home Assistant is configured for; a naive datetime.now()
+        # would follow the host's, which is not always the same.
+        now = dt_util.now().time()
         try:
             start = _time.fromisoformat(self._quiet_start)
             end = _time.fromisoformat(self._quiet_end)
@@ -1330,7 +1333,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         peak = None
         for f in forecast:
             idx = f.get("index")
-            if isinstance(idx, (int, float)):
-                if peak is None or idx > peak.get("index", -1):
-                    peak = f
+            if isinstance(idx, (int, float)) and (
+                peak is None or idx > peak.get("index", -1)
+            ):
+                peak = f
         return peak
