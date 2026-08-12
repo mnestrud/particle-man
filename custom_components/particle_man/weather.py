@@ -97,6 +97,12 @@ class ParticleManWeather(CoordinatorEntity[ParticleManCoordinator], WeatherEntit
             ),
         )
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # The forecast-array sensors reuse this entity's unit conversion so
+        # their attribute matches the get_forecasts response exactly.
+        self.coordinator.weather_entity = self
+
     @callback
     def _handle_coordinator_update(self) -> None:
         super()._handle_coordinator_update()

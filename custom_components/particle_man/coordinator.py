@@ -369,6 +369,9 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         self._hourly_partial_failures = 0
         self._minutecast_unavailable = False
         self._last_weather_endpoint_fetch: dict[str, datetime] = {}
+        # Set by the weather platform once its entity is added; the forecast
+        # sensors borrow it to convert native units the same way HA does.
+        self.weather_entity: Any = None
 
         key_hash = hashlib.md5(api_key.encode()).hexdigest()[:12]
         self._key_hash = key_hash

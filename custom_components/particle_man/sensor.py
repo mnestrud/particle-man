@@ -1077,8 +1077,22 @@ class _BaseForecastArraySensor(_BaseWeatherSensor):
     _data_key = ""
 
     @property
-    def _forecast(self) -> list[dict[str, Any]]:
-        return cast(list[dict[str, Any]], self.coordinator.data.get(self._data_key) or [])
+    def _forecast(self) -> list[Any]:
+        """Forecast entries in the same shape `weather.get_forecasts` returns.
+
+        The coordinator stores entries in native units with `native_` prefixes,
+        which is what WeatherEntity wants but not what a template author does.
+        Reuse the weather entity's own conversion so this attribute is a drop-in
+        replacement for the action's response — same keys, same units, same
+        rounding — rather than a subtly different second dialect.
+        """
+        raw = cast(list[Any], self.coordinator.data.get(self._data_key) or [])
+        entity = getattr(self.coordinator, "weather_entity", None)
+        if entity is None or not raw:
+            return raw
+        # Private, but this is exactly how homeassistant.components.weather
+        # builds the get_forecasts service response.
+        return cast(list[Any], entity._convert_forecast(raw))
 
     @property
     def native_value(self) -> int:

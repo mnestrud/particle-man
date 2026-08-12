@@ -355,3 +355,42 @@ def test_forecast_array_sensors_handle_missing_data(coord) -> None:
     sensor = WeatherHourlyForecastSensor(coord)
     assert sensor.native_value == 0
     assert sensor.extra_state_attributes["forecast"] == []
+
+
+@pytest.mark.asyncio
+async def test_forecast_sensor_matches_get_forecasts_shape(coord, aioclient_mock) -> None:
+    """The attribute must be a drop-in for the action's response.
+
+    The coordinator stores native units under `native_` keys. A template author
+    reading this attribute expects what weather.get_forecasts returns —
+    `temperature`, not `native_temperature` — so the sensor reuses the weather
+    entity's own conversion rather than inventing a second dialect.
+    """
+    from custom_components.particle_man.sensor import WeatherDailyForecastSensor
+    from custom_components.particle_man.weather import ParticleManWeather
+
+    coord.data = {
+        "weather_daily": [
+            {
+                "datetime": "2026-08-12T12:00:00+00:00",
+                "condition": "sunny",
+                "native_temperature": 30.0,
+                "native_templow": 20.0,
+                "humidity": 50,
+            }
+        ]
+    }
+    sensor = WeatherDailyForecastSensor(coord)
+
+    # Without the weather entity the raw list is passed through unchanged.
+    assert "native_temperature" in sensor.extra_state_attributes["forecast"][0]
+
+    entity = ParticleManWeather(coord)
+    entity.hass = coord.hass
+    coord.weather_entity = entity
+
+    entry = sensor.extra_state_attributes["forecast"][0]
+    assert "temperature" in entry
+    assert "native_temperature" not in entry
+    assert entry["templow"] == 20.0
+    assert entry["condition"] == "sunny"
