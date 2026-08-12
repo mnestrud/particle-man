@@ -1134,13 +1134,30 @@ class ParticleManCoordinator(DataUpdateCoordinator):
         daily: dict[str, Any],
         alerts: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        result: dict[str, Any] = {}
+        """Build every weather key at once.
 
+        Deprecated: endpoints now refresh on independent cadences, so callers
+        should use the per-endpoint builders below. Writing all keys on every
+        update would erase the forecasts on any tick where only current
+        conditions were due. Retained because tests patch it.
+        """
+        result: dict[str, Any] = {}
+        result.update(self._build_weather_current_data(current))
+        result.update(self._build_weather_hourly_data(hourly))
+        result.update(self._build_weather_daily_data(daily))
+        if alerts is not None:
+            result.update(self._build_weather_alerts_data(alerts))
+        return result
+
+    # --- Per-endpoint builders: each writes only its own keys ---------------
+
+    def _build_weather_current_data(self, current: dict[str, Any]) -> dict[str, Any]:
         is_daytime = current.get("isDaytime", True)
         wind = current.get("wind") or {}
         precip = current.get("precipitation") or {}
         qpf = precip.get("qpf") or {}
 
+        result: dict[str, Any] = {}
         result["weather_current"] = {
             "condition": _w_condition(current.get("weatherCondition"), is_daytime),
             "temperature": _w_degrees(current.get("temperature")),
@@ -1161,16 +1178,17 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             "is_daytime": is_daytime,
             "datetime": current.get("currentTime"),
         }
-
-        result["weather_hourly"] = self._build_weather_hourly(hourly)
-        daily_list, twice_daily_list = self._build_weather_daily(daily)
-        result["weather_daily"] = daily_list
-        result["weather_twice_daily"] = twice_daily_list
-
-        if alerts is not None:
-            result["weather_alerts"] = self._build_weather_alerts(alerts)
-
         return result
+
+    def _build_weather_hourly_data(self, hourly: dict[str, Any]) -> dict[str, Any]:
+        return {"weather_hourly": self._build_weather_hourly(hourly)}
+
+    def _build_weather_daily_data(self, daily: dict[str, Any]) -> dict[str, Any]:
+        daily_list, twice_daily_list = self._build_weather_daily(daily)
+        return {"weather_daily": daily_list, "weather_twice_daily": twice_daily_list}
+
+    def _build_weather_alerts_data(self, alerts: dict[str, Any]) -> dict[str, Any]:
+        return {"weather_alerts": self._build_weather_alerts(alerts)}
 
     def _build_weather_hourly(self, hourly: dict[str, Any]) -> list[dict[str, Any]]:
         entries = []
