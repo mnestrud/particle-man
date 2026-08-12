@@ -213,8 +213,11 @@ def register_api_mocks(aioclient_mock) -> None:
         re.compile(r".*weather\.googleapis\.com.*days.*"),
         json=WEATHER_DAILY_RESPONSE,
     )
+    # NOTE: the path is `publicAlerts:lookup` — matching is case-sensitive, so
+    # a bare `.*alerts.*` never matches and the fetch silently 404s into the
+    # failure path. Keep re.IGNORECASE here.
     aioclient_mock.get(
-        re.compile(r".*weather\.googleapis\.com.*alerts.*"),
+        re.compile(r".*weather\.googleapis\.com.*alerts.*", re.IGNORECASE),
         json=WEATHER_ALERTS_RESPONSE,
     )
 

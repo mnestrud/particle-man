@@ -482,6 +482,29 @@ async def test_update_data_successful(
 
 
 @pytest.mark.asyncio
+async def test_update_data_counts_all_weather_endpoints(
+    hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
+) -> None:
+    """All four weather endpoints are fetched and counted when alerts are enabled.
+
+    Regression guard for the conftest alerts mock: `publicAlerts:lookup` is
+    mixed-case, so a case-sensitive `.*alerts.*` pattern never matches, the
+    request falls into the failure path, and weather_inc silently comes back
+    3 instead of 4.
+    """
+    register_api_mocks(aioclient_mock)
+    coordinator._save_tracking = AsyncMock()
+    coordinator.data = {}
+
+    result = await coordinator._async_update_data()
+
+    assert coordinator.enable_weather_alerts is True
+    assert "weather_alerts" in result
+    coordinator._save_tracking.assert_awaited_once()
+    assert coordinator._save_tracking.await_args.kwargs["weather_inc"] == 4
+
+
+@pytest.mark.asyncio
 async def test_update_data_pollen_success(
     hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
 ) -> None:
