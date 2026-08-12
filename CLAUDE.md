@@ -178,8 +178,23 @@ Invoke agents with the Agent tool (`subagent_type: ha-dev` or `subagent_type: go
 
 ### Step 2 — Deploy to live HA for integration testing
 ```bash
-rsync -a --delete /home/ataraxia/code/particle-man/custom_components/particle_man/ /mnt/ha-config/custom_components/particle_man/
+rsync -a --delete --inplace --exclude='__pycache__' \
+  /home/ataraxia/code/particle-man/custom_components/particle_man/ \
+  /mnt/ha-config/custom_components/particle_man/
+
+# ALWAYS verify — see below
+diff -r --exclude=__pycache__ \
+  /home/ataraxia/code/particle-man/custom_components/particle_man/ \
+  /mnt/ha-config/custom_components/particle_man/
+rm -rf /mnt/ha-config/custom_components/particle_man/__pycache__
 ```
+
+**`--inplace` is mandatory.** The mount is CIFS, where rsync's write-temp-then-rename
+strategy fails intermittently with `mkstemp ... No such file or directory`. It has
+silently skipped individual files (observed: `__init__.py`) while reporting success
+for the rest — leaving a half-deployed integration that will not load. Always follow
+the rsync with the `diff -r` above; a non-zero exit means the deploy is incomplete.
+Clear `__pycache__` too: CIFS mtime granularity can defeat Python's cache invalidation.
 - **Python changes** (any `.py` file): full HA restart required — use `ha_restart` MCP call; do NOT poll after, tell user to confirm when ready
 - **Non-Python changes** (strings.json, translations, icons): reload only — `ha_reload_config component=core`
 - the mount is deploy target only — never edit `/mnt/ha-config/custom_components/particle_man/` directly
