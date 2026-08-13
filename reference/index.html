@@ -1,0 +1,1804 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://mnestrud.github.io/particle-man/reference/">
+      
+      
+        <link rel="prev" href="../examples/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Reference - Particle Man</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="light-blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Particle Man" class="md-header__button md-logo" aria-label="Particle Man" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Particle Man
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="light-blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mnestrud/particle-man" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnestrud/particle-man
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../sensors/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Sensors
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../weather/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Weather
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Reference
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Particle Man" class="md-nav__button md-logo" aria-label="Particle Man" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    Particle Man
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mnestrud/particle-man" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnestrud/particle-man
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sensors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-data-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How data updates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How data updates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#api-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#polling-cadence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polling cadence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automagic-the-weather-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automagic: the weather budget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aq-and-pollen-interval-calculation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AQ and Pollen interval calculation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monthly-usage-by-location-count-default-settings-31-day-month-quiet-hours-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monthly usage by location count (default settings, 31-day month, quiet hours on)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quota-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quota behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quota-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quota tracking
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#level-scales-and-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Level scales and sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Level scales and sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#air-quality-category-scales" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Air Quality category scales
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollen-level-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen level scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#harmonized-severity-attributes-v170" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Harmonized severity attributes (v1.7.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uv-index-category-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UV Index category scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather-alert-severity-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather alert severity scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pollen-sensors-are-unavailable-or-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen sensors are unavailable or missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#all-sensors-show-unavailable-400-or-403-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        All sensors show unavailable (400 or 403 errors)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather-entity-or-sensors-are-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather entity or sensors are missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sensors-show-stale-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensors show stale data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-usage-counts-seem-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API usage counts seem wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-doesnt-appear-after-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration doesn't appear after installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configure-changes-dont-take-effect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configure changes don't take effect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#something-else" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Something else
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-data-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How data updates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How data updates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#api-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#polling-cadence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polling cadence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automagic-the-weather-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automagic: the weather budget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aq-and-pollen-interval-calculation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AQ and Pollen interval calculation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monthly-usage-by-location-count-default-settings-31-day-month-quiet-hours-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monthly usage by location count (default settings, 31-day month, quiet hours on)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quota-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quota behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quota-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quota tracking
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#level-scales-and-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Level scales and sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Level scales and sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#air-quality-category-scales" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Air Quality category scales
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pollen-level-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen level scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#harmonized-severity-attributes-v170" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Harmonized severity attributes (v1.7.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uv-index-category-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UV Index category scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather-alert-severity-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather alert severity scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pollen-sensors-are-unavailable-or-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pollen sensors are unavailable or missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#all-sensors-show-unavailable-400-or-403-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        All sensors show unavailable (400 or 403 errors)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather-entity-or-sensors-are-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather entity or sensors are missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sensors-show-stale-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensors show stale data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-usage-counts-seem-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API usage counts seem wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-doesnt-appear-after-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration doesn't appear after installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configure-changes-dont-take-effect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configure changes don't take effect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#something-else" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Something else
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/mnestrud/particle-man/edit/main/docs/reference.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h1>
+<hr />
+<h2 id="how-data-updates">How data updates<a class="headerlink" href="#how-data-updates" title="Permanent link">&para;</a></h2>
+<p>Particle Man polls Google's APIs on a schedule and enforces monthly quotas to keep usage within Google's free tier.</p>
+<h3 id="api-calls">API calls<a class="headerlink" href="#api-calls" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>API</th>
+<th>Endpoints</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Air Quality</td>
+<td>current conditions + forecast</td>
+<td>2 calls per refresh</td>
+</tr>
+<tr>
+<td>Pollen</td>
+<td>daily forecast lookup</td>
+<td>1 call per refresh</td>
+</tr>
+<tr>
+<td>Weather</td>
+<td>current conditions, hourly forecast, daily forecast, alerts, minutecast</td>
+<td>1 call per endpoint per refresh — except the hourly forecast, which costs one call per 24 hours requested</td>
+</tr>
+</tbody>
+</table>
+<p>Google caps the hourly forecast at 24 hours per call, so a 120-hour forecast is
+five billable calls every time it refreshes. That page cost is why forecast
+length and refresh rate trade against each other.</p>
+<h3 id="polling-cadence">Polling cadence<a class="headerlink" href="#polling-cadence" title="Permanent link">&para;</a></h3>
+<p><strong>Air Quality and Pollen</strong> are fetched at most once per hour, matching Google's
+own data refresh rate. Polling faster would return identical data. At 7+
+locations the interval scales beyond an hour.</p>
+<p><strong>Weather endpoints each refresh on their own cadence.</strong> They do not all fire
+together. Base cadences follow Google's regeneration rates — current conditions
+every 15 minutes, forecasts every 30 — and where Particle Man polls slower than
+that, it is deliberate: the saved calls buy forecast length instead.</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Base cadence</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Current conditions</td>
+<td>15 min</td>
+<td>Matches Google's regeneration exactly</td>
+</tr>
+<tr>
+<td>Hourly forecast</td>
+<td>60 min</td>
+<td>Google regenerates every 30 min; the content moves slowly</td>
+</tr>
+<tr>
+<td>Daily forecast</td>
+<td>180 min</td>
+<td>Tomorrow's high barely changes hour to hour</td>
+</tr>
+<tr>
+<td>Weather alerts</td>
+<td>30 min</td>
+<td>Latency matters most here</td>
+</tr>
+<tr>
+<td>Minutecast (opt-in)</td>
+<td>15 min</td>
+<td>A nowcast is useless if stale</td>
+</tr>
+</tbody>
+</table>
+<h3 id="automagic-the-weather-budget">Automagic: the weather budget<a class="headerlink" href="#automagic-the-weather-budget" title="Permanent link">&para;</a></h3>
+<p>Automagic expresses the weather budget as calls per month rather than a single
+polling interval:</p>
+<div class="highlight"><pre><span></span><code>monthly_calls(endpoint) = ⌈ active_minutes / cadence ⌉ × pages × num_locations
+constraint: Σ(enabled endpoints) × 1.05 ≤ monthly_limit
+</code></pre></div>
+<p>At one location with default settings — a 120-hour hourly forecast, alerts on,
+quiet hours 23:00–05:00, 31-day month (33,480 active minutes):</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Cadence</th>
+<th>Pages</th>
+<th>Calls/month</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Current conditions</td>
+<td>15 min</td>
+<td>1</td>
+<td>2,232</td>
+</tr>
+<tr>
+<td>Hourly forecast</td>
+<td>60 min</td>
+<td>5</td>
+<td>2,790</td>
+</tr>
+<tr>
+<td>Daily forecast</td>
+<td>180 min</td>
+<td>1</td>
+<td>186</td>
+</tr>
+<tr>
+<td>Weather alerts</td>
+<td>30 min</td>
+<td>1</td>
+<td>1,116</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td></td>
+<td></td>
+<td><strong>6,324</strong> of 10,000</td>
+</tr>
+</tbody>
+</table>
+<p>Adding minutecast brings that to 8,556 — still inside the free tier at one
+location.</p>
+<p><strong>When it does not fit</strong>, cadences stretch by a single scale factor, except that
+alerts and current conditions stop at 60 minutes. Stretching those is a bad
+trade: a tornado warning delivered 100 minutes late is worthless, and capping
+them costs little. If even the capped plan does not fit, minutecast is dropped
+rather than served far past its useful freshness, and only then is the hourly
+forecast shortened.</p>
+<table>
+<thead>
+<tr>
+<th>Locations</th>
+<th>Current</th>
+<th>Hourly</th>
+<th>Daily</th>
+<th>Alerts</th>
+<th>Total (buffered)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>15 min</td>
+<td>60 min</td>
+<td>180 min</td>
+<td>30 min</td>
+<td>6,640</td>
+</tr>
+<tr>
+<td>2</td>
+<td>20 min</td>
+<td>80 min</td>
+<td>240 min</td>
+<td>40 min</td>
+<td>9,967</td>
+</tr>
+<tr>
+<td>5</td>
+<td>60 min</td>
+<td>240 min</td>
+<td>480 min</td>
+<td>60 min</td>
+<td>9,902</td>
+</tr>
+<tr>
+<td>10</td>
+<td>120 min</td>
+<td>480 min</td>
+<td>1200 min</td>
+<td>120 min</td>
+<td>9,828</td>
+</tr>
+</tbody>
+</table>
+<p>Cadences are always exact multiples of the coordinator's wake interval, since
+an endpoint can only refresh on a tick.</p>
+<h3 id="aq-and-pollen-interval-calculation">AQ and Pollen interval calculation<a class="headerlink" href="#aq-and-pollen-interval-calculation" title="Permanent link">&para;</a></h3>
+<p>Air quality and pollen still use a single interval each:</p>
+<div class="highlight"><pre><span></span><code>safe_interval_minutes = ⌈ active_minutes × calls_per_poll × num_locations × 1.05 / monthly_limit ⌉
+</code></pre></div>
+<p>Floored at 60 minutes, which is how often Google regenerates the data.</p>
+<p><strong>Where to see the live assumptions:</strong></p>
+<p>Open any of the three monthly usage diagnostic sensors (<strong>Monthly AQ Calls</strong>,
+<strong>Monthly Pollen Calls</strong>, <strong>Monthly Weather Calls</strong>) in <strong>Developer Tools →
+States</strong>. The weather sensor additionally reports the resolved plan:</p>
+<div class="highlight"><pre><span></span><code>automagic_mode: true
+num_locations: 1
+calls_per_poll: 2.83
+fetch_interval_minutes: 15
+endpoint_cadences: {current: 15, hours: 60, days: 180, alerts: 30}
+endpoint_pages: {current: 1, hours: 5, days: 1, alerts: 1}
+endpoint_calls_per_month: {current: 2232, hours: 2790, days: 186, alerts: 1116}
+projected_monthly_calls: 6324
+cadence_scale_factor: 1.0
+hourly_forecast_hours: 120
+minutecast_enabled: false
+dropped_endpoints: []
+plan_degraded: false
+quiet_hours_enabled: true
+quiet_hours_window: 23:00–05:00
+active_hours_per_day: 18.0
+billing_month_days: 31
+effective_minutes_per_month: 33480
+safety_buffer_pct: 5
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title"><code>calls_per_poll</code> is now an average</p>
+<p>Because endpoints refresh at different rates, this is the mean number of
+billable calls per coordinator wake-up rather than a fixed integer. The
+relationship it always satisfied still holds:
+<code>calls_per_poll × (effective_minutes ÷ fetch_interval_minutes) ≈ projected_monthly_calls</code>.</p>
+</div>
+<h3 id="monthly-usage-by-location-count-default-settings-31-day-month-quiet-hours-on">Monthly usage by location count (default settings, 31-day month, quiet hours on)<a class="headerlink" href="#monthly-usage-by-location-count-default-settings-31-day-month-quiet-hours-on" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Locations</th>
+<th>AQ calls</th>
+<th>Pollen calls</th>
+<th>Weather calls</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>558</td>
+<td>558</td>
+<td>6,324</td>
+<td>✅ All within free tier</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1,116</td>
+<td>1,116</td>
+<td>9,492</td>
+<td>✅ Weather cadences stretched</td>
+</tr>
+<tr>
+<td>5</td>
+<td>2,790</td>
+<td>2,790</td>
+<td>9,430</td>
+<td>✅ Alerts capped at 60 min</td>
+</tr>
+</tbody>
+</table>
+<p>Free tier limits: <a href="https://developers.google.com/maps/documentation/air-quality/usage-and-billing">Air Quality</a> (10,000/mo), <a href="https://developers.google.com/maps/documentation/pollen/usage-and-billing">Pollen</a> (5,000/mo), <a href="https://developers.google.com/maps/documentation/weather/usage-and-billing">Weather</a> (10,000/mo).</p>
+<h3 id="quota-behavior">Quota behavior<a class="headerlink" href="#quota-behavior" title="Permanent link">&para;</a></h3>
+<p>When an API approaches its monthly limit, Particle Man degrades rather than
+stopping dead. Past 95% of the weather limit only alerts and current conditions
+keep running; below that, endpoints drop in reverse priority order until the
+remaining quota covers the refresh. Air Quality and Pollen pause entirely when
+their own limits are reached. Other APIs are never affected.</p>
+<p>Tracking resets automatically on the 1st of the month (midnight Pacific Time).</p>
+<h3 id="quota-tracking">Quota tracking<a class="headerlink" href="#quota-tracking" title="Permanent link">&para;</a></h3>
+<p>Particle Man tracks API calls locally using HA's persistent storage — it does not pull usage data from Google. Counts survive restarts and option changes.</p>
+<p>If counts get out of sync (e.g. after migrating to a new HA instance), remove and re-add the integration to reset tracking.</p>
+<hr />
+<h2 id="level-scales-and-sources">Level scales and sources<a class="headerlink" href="#level-scales-and-sources" title="Permanent link">&para;</a></h2>
+<p>The four advisory/severity scales used by Particle Man sensors — air quality categories, pollen levels, UV index, and weather alert severity — come from different sources. Details below.</p>
+<h3 id="air-quality-category-scales">Air Quality category scales<a class="headerlink" href="#air-quality-category-scales" title="Permanent link">&para;</a></h3>
+<p>Two distinct ladders are in play — they are <strong>not</strong> the same vocabulary:</p>
+<p><strong>Universal AQI (UAQI)</strong> — the Universal AQI sensor state and the Air Quality
+Advisory. Google's proprietary 0–100 index where <strong>higher is better</strong>, banded
+per the <a href="https://developers.google.com/maps/documentation/air-quality/laqis">official UAQI table</a>:</p>
+<table>
+<thead>
+<tr>
+<th>UAQI</th>
+<th>Category</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>80–100</td>
+<td>Excellent air quality</td>
+</tr>
+<tr>
+<td>60–79</td>
+<td>Good air quality</td>
+</tr>
+<tr>
+<td>40–59</td>
+<td>Moderate air quality</td>
+</tr>
+<tr>
+<td>20–39</td>
+<td>Low air quality</td>
+</tr>
+<tr>
+<td>0–19</td>
+<td>Poor air quality</td>
+</tr>
+</tbody>
+</table>
+<p><strong>EPA AQI categories</strong> — the per-pollutant sensors' <code>epa_category</code> attribute
+and their <code>*_level</code> companions, calculated locally from
+<a href="https://www.epa.gov/criteria-air-pollutants/naaqs-table">US EPA NAAQS breakpoints</a>
+(PM2.5 uses the 2024 revision):</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>PM2.5 (μg/m³, 24-h avg)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Good</td>
+<td>0.0–9.0</td>
+</tr>
+<tr>
+<td>Moderate</td>
+<td>9.1–35.4</td>
+</tr>
+<tr>
+<td>Unhealthy for Sensitive Groups</td>
+<td>35.5–55.4</td>
+</tr>
+<tr>
+<td>Unhealthy</td>
+<td>55.5–125.4</td>
+</tr>
+<tr>
+<td>Very Unhealthy</td>
+<td>125.5–225.4</td>
+</tr>
+<tr>
+<td>Hazardous</td>
+<td>≥ 225.5</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="pollen-level-scale">Pollen level scale<a class="headerlink" href="#pollen-level-scale" title="Permanent link">&para;</a></h3>
+<p><strong>Sensors:</strong> Pollen Advisory, individual plant species sensors — state is one of six levels.</p>
+<p><strong>Source:</strong> <a href="https://developers.google.com/maps/documentation/pollen/pollen-index">Google Universal Pollen Index (UPI)</a>. Google returns an integer index (0–5) per plant type; the integration maps it to the label below.</p>
+<table>
+<thead>
+<tr>
+<th>Index</th>
+<th>Level</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>None</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Very Low</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Moderate</td>
+</tr>
+<tr>
+<td>4</td>
+<td>High</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Very High</td>
+</tr>
+</tbody>
+</table>
+<p>Google does not publish fixed concentration thresholds for the UPI levels — the index is calculated from a proprietary model combining pollen concentration models, historical data, and regional plant phenology.</p>
+<hr />
+<h3 id="harmonized-severity-attributes-v170">Harmonized severity attributes (v1.7.0)<a class="headerlink" href="#harmonized-severity-attributes-v170" title="Permanent link">&para;</a></h3>
+<p>Every categorized sensor additionally exposes presentation metadata so dashboards can draw uniform severity graphics without hardcoding any vocabulary:</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>severity</code></td>
+<td>The reading's rank within <strong>its own</strong> canonical scale, <code>0</code> = least severe. <code>null</code> when unmapped.</td>
+</tr>
+<tr>
+<td><code>severity_max</code></td>
+<td>The scale's top rank (UAQI 4, EPA 5, UPI 5, alerts 3, minutecast intensity 3).</td>
+</tr>
+<tr>
+<td><code>below_action_level</code></td>
+<td><code>true</code> when the reading is below the domain's action boundary (see below). <code>null</code> when unknown.</td>
+</tr>
+<tr>
+<td><code>color_hex</code></td>
+<td>The canonical category color — Google's own index/pollen color where the API provides one (UAQI, local AQI, pollen), the EPA palette for pollutants.</td>
+</tr>
+</tbody>
+</table>
+<p>These are <em>additive</em>: the canonical <code>category</code> / <code>epa_category</code> strings, state values, and scales are unchanged and remain authoritative. <code>severity</code> asserts no cross-domain equivalence — a full pollen bar means "top of the UPI scale", not "as hazardous as Poor air quality." Forecast array entries (<code>daily_forecast</code> / <code>hourly_forecast</code>) carry <code>severity</code> and <code>color_hex</code> too. Weather alert entries carry <code>severity_rank</code> alongside Google's <code>severity</code> string; local AQI severity is <code>null</code> by design (country vocabularies vary).</p>
+<p><strong>Action boundaries</strong> (Google documents none, so these are explicit, documented choices):</p>
+<ul>
+<li><strong>Air quality</strong>: quiet at UAQI ≥ 60 — only the Good and Excellent bands are quiet; "Moderate air quality" and below act.</li>
+<li><strong>Pollutants</strong>: quiet only at EPA <strong>Good</strong> — matches the advisory's existing <code>elevated_pollutants</code> logic.</li>
+<li><strong>Pollen</strong>: quiet below UPI <strong>3 (Moderate)</strong> — None, Very Low and Low are quiet.</li>
+<li><strong>Alerts</strong>: never quiet.</li>
+</ul>
+<p><strong>Daily AQI forecast fix (v1.7.0):</strong> the UAQI <code>daily_forecast</code> previously summarized each day with <code>max(aqi)</code> — on an inverted scale that was the day's <em>cleanest</em> hour. It now reports the worst hour (<code>min(aqi)</code> for UAQI; local AQIs keep <code>max</code>).</p>
+<hr />
+<h3 id="uv-index-category-scale">UV Index category scale<a class="headerlink" href="#uv-index-category-scale" title="Permanent link">&para;</a></h3>
+<p><strong>Sensor:</strong> UV Index Category — state is calculated locally from the raw UV index value returned by the Weather API.</p>
+<p><strong>Source:</strong> <a href="https://www.who.int/news-room/questions-and-answers/item/radiation-the-ultraviolet-(uv)-index">WHO Global Solar UV Index</a>, adopted by WMO, UNEP, and national health agencies worldwide.</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>UV Index</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Low</td>
+<td>0–2</td>
+</tr>
+<tr>
+<td>Moderate</td>
+<td>3–5</td>
+</tr>
+<tr>
+<td>High</td>
+<td>6–7</td>
+</tr>
+<tr>
+<td>Very High</td>
+<td>8–10</td>
+</tr>
+<tr>
+<td>Extreme</td>
+<td>11+</td>
+</tr>
+</tbody>
+</table>
+<p>The raw UV index value is available as the <code>uv_index</code> attribute on the UV Index Category sensor, and also directly on the weather entity.</p>
+<hr />
+<h3 id="weather-alert-severity-scale">Weather alert severity scale<a class="headerlink" href="#weather-alert-severity-scale" title="Permanent link">&para;</a></h3>
+<p><strong>Sensor:</strong> Alert Highest Severity — state is one of four levels.</p>
+<p><strong>Source:</strong> <a href="https://developers.google.com/maps/documentation/weather/get-public-alerts">Google Public Alerts</a>, which aggregates alerts from government meteorological agencies (e.g., NWS in the US). Severity is returned directly by the API.</p>
+<table>
+<thead>
+<tr>
+<th>Severity</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MINOR</td>
+<td>Minimal or no known threat</td>
+</tr>
+<tr>
+<td>MODERATE</td>
+<td>Possible threat to life or property</td>
+</tr>
+<tr>
+<td>SEVERE</td>
+<td>Significant threat to life or property</td>
+</tr>
+<tr>
+<td>EXTREME</td>
+<td>Extraordinary threat to life or property</td>
+</tr>
+</tbody>
+</table>
+<p><code>None</code> is the state when no active alerts are present.</p>
+<hr />
+<h2 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Pollen API coverage:</strong> primarily North America and Europe. Outside covered regions, pollen sensors remain unavailable. (<a href="https://developers.google.com/maps/documentation/pollen/coverage">Coverage map</a>)</li>
+<li><strong>Weather API coverage:</strong> varies by region. (<a href="https://developers.google.com/maps/documentation/weather/coverage">Coverage</a>)</li>
+<li><strong>Weather alerts:</strong> only available in regions covered by Google's public alerts service, primarily the US.</li>
+<li><strong>Local AQI indices are region-specific:</strong> US EPA AQI values are only valid for US coordinates; other regional standards apply only in their respective countries.</li>
+<li><strong>API call counts are estimated locally:</strong> counts are based on calls made by this integration and may diverge from Google's actual billing counter after migration, reinstall, or key sharing across multiple HA instances.</li>
+<li><strong>Multiple locations share the monthly quota:</strong> all locations using the same API key count against the same free tier limit. Automagic mode factors this in when suggesting the minimum interval.</li>
+<li><strong>Minimum polling interval:</strong> 15 minutes, enforced by the integration.</li>
+<li><strong>AQ data refreshes hourly:</strong> polling faster than 60 minutes fetches the same data with no improvement in freshness.</li>
+<li><strong>Plant species availability depends on location:</strong> not all covered regions have species-level pollen data.</li>
+</ul>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="pollen-sensors-are-unavailable-or-missing">Pollen sensors are unavailable or missing<a class="headerlink" href="#pollen-sensors-are-unavailable-or-missing" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Google's Pollen API doesn't cover all countries.</p>
+<ol>
+<li>Check HA logs (<strong>Settings → System → Logs</strong>) for a line containing <code>Pollen API fetch failed</code></li>
+<li>If the error indicates a coverage issue, pollen sensors won't be available at your location — this is a limitation of the upstream API</li>
+<li>If the error indicates an authentication problem, verify your API key has the Pollen API enabled (<a href="https://console.cloud.google.com/apis/credentials">Google Cloud Console</a>)</li>
+<li>If pollen should be available in your region but sensors are missing, try removing and re-adding the integration</li>
+</ol>
+<p>(<a href="https://developers.google.com/maps/documentation/pollen/coverage">Pollen API coverage</a>)</p>
+<hr />
+<h3 id="all-sensors-show-unavailable-400-or-403-errors">All sensors show unavailable (400 or 403 errors)<a class="headerlink" href="#all-sensors-show-unavailable-400-or-403-errors" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> API key issue or API not enabled.</p>
+<ol>
+<li>Open the <a href="https://console.cloud.google.com/apis/credentials">Google Cloud Console</a> and confirm <strong>Air Quality API</strong>, <strong>Pollen API</strong>, and <strong>Weather API</strong> are all enabled</li>
+<li>Confirm the API key is associated with the correct project</li>
+<li>Check that the key has no restrictions blocking your HA server's IP or referrer</li>
+<li>If the key was just created, wait a few minutes — Google can take time to propagate new keys</li>
+</ol>
+<hr />
+<h3 id="weather-entity-or-sensors-are-missing">Weather entity or sensors are missing<a class="headerlink" href="#weather-entity-or-sensors-are-missing" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Weather API not enabled on the API key, or the Weather option was disabled in Configure.</p>
+<ol>
+<li>Verify the <strong>Weather API</strong> is enabled in the <a href="https://console.cloud.google.com/apis/credentials">Google Cloud Console</a></li>
+<li>In HA, go to <strong>Settings → Devices &amp; Services → Particle Man → Configure</strong> and confirm <strong>Weather</strong> is toggled on</li>
+<li>Check HA logs for <code>Weather API fetch failed</code></li>
+</ol>
+<hr />
+<h3 id="sensors-show-stale-data">Sensors show stale data<a class="headerlink" href="#sensors-show-stale-data" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> API errors or long polling interval.</p>
+<ol>
+<li>Check the <strong>Last API Update</strong> diagnostic sensor — if it hasn't updated recently, check logs for API errors</li>
+<li>Check <strong>Configure → Polling &amp; Limits</strong> to confirm the polling interval is what you expect</li>
+<li>If enforce mode paused an API, the diagnostic sensors will show <code>critical</code> status and the HA log will note the pause</li>
+</ol>
+<hr />
+<h3 id="api-usage-counts-seem-wrong">API usage counts seem wrong<a class="headerlink" href="#api-usage-counts-seem-wrong" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Counts are estimated locally, not from Google's billing.</p>
+<p>Counts diverge when:
+- The integration was removed and re-added mid-period
+- HA was migrated to a new instance
+- The same API key is used in multiple HA instances</p>
+<p>To reset: remove and re-add the integration. This clears persistent storage and restarts tracking from today.</p>
+<hr />
+<h3 id="integration-doesnt-appear-after-installation">Integration doesn't appear after installation<a class="headerlink" href="#integration-doesnt-appear-after-installation" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Custom integrations require a restart to load.</p>
+<p>Restart Home Assistant after installing via HACS or copying files manually.</p>
+<hr />
+<h3 id="configure-changes-dont-take-effect">Configure changes don't take effect<a class="headerlink" href="#configure-changes-dont-take-effect" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Integration didn't reload after saving.</p>
+<p>After saving options, the integration card should briefly show "reloading." If it doesn't, manually reload via the three-dot menu on the integration card.</p>
+<hr />
+<h3 id="something-else">Something else<a class="headerlink" href="#something-else" title="Permanent link">&para;</a></h3>
+<p>Open an issue on <a href="https://github.com/mnestrud/particle-man/issues">GitHub</a> with your HA version, integration version, and the relevant section from <strong>Settings → System → Logs</strong>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "search.suggest", "search.highlight", "content.action.edit", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
