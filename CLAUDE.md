@@ -198,6 +198,7 @@ Clear `__pycache__` too: CIFS mtime granularity can defeat Python's cache invali
 - **Python changes** (any `.py` file): full HA restart required — use `ha_restart` MCP call. Verify recovery yourself via a read-only MCP call (e.g. `ha_get_entity_state` on a particle_man sensor) after ~60s — do NOT ask the user to confirm uptime
 - **Non-Python changes** (strings.json, translations, icons): reload only — `ha_reload_config component=core`
 - the mount is deploy target only — never edit `/mnt/ha-config/custom_components/particle_man/` directly
+- **particle_man is also registered in HACS** (custom repository), which manages the *same* deploy directory. A HACS update overwrites it with the latest GitHub release — harmless when deploy == release, but it silently rolls back any dev build deployed ahead of a release. Never run `ha_hacs_update_all`; after any HACS update of particle_man, re-run the rsync deploy if dev is ahead.
 
 ### Step 2b — Validate on live HA (after user confirms restart complete)
 Invoke `ha-integration-validator` agent: "Validate particle_man on live HA"
