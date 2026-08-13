@@ -54,10 +54,12 @@ from .const import (
     DEFAULT_WEATHER_UNITS,
     DOMAIN,
     EPA_BREAKPOINTS,
+    EPA_COLORS,
     FORECAST_EXTRA_COMPUTATIONS,
     GAS_MW,
     MOLAR_VOL,
     POLLEN_API_URL,
+    UAQI_CATEGORY_COLORS,
     W_ALERTS,
     W_CURRENT,
     W_DAYS,
@@ -67,7 +69,9 @@ from .const import (
     WeatherPlan,
     _billing_month_days,
     _quiet_active_minutes_per_month,
+    epa_severity,
     solve_weather_plan,
+    uaqi_severity,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -253,6 +257,17 @@ def _rgb_to_hex(rgb: tuple[int, int, int] | None) -> str | None:
     if rgb is None:
         return None
     return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
+def _index_color_hex(idx: dict[str, Any]) -> str | None:
+    """Hex of an AQ index's API `color`, falling back to the official UAQI
+    category palette when the response omits the field entirely."""
+    hex_color = _rgb_to_hex(_rgb_from_api(idx.get("color")))
+    if hex_color is not None:
+        return hex_color
+    if idx.get("code") == "uaqi":
+        return UAQI_CATEGORY_COLORS.get(idx.get("category") or "")
+    return None
 
 
 def _day_to_datetime(date_obj: dict[str, Any]) -> str | None:
@@ -1134,6 +1149,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             "value": uaqi.get("aqi") if uaqi else None,
             "display": uaqi.get("aqiDisplay") if uaqi else None,
             "category": uaqi.get("category") if uaqi else None,
+            "color_hex": _index_color_hex(uaqi) if uaqi else None,
+            "severity": uaqi_severity(uaqi.get("aqi")) if uaqi else None,
             "dominant_pollutant": dominant_code or None,
             "region_code": current.get("regionCode"),
             "datetime": current.get("dateTime"),
@@ -1155,6 +1172,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     "value": local_idx.get("aqi"),
                     "display": local_idx.get("aqiDisplay"),
                     "category": local_idx.get("category"),
+                    "color_hex": _index_color_hex(local_idx),
                     "code": local_idx.get("code"),
                     "display_name": local_idx.get("displayName"),
                     "dominant_pollutant": local_idx.get("dominantPollutant"),
@@ -1218,6 +1236,8 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                         "datetime": dt_str,
                         "aqi": idx["aqi"],
                         "category": idx.get("category"),
+                        "color_hex": _index_color_hex(idx),
+                        "severity": uaqi_severity(idx["aqi"]),
                         "dominant_pollutant": idx.get("dominantPollutant"),
                     })
                 elif (
@@ -1228,6 +1248,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                         "datetime": dt_str,
                         "aqi": idx["aqi"],
                         "category": idx.get("category"),
+                        "color_hex": _index_color_hex(idx),
                     })
         return uaqi_hourly, local_hourly
 
@@ -1243,11 +1264,14 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 val = conc.get("value")
                 units = _parse_units(conc.get("units", ""))
                 if val is not None:
+                    category = _epa_category(code, val, units)
                     result[code].append({
                         "datetime": dt_str,
                         "value": val,
                         "units": units,
-                        "epa_category": _epa_category(code, val, units),
+                        "epa_category": category,
+                        "color_hex": EPA_COLORS.get(category) if category else None,
+                        "severity": epa_severity(category),
                     })
         return dict(result)
 
@@ -1269,28 +1293,44 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             for idx in h.get("indexes", []):
                 if idx.get("code") == "uaqi" and idx.get("aqi") is not None:
                     uaqi_days[date_key].append(
-                        {"aqi": idx["aqi"], "category": idx.get("category")}
+                        {
+                            "aqi": idx["aqi"],
+                            "category": idx.get("category"),
+                            "color_hex": _index_color_hex(idx),
+                        }
                     )
                 elif idx.get("code") not in ("uaqi", None) and idx.get("aqi") is not None:
                     local_days[date_key].append(
-                        {"aqi": idx["aqi"], "category": idx.get("category")}
+                        {
+                            "aqi": idx["aqi"],
+                            "category": idx.get("category"),
+                            "color_hex": _index_color_hex(idx),
+                        }
                     )
 
-        def _to_daily(days_dict: dict[str, Any]) -> list[dict[str, Any]]:
+        def _to_daily(
+            days_dict: dict[str, Any], *, uaqi: bool
+        ) -> list[dict[str, Any]]:
+            # A daily summary must be the day's WORST hour. UAQI is inverted
+            # (higher = better), so its worst is min(aqi); local AQIs
+            # conventionally read higher = worse, so theirs stays max(aqi).
             result = []
             for date_key in sorted(days_dict.keys())[: self.forecast_days]:
                 entries = days_dict[date_key]
-                peak = max(entries, key=lambda x: x["aqi"])
-                result.append(
-                    {
-                        "datetime": f"{date_key}T12:00:00+00:00",
-                        "aqi": peak["aqi"],
-                        "category": peak["category"],
-                    }
-                )
+                pick = min if uaqi else max
+                peak = pick(entries, key=lambda x: x["aqi"])
+                entry = {
+                    "datetime": f"{date_key}T12:00:00+00:00",
+                    "aqi": peak["aqi"],
+                    "category": peak["category"],
+                    "color_hex": peak.get("color_hex"),
+                }
+                if uaqi:
+                    entry["severity"] = uaqi_severity(peak["aqi"])
+                result.append(entry)
             return result
 
-        return _to_daily(uaqi_days), _to_daily(local_days)
+        return _to_daily(uaqi_days, uaqi=True), _to_daily(local_days, uaqi=False)
 
     def _build_pollutant_daily_forecast(
         self, hours: list[dict[str, Any]]
@@ -1319,12 +1359,15 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 entries = date_dict[date_key]
                 max_val = max(e["value"] for e in entries)
                 units = entries[0]["units"]
+                category = _epa_category(code, max_val, units)
                 daily.append(
                     {
                         "datetime": f"{date_key}T12:00:00+00:00",
                         "max": round(max_val, 2),
                         "units": units,
-                        "epa_category": _epa_category(code, max_val, units),
+                        "epa_category": category,
+                        "color_hex": EPA_COLORS.get(category) if category else None,
+                        "severity": epa_severity(category),
                     }
                 )
             result[code] = daily
@@ -1477,12 +1520,15 @@ class ParticleManCoordinator(DataUpdateCoordinator):
             item = by_day[i].get(code, {}) if i < len(by_day) else {}
             fidx = (item.get("indexInfo") or {}) if item else {}
             frgb = _rgb_from_api(fidx.get("color")) if fidx else None
+            fvalue = fidx.get("value")
             forecast.append(
                 {
                     "datetime": dt_str,
-                    "index": fidx.get("value"),
+                    "index": fvalue,
                     "category": fidx.get("category"),
                     "color_hex": _rgb_to_hex(frgb),
+                    # UPI is already ordinal: severity == index value.
+                    "severity": fvalue if isinstance(fvalue, int) else None,
                 }
             )
         return forecast
@@ -1599,6 +1645,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 "type": ptype or None,
                 "probability": probability,
                 "intensity": intensity or None,
+                "severity": _MINUTECAST_INTENSITY_ORDER.get(intensity),
                 "qpf": qpf,
                 "snowfall": snow,
                 "precipitation": precipitating,

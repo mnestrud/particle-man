@@ -32,17 +32,30 @@ from homeassistant.util import dt as dt_util
 from .const import (
     _AQ_CALLS_PER_POLL,
     _AUTOMAGIC_BUFFER,
+    _MINUTECAST_INTENSITY_ORDER,
     _PACIFIC_TZ,
     _POLLEN_CALLS_PER_POLL,
+    ALERT_SEVERITY_MAX,
+    ALERT_SEVERITY_ORDER,
+    AQ_ACTION_MIN_UAQI,
     ATTRIBUTION,
     DOMAIN,
     EPA_BREAKPOINT_POLLUTANTS,
     EPA_COLORS,
+    EPA_SEVERITY_MAX,
+    MINUTECAST_SEVERITY_MAX,
+    POLLEN_ACTION_MIN_UPI,
     POLLEN_ATTRIBUTION,
     POLLEN_COLORS,
+    POLLUTANT_ACTION_CATEGORY,
+    UAQI_SEVERITY_MAX,
+    UPI_SEVERITY_MAX,
     WEATHER_ATTRIBUTION,
     _billing_month_days,
     _quiet_active_minutes_per_month,
+    alert_severity_rank,
+    epa_severity,
+    uaqi_severity,
 )
 from .coordinator import ParticleManCoordinator
 
@@ -295,8 +308,17 @@ class AqiSensor(_BaseGaqSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = cast(dict[str, Any], self.coordinator.data.get("aqi", {}))
+        value = info.get("value")
         attrs: dict[str, Any] = {
             "category": info.get("category"),
+            "color_hex": info.get("color_hex"),
+            "severity": info.get("severity"),
+            "severity_max": UAQI_SEVERITY_MAX,
+            "below_action_level": (
+                value >= AQ_ACTION_MIN_UAQI
+                if isinstance(value, (int, float))
+                else None
+            ),
             "dominant_pollutant": info.get("dominant_pollutant"),
             "region_code": info.get("region_code"),
             "last_updated": info.get("datetime"),
@@ -348,8 +370,12 @@ class AirQualityAdvisorySensor(_BaseGaqSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = cast(dict[str, Any], self.coordinator.data.get("aq_advisory", {}))
+        aqi_info = cast(dict[str, Any], self.coordinator.data.get("aqi", {}))
         attrs: dict[str, Any] = {
             "aqi": info.get("aqi"),
+            "color_hex": aqi_info.get("color_hex"),
+            "severity": uaqi_severity(info.get("aqi")),
+            "severity_max": UAQI_SEVERITY_MAX,
             "dominant_pollutant": info.get("dominant_pollutant"),
             "elevated_pollutants": info.get("elevated_pollutants", []),
             "trend": info.get("trend"),
@@ -388,6 +414,12 @@ class LocalAqiSensor(_BaseGaqSensor):
         info = self._info
         return {
             "category": info.get("category"),
+            # Country-specific vocabularies are unmapped by design: color comes
+            # from the API's own palette; severity/action stay None.
+            "color_hex": info.get("color_hex"),
+            "severity": None,
+            "severity_max": None,
+            "below_action_level": None,
             "aqi_display": info.get("display"),
             "dominant_pollutant": info.get("dominant_pollutant"),
             "index_code": info.get("code"),
@@ -430,9 +462,16 @@ class PollutantSensor(_BaseGaqSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = self._info
+        category = info.get("epa_category")
         return {
             "full_name": info.get("full_name"),
-            "epa_category": info.get("epa_category"),
+            "epa_category": category,
+            "color_hex": EPA_COLORS.get(category) if category else None,
+            "severity": epa_severity(category),
+            "severity_max": EPA_SEVERITY_MAX,
+            "below_action_level": (
+                category == POLLUTANT_ACTION_CATEGORY if category else None
+            ),
             "is_dominant": info.get("is_dominant"),
             "sources": info.get("sources"),
             "effects": info.get("effects"),
@@ -499,9 +538,14 @@ class PollenAdvisorySensor(_BasePollenSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = cast(dict[str, Any], self.coordinator.data.get("pollen_advisory", {}))
+        dominant_index = info.get("dominant_index")
+        category = info.get("value")
         attrs: dict[str, Any] = {
             "dominant_type": info.get("dominant_type"),
-            "dominant_index": info.get("dominant_index"),
+            "dominant_index": dominant_index,
+            "color_hex": POLLEN_COLORS.get(category) if category else None,
+            "severity": dominant_index if isinstance(dominant_index, int) else None,
+            "severity_max": UPI_SEVERITY_MAX,
             "in_season_types": info.get("in_season_types", []),
             "all_levels": info.get("all_levels", {}),
             ATTR_ATTRIBUTION: POLLEN_ATTRIBUTION,
@@ -540,10 +584,16 @@ class PollenTypeSensor(_BasePollenSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = self._info
+        value = info.get("value")
         attrs: dict[str, Any] = {
             "category": info.get("category"),
             "in_season": info.get("in_season"),
             "color_hex": info.get("color_hex"),
+            "severity": value if isinstance(value, int) else None,
+            "severity_max": UPI_SEVERITY_MAX,
+            "below_action_level": (
+                value < POLLEN_ACTION_MIN_UPI if isinstance(value, int) else None
+            ),
             "trend": info.get("trend"),
             "expected_peak": info.get("expected_peak"),
             "daily_forecast": info.get("forecast", []),
@@ -618,10 +668,16 @@ class PollenPlantSensor(_BasePollenSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = self._info
+        value = info.get("value")
         attrs: dict[str, Any] = {
             "category": info.get("category"),
             "in_season": info.get("in_season"),
             "color_hex": info.get("color_hex"),
+            "severity": value if isinstance(value, int) else None,
+            "severity_max": UPI_SEVERITY_MAX,
+            "below_action_level": (
+                value < POLLEN_ACTION_MIN_UPI if isinstance(value, int) else None
+            ),
             "trend": info.get("trend"),
             "expected_peak": info.get("expected_peak"),
             "daily_forecast": info.get("forecast", []),
@@ -675,7 +731,11 @@ class PollenPlantLevelSensor(_BasePollenSensor):
 # Weather sensors
 # ---------------------------------------------------------------------------
 
-_SEVERITY_ORDER: dict[str, int] = {"MINOR": 1, "MODERATE": 2, "SEVERE": 3, "EXTREME": 4}
+# 1-based so max(..., default-0 unknowns) sorts every known severity above
+# SEVERITY_UNKNOWN. Vocabulary lives in const.ALERT_SEVERITY_ORDER.
+_SEVERITY_ORDER: dict[str, int] = {
+    s: i + 1 for i, s in enumerate(ALERT_SEVERITY_ORDER)
+}
 
 
 class WeatherAlertCountSensor(_BaseWeatherSensor):
@@ -697,8 +757,15 @@ class WeatherAlertCountSensor(_BaseWeatherSensor):
         severities = [a.get("severity", "") for a in alerts if a.get("severity")]
         highest = max(severities, key=lambda s: _SEVERITY_ORDER.get(s, 0), default=None) if severities else None
         return {
-            "alerts": alerts,
+            # Copies, not the coordinator's dicts — severity_rank is presentation
+            # metadata and must not leak back into shared coordinator data.
+            "alerts": [
+                {**a, "severity_rank": alert_severity_rank(a.get("severity"))}
+                for a in alerts
+            ],
             "highest_severity": highest,
+            "highest_severity_rank": alert_severity_rank(highest),
+            "severity_max": ALERT_SEVERITY_MAX,
             "active_event_types": sorted({a.get("event_type") for a in alerts if a.get("event_type")}),
             ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
         }
@@ -1030,8 +1097,15 @@ class PrecipitationIntensitySensor(_BaseMinutecastSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         seg = self._segment_now() or {}
+        intensity = seg.get("intensity")
         return {
             "probability": seg.get("probability"),
+            "severity": (
+                _MINUTECAST_INTENSITY_ORDER.get(intensity)
+                if isinstance(intensity, str)
+                else None
+            ),
+            "severity_max": MINUTECAST_SEVERITY_MAX,
             "qpf": seg.get("qpf"),
             "snowfall": seg.get("snowfall"),
             ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,

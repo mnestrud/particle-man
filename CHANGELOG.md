@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.7.0] — 2026-08-13
+
+### Added
+
+- **Harmonized severity attributes** on every categorized sensor: `severity` (the reading's rank within its own canonical scale, 0 = least severe), `severity_max`, and `below_action_level`, so dashboards can draw uniform severity graphics without hardcoding any thresholds or vocabulary. The canonical categories, colors, states, and scales are unchanged and remain authoritative; severity asserts no cross-domain equivalence. Action boundaries are documented in the reference (AQ quiet only in the Good/Excellent UAQI bands; pollutants quiet only at EPA Good; pollen quiet below UPI 2; alerts never quiet).
+- **Index colors captured from the API.** Google returns a `color` on every air-quality index; it is now exposed as `color_hex` on the Universal AQI, Local AQI, and advisory sensors (with the official UAQI category palette as fallback), and the numeric pollutant sensors now carry the EPA category color. Previously only the `*_level` sensors had colors, so dashboard swatches for the AQI and pollutants rendered grey.
+- Forecast array entries (`daily_forecast` / `hourly_forecast` on AQ, pollutant, and pollen sensors) now carry `color_hex` and `severity` per entry; weather alert entries carry `severity_rank`; minutecast segments and the Precipitation Intensity sensor carry `severity`.
+
+### Fixed
+
+- **UAQI daily forecast summarized each day with its *cleanest* hour.** UAQI is inverted (higher = better) and the aggregation took `max(aqi)`; it now reports the worst hour. Local AQI daily forecasts (higher = worse) are unchanged.
+- Documentation: the reference claimed Google's Universal AQI uses the six EPA category names — it uses its own five-band ladder (Excellent → Poor air quality) on an inverted 0–100 scale. Corrected, with both scales now documented separately.
+
+---
+
 ## [1.6.0] — 2026-08-12
 
 ### Added

@@ -1169,7 +1169,15 @@ def test_build_aqi_daily_forecast_with_data(coordinator: ParticleManCoordinator)
     uaqi_daily, local_daily = coordinator._build_aqi_daily_forecast(hours)
     assert len(uaqi_daily) >= 1
     aqi_values = {d["aqi"] for d in uaqi_daily}
-    assert 60 in aqi_values  # peak of day April 22
+    # UAQI is inverted (higher = better): the daily summary is the WORST hour,
+    # so April 22 reports 40 (Moderate), not the cleaner 60.
+    assert 40 in aqi_values
+    assert 60 not in aqi_values
+    for entry in uaqi_daily:
+        assert "severity" in entry
+        assert "color_hex" in entry
+    # Local AQIs read higher = worse and keep max-of-day.
+    assert local_daily and local_daily[0]["aqi"] == 45
 
 
 def test_build_pollutant_daily_forecast_with_data(coordinator: ParticleManCoordinator) -> None:

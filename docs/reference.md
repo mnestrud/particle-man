@@ -154,26 +154,35 @@ If counts get out of sync (e.g. after migrating to a new HA instance), remove an
 
 The four advisory/severity scales used by Particle Man sensors — air quality categories, pollen levels, UV index, and weather alert severity — come from different sources. Details below.
 
-### Air Quality category scale
+### Air Quality category scales
 
-**Sensor:** Air Quality Advisory — state is the raw category text returned by Google.
+Two distinct ladders are in play — they are **not** the same vocabulary:
 
-**Source:** Google uses the same six category names as the [US EPA AQI](https://www.airnow.gov/aqi/aqi-basics/). The categories are also consistent with the WHO UAQI framework.
+**Universal AQI (UAQI)** — the Universal AQI sensor state and the Air Quality
+Advisory. Google's proprietary 0–100 index where **higher is better**, banded
+per the [official UAQI table](https://developers.google.com/maps/documentation/air-quality/laqis):
 
-| Category | AQI range | PM2.5 (μg/m³, 24-h avg)* |
-|---|---|---|
-| Good | 0–50 | 0.0–9.0 |
-| Moderate | 51–100 | 9.1–35.4 |
-| Unhealthy for Sensitive Groups | 101–150 | 35.5–55.4 |
-| Unhealthy | 151–200 | 55.5–125.4 |
-| Very Unhealthy | 201–300 | 125.5–225.4 |
-| Hazardous | 301–500 | ≥ 225.5 |
+| UAQI | Category |
+|---|---|
+| 80–100 | Excellent air quality |
+| 60–79 | Good air quality |
+| 40–59 | Moderate air quality |
+| 20–39 | Low air quality |
+| 0–19 | Poor air quality |
 
-*PM2.5 breakpoints use the [2024 EPA NAAQS revision](https://www.epa.gov/criteria-air-pollutants/naaqs-table). Other pollutants (PM10, O3, NO2, CO, SO2) follow current EPA NAAQS breakpoints. Google derives its Universal AQI category from the dominant pollutant's concentration.
+**EPA AQI categories** — the per-pollutant sensors' `epa_category` attribute
+and their `*_level` companions, calculated locally from
+[US EPA NAAQS breakpoints](https://www.epa.gov/criteria-air-pollutants/naaqs-table)
+(PM2.5 uses the 2024 revision):
 
-**Alignment note:** Google's category boundary *names* match EPA AQI exactly. The underlying index score uses Google's proprietary UAQI formula, which may assign different numeric values than raw EPA AQI — but the category text returned by the API (and exposed as the sensor state) is identical to EPA terminology.
-
-The per-pollutant sensors (PM2.5, PM10, O3, etc.) under the Air Quality section also expose an `epa_category` attribute, calculated locally from the EPA breakpoints above.
+| Category | PM2.5 (μg/m³, 24-h avg) |
+|---|---|
+| Good | 0.0–9.0 |
+| Moderate | 9.1–35.4 |
+| Unhealthy for Sensitive Groups | 35.5–55.4 |
+| Unhealthy | 55.5–125.4 |
+| Very Unhealthy | 125.5–225.4 |
+| Hazardous | ≥ 225.5 |
 
 ---
 
@@ -193,6 +202,30 @@ The per-pollutant sensors (PM2.5, PM10, O3, etc.) under the Air Quality section 
 | 5 | Very High |
 
 Google does not publish fixed concentration thresholds for the UPI levels — the index is calculated from a proprietary model combining pollen concentration models, historical data, and regional plant phenology.
+
+---
+
+### Harmonized severity attributes (v1.7.0)
+
+Every categorized sensor additionally exposes presentation metadata so dashboards can draw uniform severity graphics without hardcoding any vocabulary:
+
+| Attribute | Meaning |
+|---|---|
+| `severity` | The reading's rank within **its own** canonical scale, `0` = least severe. `null` when unmapped. |
+| `severity_max` | The scale's top rank (UAQI 4, EPA 5, UPI 5, alerts 3, minutecast intensity 3). |
+| `below_action_level` | `true` when the reading is below the domain's action boundary (see below). `null` when unknown. |
+| `color_hex` | The canonical category color — Google's own index/pollen color where the API provides one (UAQI, local AQI, pollen), the EPA palette for pollutants. |
+
+These are *additive*: the canonical `category` / `epa_category` strings, state values, and scales are unchanged and remain authoritative. `severity` asserts no cross-domain equivalence — a full pollen bar means "top of the UPI scale", not "as hazardous as Poor air quality." Forecast array entries (`daily_forecast` / `hourly_forecast`) carry `severity` and `color_hex` too. Weather alert entries carry `severity_rank` alongside Google's `severity` string; local AQI severity is `null` by design (country vocabularies vary).
+
+**Action boundaries** (Google documents none, so these are explicit, documented choices):
+
+- **Air quality**: quiet at UAQI ≥ 60 — only the Good and Excellent bands are quiet; "Moderate air quality" and below act.
+- **Pollutants**: quiet only at EPA **Good** — matches the advisory's existing `elevated_pollutants` logic.
+- **Pollen**: quiet below UPI **2 (Low)** — only None and Very Low are quiet.
+- **Alerts**: never quiet.
+
+**Daily AQI forecast fix (v1.7.0):** the UAQI `daily_forecast` previously summarized each day with `max(aqi)` — on an inverted scale that was the day's *cleanest* hour. It now reports the worst hour (`min(aqi)` for UAQI; local AQIs keep `max`).
 
 ---
 

@@ -195,7 +195,7 @@ silently skipped individual files (observed: `__init__.py`) while reporting succ
 for the rest — leaving a half-deployed integration that will not load. Always follow
 the rsync with the `diff -r` above; a non-zero exit means the deploy is incomplete.
 Clear `__pycache__` too: CIFS mtime granularity can defeat Python's cache invalidation.
-- **Python changes** (any `.py` file): full HA restart required — use `ha_restart` MCP call; do NOT poll after, tell user to confirm when ready
+- **Python changes** (any `.py` file): full HA restart required — use `ha_restart` MCP call. Verify recovery yourself via a read-only MCP call (e.g. `ha_get_entity_state` on a particle_man sensor) after ~60s — do NOT ask the user to confirm uptime
 - **Non-Python changes** (strings.json, translations, icons): reload only — `ha_reload_config component=core`
 - the mount is deploy target only — never edit `/mnt/ha-config/custom_components/particle_man/` directly
 

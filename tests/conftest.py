@@ -90,6 +90,9 @@ AQ_CURRENT_RESPONSE = {
             "aqi": 45,
             "aqiDisplay": "45",
             "category": "Good",
+            # Real responses omit any color channel whose value is 0 — this
+            # green-only dict exercises that parsing path. (0, 204, 0) = #00cc00.
+            "color": {"green": 0.8},
             "dominantPollutant": "pm25",
         }
     ],

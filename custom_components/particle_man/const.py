@@ -676,3 +676,101 @@ EPA_BREAKPOINTS: dict[str, tuple[str, list[tuple[float, str]]]] = {
 # Molecular weights (g/mol) for µg/m³ ↔ ppb/ppm conversion at 25°C, 1 atm
 GAS_MW: dict[str, float] = {"no2": 46.0, "o3": 48.0, "co": 28.0, "so2": 64.0}
 MOLAR_VOL = 24.45  # L/mol at 25°C, 1 atm
+
+# ---------------------------------------------------------------------------
+# Harmonized severity model (additive presentation metadata for consumers)
+#
+# Each domain keeps its own canonical scale — Google UAQI bands, EPA AQI
+# categories, Google UPI, CAP alert severities, minutecast intensities.
+# `severity` is a reading's RANK within its own scale (0 = least severe) and
+# `severity_max` the scale's top rank, so a card can draw uniform geometry
+# (severity / severity_max) without any cross-domain equivalence being
+# asserted. Never derive behavior from these; the canonical fields stay
+# authoritative.
+# ---------------------------------------------------------------------------
+
+# UAQI severity from the numeric index — locale-independent, unlike the
+# localized category strings. Bands per the official UAQI table
+# (developers.google.com/maps/documentation/air-quality/laqis):
+# 80-100 Excellent, 60-79 Good, 40-59 Moderate, 20-39 Low, 0-19 Poor.
+# Higher UAQI = better air, hence the inverted rank.
+_UAQI_BAND_FLOORS: tuple[tuple[int, int], ...] = (
+    (80, 0),  # Excellent air quality
+    (60, 1),  # Good air quality
+    (40, 2),  # Moderate air quality
+    (20, 3),  # Low air quality
+    (0, 4),   # Poor air quality (uaqi 0-19)
+)
+UAQI_SEVERITY_MAX = 4
+
+# Official per-category UAQI colors (RED_GREEN palette, laqis table) — used
+# only as a fallback when the API response omits the index `color` field.
+UAQI_CATEGORY_COLORS: dict[str, str] = {
+    "Excellent air quality": "#009e3a",
+    "Good air quality": "#84cf33",
+    "Moderate air quality": "#ffff00",
+    "Low air quality": "#ff8c00",
+    "Poor air quality": "#ff0000",  # uaqi 1-19; uaqi 0 is maroon #800000
+}
+
+# EPA AQI category ladder (order = severity rank). Same vocabulary as
+# EPA_BREAKPOINTS/EPA_COLORS — integration-computed, so locale-stable.
+EPA_CATEGORY_ORDER: tuple[str, ...] = (
+    "Good",
+    "Moderate",
+    "Unhealthy for Sensitive Groups",
+    "Unhealthy",
+    "Very Unhealthy",
+    "Hazardous",
+)
+EPA_SEVERITY_MAX = len(EPA_CATEGORY_ORDER) - 1
+
+# Google UPI is already ordinal: severity == index value (0 None … 5 Very High).
+UPI_SEVERITY_MAX = 5
+
+# publicAlerts severity enum, least → most severe. SEVERITY_UNKNOWN (and any
+# future value) maps to severity None.
+ALERT_SEVERITY_ORDER: tuple[str, ...] = ("MINOR", "MODERATE", "SEVERE", "EXTREME")
+ALERT_SEVERITY_MAX = len(ALERT_SEVERITY_ORDER) - 1
+
+MINUTECAST_SEVERITY_MAX = 3  # ranks in _MINUTECAST_INTENSITY_ORDER
+
+# --- Action levels ---------------------------------------------------------
+# Google documents no "act at this level" boundary for AQ or pollen, so these
+# are explicit policy choices (user-confirmed 2026-08-13), each anchored to a
+# canonical scale:
+# - AQ: anything below the "Good air quality" band acts — i.e. "Moderate air
+#   quality" (uaqi 40-59) and worse are surfaced; only Good/Excellent are quiet.
+# - Pollutants: EPA "Good" is quiet — matches the existing elevated_pollutants
+#   logic in the AQ advisory (anything above Good is surfaced).
+# - Pollen: UPI "Low" (2) and above act; only None/Very Low are quiet.
+# Alerts are never quiet.
+AQ_ACTION_MIN_UAQI = 60          # below_action_level when uaqi >= 60
+POLLUTANT_ACTION_CATEGORY = "Good"  # below_action_level when epa_category == Good
+POLLEN_ACTION_MIN_UPI = 2        # below_action_level when index < 2
+
+
+def uaqi_severity(aqi: float | None) -> int | None:
+    """Rank of a Universal AQI value within the official band ladder."""
+    if not isinstance(aqi, (int, float)):
+        return None
+    for floor, rank in _UAQI_BAND_FLOORS:
+        if aqi >= floor:
+            return rank
+    return UAQI_SEVERITY_MAX
+
+
+def epa_severity(category: str | None) -> int | None:
+    """Rank of an EPA AQI category within the EPA ladder."""
+    try:
+        return EPA_CATEGORY_ORDER.index(category)
+    except ValueError:
+        return None
+
+
+def alert_severity_rank(severity: str | None) -> int | None:
+    """Rank of a publicAlerts severity enum value; unknown values → None."""
+    try:
+        return ALERT_SEVERITY_ORDER.index(severity)
+    except ValueError:
+        return None
