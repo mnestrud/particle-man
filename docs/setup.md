@@ -73,19 +73,31 @@ With **Automagic** on, Particle Man automatically calculates the safest polling 
 
 | Factor | What it does |
 |---|---|
-| **APIs enabled** | Determines how many calls are made per poll |
+| **APIs enabled** | Determines which endpoints are fetched and how often |
 | **Number of locations** | Multiplies calls (each location is polled separately) |
 | **Monthly API limits** | Sets the ceiling the interval must stay under |
 | **Quiet hours window** | Reduces effective polling time, so active polls are closer together |
 | **5% safety buffer** | Adds headroom so the projection doesn't land exactly at the limit |
 
-**Specific formula (weather interval):**
+**Weather endpoints each get their own cadence** rather than sharing one
+interval, because they change at different rates and cost different amounts.
+Current conditions refresh every 15 minutes, the hourly forecast every hour, the
+daily forecast every three hours, and alerts every 30 minutes. Automagic budgets
+the total:
 
 ```
-safe_interval = ⌈ active_minutes_per_month × calls_per_poll × num_locations × 1.05 / monthly_limit ⌉
+monthly_calls(endpoint) = ⌈ active_minutes / cadence ⌉ × pages × num_locations
+constraint: Σ(enabled endpoints) × 1.05 ≤ monthly_limit
 ```
 
-The result is floored at 15 minutes. `active_minutes_per_month` uses the actual day count of the current billing month (not a fixed 30-day assumption), minus any quiet hours.
+`active_minutes` uses the actual day count of the current billing month (not a
+fixed 30-day assumption), minus any quiet hours. `pages` is 1 for every endpoint
+except the hourly forecast, which costs one call per 24 hours requested.
+
+When the total does not fit, cadences stretch — but alerts and current
+conditions stop stretching at 60 minutes, since delivering a severe-weather
+alert an hour and a half late defeats the point. See
+[Reference — Automagic: the weather budget](reference.md#automagic-the-weather-budget).
 
 **Air Quality and Pollen** are always fetched on a separate 60-minute cadence (matching Google's data refresh rate). At 7+ locations they scale above 60 minutes automatically.
 
@@ -104,7 +116,7 @@ Switch **Automagic** off to control the interval and limits yourself.
 | Pollen limit | 5,000 | Monthly Pollen call ceiling before pausing |
 | Weather limit | 10,000 | Monthly Weather call ceiling before pausing |
 
-The options form shows **projected monthly usage** and a **suggested minimum interval** for the current month, quiet hours, and location count.
+The options form shows **projected monthly usage** and the **resolved per-endpoint cadences** for the current month, quiet hours, and location count.
 
 ### Quiet hours
 

@@ -48,6 +48,24 @@
       },
       "monthly_weather_calls": {
         "default": "mdi:weather-partly-cloudy"
+      },
+      "minutes_until_precipitation": {
+        "default": "mdi:weather-rainy"
+      },
+      "precipitation_ends_in": {
+        "default": "mdi:weather-partly-rainy"
+      },
+      "precipitation_intensity": {
+        "default": "mdi:weather-pouring"
+      },
+      "precipitation_type": {
+        "default": "mdi:weather-snowy-rainy"
+      },
+      "weather_hourly_forecast": {
+        "default": "mdi:clock-outline"
+      },
+      "weather_daily_forecast": {
+        "default": "mdi:calendar-range"
       }
     },
     "switch": {

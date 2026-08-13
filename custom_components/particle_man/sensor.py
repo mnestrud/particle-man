@@ -3,33 +3,59 @@ from __future__ import annotations
 
 import calendar as _calendar
 import logging
+from collections.abc import Callable
 from datetime import date as _date
 from datetime import datetime as _datetime
-from collections.abc import Callable
+from datetime import timedelta
 from typing import Any, cast
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ATTRIBUTION, PERCENTAGE, UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    ATTR_ATTRIBUTION,
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfTemperature,
+    UnitOfTime,
+)
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
+    _AQ_CALLS_PER_POLL,
+    _AUTOMAGIC_BUFFER,
+    _MINUTECAST_INTENSITY_ORDER,
+    _PACIFIC_TZ,
+    _POLLEN_CALLS_PER_POLL,
+    ALERT_SEVERITY_MAX,
+    ALERT_SEVERITY_ORDER,
+    AQ_ACTION_MIN_UAQI,
     ATTRIBUTION,
     DOMAIN,
     EPA_BREAKPOINT_POLLUTANTS,
     EPA_COLORS,
+    EPA_SEVERITY_MAX,
+    MINUTECAST_SEVERITY_MAX,
+    POLLEN_ACTION_MIN_UPI,
     POLLEN_ATTRIBUTION,
     POLLEN_COLORS,
+    POLLUTANT_ACTION_CATEGORY,
+    UAQI_SEVERITY_MAX,
+    UPI_SEVERITY_MAX,
     WEATHER_ATTRIBUTION,
-    _AQ_CALLS_PER_POLL,
-    _PACIFIC_TZ,
-    _POLLEN_CALLS_PER_POLL,
     _billing_month_days,
     _quiet_active_minutes_per_month,
+    alert_severity_rank,
+    epa_severity,
+    uaqi_severity,
 )
 from .coordinator import ParticleManCoordinator
 
@@ -95,8 +121,21 @@ def _add_dynamic_entities(
             HeatIndexSensor(coordinator),
             WindChillSensor(coordinator),
             UvIndexCategorySensor(coordinator),
+            WeatherHourlyForecastSensor(coordinator),
+            WeatherDailyForecastSensor(coordinator),
         ])
         known.add("weather_current")
+
+    # Nowcast entities appear the first time minutecast data lands, so enabling
+    # the option does not require a reload.
+    if coordinator.enable_weather and "weather_minute" in data and "weather_minute" not in known:
+        out.extend([
+            MinutesUntilPrecipitationSensor(coordinator),
+            PrecipitationEndsInSensor(coordinator),
+            PrecipitationIntensitySensor(coordinator),
+            PrecipitationTypeSensor(coordinator),
+        ])
+        known.add("weather_minute")
 
 
 async def async_setup_entry(
@@ -192,6 +231,9 @@ class _BaseGaqSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
 
 class _BasePollenSensor(CoordinatorEntity[ParticleManCoordinator], SensorEntity):
     _attr_has_entity_name = True
+    # Forecast arrays are large and rewritten on every update. Keeping them out
+    # of the recorder costs nothing — the frontend and templates still see them.
+    _unrecorded_attributes = frozenset({"daily_forecast", "hourly_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
@@ -252,7 +294,7 @@ class AqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_device_class = SensorDeviceClass.AQI
     _attr_translation_key = "aqi"
-    _unrecorded_attributes = frozenset({"hourly_forecast"})
+    _unrecorded_attributes = frozenset({"hourly_forecast", "daily_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
@@ -266,8 +308,17 @@ class AqiSensor(_BaseGaqSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = cast(dict[str, Any], self.coordinator.data.get("aqi", {}))
+        value = info.get("value")
         attrs: dict[str, Any] = {
             "category": info.get("category"),
+            "color_hex": info.get("color_hex"),
+            "severity": info.get("severity"),
+            "severity_max": UAQI_SEVERITY_MAX,
+            "below_action_level": (
+                value >= AQ_ACTION_MIN_UAQI
+                if isinstance(value, (int, float))
+                else None
+            ),
             "dominant_pollutant": info.get("dominant_pollutant"),
             "region_code": info.get("region_code"),
             "last_updated": info.get("datetime"),
@@ -319,8 +370,12 @@ class AirQualityAdvisorySensor(_BaseGaqSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = cast(dict[str, Any], self.coordinator.data.get("aq_advisory", {}))
+        aqi_info = cast(dict[str, Any], self.coordinator.data.get("aqi", {}))
         attrs: dict[str, Any] = {
             "aqi": info.get("aqi"),
+            "color_hex": aqi_info.get("color_hex"),
+            "severity": uaqi_severity(info.get("aqi")),
+            "severity_max": UAQI_SEVERITY_MAX,
             "dominant_pollutant": info.get("dominant_pollutant"),
             "elevated_pollutants": info.get("elevated_pollutants", []),
             "trend": info.get("trend"),
@@ -335,7 +390,7 @@ class LocalAqiSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_device_class = SensorDeviceClass.AQI
     _attr_icon = "mdi:air-filter"
-    _unrecorded_attributes = frozenset({"hourly_forecast"})
+    _unrecorded_attributes = frozenset({"hourly_forecast", "daily_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator) -> None:
         super().__init__(coordinator)
@@ -359,6 +414,12 @@ class LocalAqiSensor(_BaseGaqSensor):
         info = self._info
         return {
             "category": info.get("category"),
+            # Country-specific vocabularies are unmapped by design: color comes
+            # from the API's own palette; severity/action stay None.
+            "color_hex": info.get("color_hex"),
+            "severity": None,
+            "severity_max": None,
+            "below_action_level": None,
             "aqi_display": info.get("display"),
             "dominant_pollutant": info.get("dominant_pollutant"),
             "index_code": info.get("code"),
@@ -371,7 +432,7 @@ class LocalAqiSensor(_BaseGaqSensor):
 
 class PollutantSensor(_BaseGaqSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _unrecorded_attributes = frozenset({"hourly_forecast"})
+    _unrecorded_attributes = frozenset({"hourly_forecast", "daily_forecast"})
 
     def __init__(self, coordinator: ParticleManCoordinator, code: str) -> None:
         super().__init__(coordinator)
@@ -401,9 +462,16 @@ class PollutantSensor(_BaseGaqSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = self._info
+        category = info.get("epa_category")
         return {
             "full_name": info.get("full_name"),
-            "epa_category": info.get("epa_category"),
+            "epa_category": category,
+            "color_hex": EPA_COLORS.get(category) if category else None,
+            "severity": epa_severity(category),
+            "severity_max": EPA_SEVERITY_MAX,
+            "below_action_level": (
+                category == POLLUTANT_ACTION_CATEGORY if category else None
+            ),
             "is_dominant": info.get("is_dominant"),
             "sources": info.get("sources"),
             "effects": info.get("effects"),
@@ -470,9 +538,14 @@ class PollenAdvisorySensor(_BasePollenSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = cast(dict[str, Any], self.coordinator.data.get("pollen_advisory", {}))
+        dominant_index = info.get("dominant_index")
+        category = info.get("value")
         attrs: dict[str, Any] = {
             "dominant_type": info.get("dominant_type"),
-            "dominant_index": info.get("dominant_index"),
+            "dominant_index": dominant_index,
+            "color_hex": POLLEN_COLORS.get(category) if category else None,
+            "severity": dominant_index if isinstance(dominant_index, int) else None,
+            "severity_max": UPI_SEVERITY_MAX,
             "in_season_types": info.get("in_season_types", []),
             "all_levels": info.get("all_levels", {}),
             ATTR_ATTRIBUTION: POLLEN_ATTRIBUTION,
@@ -511,10 +584,16 @@ class PollenTypeSensor(_BasePollenSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = self._info
+        value = info.get("value")
         attrs: dict[str, Any] = {
             "category": info.get("category"),
             "in_season": info.get("in_season"),
             "color_hex": info.get("color_hex"),
+            "severity": value if isinstance(value, int) else None,
+            "severity_max": UPI_SEVERITY_MAX,
+            "below_action_level": (
+                value < POLLEN_ACTION_MIN_UPI if isinstance(value, int) else None
+            ),
             "trend": info.get("trend"),
             "expected_peak": info.get("expected_peak"),
             "daily_forecast": info.get("forecast", []),
@@ -589,10 +668,16 @@ class PollenPlantSensor(_BasePollenSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         info = self._info
+        value = info.get("value")
         attrs: dict[str, Any] = {
             "category": info.get("category"),
             "in_season": info.get("in_season"),
             "color_hex": info.get("color_hex"),
+            "severity": value if isinstance(value, int) else None,
+            "severity_max": UPI_SEVERITY_MAX,
+            "below_action_level": (
+                value < POLLEN_ACTION_MIN_UPI if isinstance(value, int) else None
+            ),
             "trend": info.get("trend"),
             "expected_peak": info.get("expected_peak"),
             "daily_forecast": info.get("forecast", []),
@@ -646,7 +731,11 @@ class PollenPlantLevelSensor(_BasePollenSensor):
 # Weather sensors
 # ---------------------------------------------------------------------------
 
-_SEVERITY_ORDER: dict[str, int] = {"MINOR": 1, "MODERATE": 2, "SEVERE": 3, "EXTREME": 4}
+# 1-based so max(..., default-0 unknowns) sorts every known severity above
+# SEVERITY_UNKNOWN. Vocabulary lives in const.ALERT_SEVERITY_ORDER.
+_SEVERITY_ORDER: dict[str, int] = {
+    s: i + 1 for i, s in enumerate(ALERT_SEVERITY_ORDER)
+}
 
 
 class WeatherAlertCountSensor(_BaseWeatherSensor):
@@ -668,8 +757,15 @@ class WeatherAlertCountSensor(_BaseWeatherSensor):
         severities = [a.get("severity", "") for a in alerts if a.get("severity")]
         highest = max(severities, key=lambda s: _SEVERITY_ORDER.get(s, 0), default=None) if severities else None
         return {
-            "alerts": alerts,
+            # Copies, not the coordinator's dicts — severity_rank is presentation
+            # metadata and must not leak back into shared coordinator data.
+            "alerts": [
+                {**a, "severity_rank": alert_severity_rank(a.get("severity"))}
+                for a in alerts
+            ],
             "highest_severity": highest,
+            "highest_severity_rank": alert_severity_rank(highest),
+            "severity_max": ALERT_SEVERITY_MAX,
             "active_event_types": sorted({a.get("event_type") for a in alerts if a.get("event_type")}),
             ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
         }
@@ -824,6 +920,289 @@ class UvIndexCategorySensor(_BaseWeatherSensor):
 
 
 # ---------------------------------------------------------------------------
+# Minutecast (experimental 6-hour precipitation nowcast)
+# ---------------------------------------------------------------------------
+
+class _BaseMinutecastSensor(_BaseWeatherSensor):
+    """Nowcast sensor whose state is a function of the current time.
+
+    The coordinator refreshes at most every 15 minutes, but a countdown has to
+    tick every minute or it freezes and then jumps — useless for the "close the
+    windows" automation this exists for. State is therefore derived in
+    native_value from utcnow, and the entity re-renders itself on a timer.
+    """
+
+    _attr_entity_registry_enabled_default = True
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._async_tick, timedelta(minutes=1))
+        )
+
+    @callback
+    def _async_tick(self, _now: _datetime) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def _minute(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.coordinator.data.get("weather_minute") or {})
+
+    @property
+    def _is_stale(self) -> bool:
+        """True once the forecast window has run out.
+
+        A six-hour nowcast fetched six hours ago carries forward as data but
+        says nothing about now, so it must not be reported as fact.
+        """
+        end = dt_util.parse_datetime(self._minute.get("horizon_end") or "")
+        return end is None or dt_util.utcnow() > end
+
+    def _active_run(self) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Return (run covering now, next run starting later)."""
+        now = dt_util.utcnow()
+        current = upcoming = None
+        for run in self._minute.get("runs") or []:
+            start = dt_util.parse_datetime(run.get("start") or "")
+            end = dt_util.parse_datetime(run.get("end") or "")
+            if start is None or end is None:
+                continue
+            if start <= now < end:
+                current = run
+                break
+            if start > now:
+                upcoming = run
+                break
+        return current, upcoming
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._minute) and not self._is_stale
+
+
+class MinutesUntilPrecipitationSensor(_BaseMinutecastSensor):
+    _attr_translation_key = "minutes_until_precipitation"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _unrecorded_attributes = frozenset({"segments", "runs"})
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_minutes_until_precipitation"
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        if self._is_stale:
+            return None
+        current, upcoming = self._active_run()
+        if current is not None:
+            return 0
+        if upcoming is None:
+            return None
+        start = dt_util.parse_datetime(upcoming.get("start") or "")
+        if start is None:
+            return None
+        # Floor, so "0" reads as "already falling or starting within the
+        # minute"; is_precipitating disambiguates the two.
+        return max(0, int((start - dt_util.utcnow()).total_seconds() // 60))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self._minute
+        current, upcoming = self._active_run()
+        run = current or upcoming
+        return {
+            "is_precipitating": current is not None,
+            "starts_at": (run or {}).get("start"),
+            "ends_at": (run or {}).get("end"),
+            "type": (run or {}).get("type"),
+            "types": (run or {}).get("types", []),
+            "max_intensity": (run or {}).get("max_intensity"),
+            "max_probability": (run or {}).get("max_probability"),
+            "runs": info.get("runs", []),
+            "segments": info.get("segments", []),
+            "horizon_start": info.get("horizon_start"),
+            "horizon_end": info.get("horizon_end"),
+            "stale": self._is_stale,
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class PrecipitationEndsInSensor(_BaseMinutecastSensor):
+    _attr_translation_key = "precipitation_ends_in"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_precipitation_ends_in"
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        if self._is_stale:
+            return None
+        current, _ = self._active_run()
+        if current is None:
+            return None  # nothing falling, so nothing to end
+        end = dt_util.parse_datetime(current.get("end") or "")
+        if end is None:
+            return None
+        return max(0, int((end - dt_util.utcnow()).total_seconds() // 60))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        current, _ = self._active_run()
+        return {
+            "is_precipitating": current is not None,
+            "ends_at": (current or {}).get("end"),
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class PrecipitationIntensitySensor(_BaseMinutecastSensor):
+    _attr_translation_key = "precipitation_intensity"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_precipitation_intensity"
+        )
+
+    def _segment_now(self) -> dict[str, Any] | None:
+        now = dt_util.utcnow()
+        for seg in self._minute.get("segments") or []:
+            start = dt_util.parse_datetime(seg.get("start") or "")
+            end = dt_util.parse_datetime(seg.get("end") or "")
+            if start is not None and end is not None and start <= now < end:
+                return cast("dict[str, Any]", seg)
+        return None
+
+    @property
+    def native_value(self) -> str | None:
+        if self._is_stale:
+            return None
+        seg = self._segment_now()
+        if seg is None:
+            # Google's window can start a few minutes ahead of "now", leaving a
+            # brief uncovered gap. That is unknown, not clear.
+            return None
+        return cast("str | None", seg.get("intensity"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        seg = self._segment_now() or {}
+        intensity = seg.get("intensity")
+        return {
+            "probability": seg.get("probability"),
+            "severity": (
+                _MINUTECAST_INTENSITY_ORDER.get(intensity)
+                if isinstance(intensity, str)
+                else None
+            ),
+            "severity_max": MINUTECAST_SEVERITY_MAX,
+            "qpf": seg.get("qpf"),
+            "snowfall": seg.get("snowfall"),
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class PrecipitationTypeSensor(PrecipitationIntensitySensor):
+    _attr_translation_key = "precipitation_type"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_precipitation_type"
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        if self._is_stale:
+            return None
+        seg = self._segment_now()
+        if seg is None:
+            return None
+        return cast("str | None", seg.get("type"))
+
+
+class _BaseForecastArraySensor(_BaseWeatherSensor):
+    """Exposes a weather forecast list as an attribute.
+
+    Home Assistant removed the `forecast` attribute from weather entities in
+    2024.4, so templates can only reach forecast data by calling an action —
+    which Jinja cannot do outside a trigger-based template entity. Every user
+    who wants to template against a forecast therefore has to rebuild the same
+    scaffolding by hand. Air quality and pollen already expose their forecasts
+    this way; this brings weather in line.
+
+    The array is kept out of the recorder, so it costs nothing to store.
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "entries"
+    _attr_entity_registry_enabled_default = False
+    _unrecorded_attributes = frozenset({"forecast"})
+    _data_key = ""
+
+    @property
+    def _forecast(self) -> list[Any]:
+        """Forecast entries in the same shape `weather.get_forecasts` returns.
+
+        The coordinator stores entries in native units with `native_` prefixes,
+        which is what WeatherEntity wants but not what a template author does.
+        Reuse the weather entity's own conversion so this attribute is a drop-in
+        replacement for the action's response — same keys, same units, same
+        rounding — rather than a subtly different second dialect.
+        """
+        raw = cast(list[Any], self.coordinator.data.get(self._data_key) or [])
+        entity = getattr(self.coordinator, "weather_entity", None)
+        if entity is None or not raw:
+            return raw
+        # Private, but this is exactly how homeassistant.components.weather
+        # builds the get_forecasts service response.
+        return cast(list[Any], entity._convert_forecast(raw))
+
+    @property
+    def native_value(self) -> int:
+        return len(self._forecast)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "forecast": self._forecast,
+            ATTR_ATTRIBUTION: WEATHER_ATTRIBUTION,
+        }
+
+
+class WeatherHourlyForecastSensor(_BaseForecastArraySensor):
+    _attr_translation_key = "weather_hourly_forecast"
+    _data_key = "weather_hourly"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_weather_hourly_forecast"
+        )
+
+
+class WeatherDailyForecastSensor(_BaseForecastArraySensor):
+    _attr_translation_key = "weather_daily_forecast"
+    _data_key = "weather_daily"
+
+    def __init__(self, coordinator: ParticleManCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{coordinator.entry_id}_{coordinator.location_slug}_weather_daily_forecast"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Diagnostic sensors (shared per entry)
 # ---------------------------------------------------------------------------
 
@@ -928,8 +1307,9 @@ def _billing_projection_attrs(calls: int, limit: int, period_month: str) -> dict
 
 def _automagic_assumption_attrs(
     coordinator: ParticleManCoordinator,
-    calls_per_poll: int,
+    calls_per_poll: float,
     fetch_interval_minutes: int,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the assumptions behind a monthly usage projection for a given API."""
     c = coordinator
@@ -943,7 +1323,7 @@ def _automagic_assumption_attrs(
         eff_min = days * 24 * 60
         active_hours = 24.0
         window = None
-    return {
+    attrs = {
         "automagic_mode": c.automagic_mode,
         "num_locations": c.num_locations,
         "calls_per_poll": calls_per_poll,
@@ -953,8 +1333,11 @@ def _automagic_assumption_attrs(
         "active_hours_per_day": active_hours,
         "billing_month_days": days,
         "effective_minutes_per_month": eff_min,
-        "safety_buffer_pct": 5,
+        "safety_buffer_pct": round((_AUTOMAGIC_BUFFER - 1) * 100),
     }
+    if extra:
+        attrs.update(extra)
+    return attrs
 
 
 class MonthlyAqUsageSensor(_BaseDiagnosticSensor):
@@ -1049,8 +1432,27 @@ class MonthlyWeatherUsageSensor(_BaseDiagnosticSensor):
         attrs["shared_total_calls"] = tracking.get("weather_calls", 0)
         attrs["num_locations"] = c.num_locations
         weather_interval_min = int(c.update_interval.total_seconds() // 60) if c.update_interval else 0
+        plan = c.weather_plan
         attrs.update(_automagic_assumption_attrs(
             c, c.weather_calls_per_poll, weather_interval_min,
+            extra={
+                # Endpoints refresh independently now, so the single-interval
+                # view above is only the coordinator wake rate. These describe
+                # what actually gets fetched and how often.
+                "endpoint_cadences": dict(plan.cadences),
+                "endpoint_pages": dict(plan.pages),
+                "endpoint_calls_per_month": dict(plan.monthly_calls),
+                "endpoint_last_fetch": {
+                    name: ts.isoformat()
+                    for name, ts in c._last_weather_endpoint_fetch.items()
+                },
+                "projected_monthly_calls": plan.total_monthly_calls,
+                "cadence_scale_factor": plan.scale_factor,
+                "hourly_forecast_hours": plan.hourly_hours,
+                "minutecast_enabled": c.enable_minutecast and not c._minutecast_unavailable,
+                "dropped_endpoints": list(plan.dropped),
+                "plan_degraded": plan.degraded,
+            },
         ))
         attrs[ATTR_ATTRIBUTION] = WEATHER_ATTRIBUTION
         return attrs

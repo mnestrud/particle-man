@@ -54,26 +54,80 @@
   },
   "entity": {
     "sensor": {
-      "aqi": {"name": "Universal AQI"},
-      "aqi_level": {"name": "Universal AQI Level"},
-      "aq_advisory": {"name": "Air Quality Advisory"},
-      "pollen_advisory": {"name": "Pollen Advisory"},
-      "weather_alert_count": {"name": "Weather Alert Count"},
-      "weather_alert_highest_severity": {"name": "Weather Alert Highest Severity"},
-      "weather_alert_active_event_types": {"name": "Weather Alert Event Types"},
-      "thunderstorm_probability": {"name": "Thunderstorm Probability"},
-      "heat_index": {"name": "Heat Index"},
-      "wind_chill": {"name": "Wind Chill"},
-      "uv_index_category": {"name": "UV Index Category"},
-      "aq_last_fetch": {"name": "AQ Last Fetched"},
-      "pollen_last_fetch": {"name": "Pollen Last Fetched"},
-      "weather_last_fetch": {"name": "Weather Last Fetched"},
-      "monthly_aq_calls": {"name": "AQ API Calls (Monthly)"},
-      "monthly_pollen_calls": {"name": "Pollen API Calls (Monthly)"},
-      "monthly_weather_calls": {"name": "Weather API Calls (Monthly)"}
+      "aqi": {
+        "name": "Universal AQI"
+      },
+      "aqi_level": {
+        "name": "Universal AQI Level"
+      },
+      "aq_advisory": {
+        "name": "Air Quality Advisory"
+      },
+      "pollen_advisory": {
+        "name": "Pollen Advisory"
+      },
+      "weather_alert_count": {
+        "name": "Weather Alert Count"
+      },
+      "weather_alert_highest_severity": {
+        "name": "Weather Alert Highest Severity"
+      },
+      "weather_alert_active_event_types": {
+        "name": "Weather Alert Event Types"
+      },
+      "thunderstorm_probability": {
+        "name": "Thunderstorm Probability"
+      },
+      "heat_index": {
+        "name": "Heat Index"
+      },
+      "wind_chill": {
+        "name": "Wind Chill"
+      },
+      "uv_index_category": {
+        "name": "UV Index Category"
+      },
+      "aq_last_fetch": {
+        "name": "AQ Last Fetched"
+      },
+      "pollen_last_fetch": {
+        "name": "Pollen Last Fetched"
+      },
+      "weather_last_fetch": {
+        "name": "Weather Last Fetched"
+      },
+      "monthly_aq_calls": {
+        "name": "AQ API Calls (Monthly)"
+      },
+      "monthly_pollen_calls": {
+        "name": "Pollen API Calls (Monthly)"
+      },
+      "monthly_weather_calls": {
+        "name": "Weather API Calls (Monthly)"
+      },
+      "minutes_until_precipitation": {
+        "name": "Minutes Until Precipitation"
+      },
+      "precipitation_ends_in": {
+        "name": "Precipitation Ends In"
+      },
+      "precipitation_intensity": {
+        "name": "Precipitation Intensity"
+      },
+      "precipitation_type": {
+        "name": "Precipitation Type"
+      },
+      "weather_hourly_forecast": {
+        "name": "Hourly Forecast"
+      },
+      "weather_daily_forecast": {
+        "name": "Daily Forecast"
+      }
     },
     "switch": {
-      "quiet_hours": {"name": "Quiet Hours"}
+      "quiet_hours": {
+        "name": "Quiet Hours"
+      }
     }
   },
   "options": {
@@ -172,14 +226,18 @@
       },
       "weather": {
         "title": "Weather Options",
-        "description": "Customize the weather entity for this location.",
+        "description": "Customize the weather entity for this location.\n\n{usage}",
         "data": {
           "weather_units": "Units",
-          "enable_weather_alerts": "Weather alerts sensor"
+          "weather_hourly_hours": "Hourly forecast length",
+          "enable_weather_alerts": "Weather alerts sensor",
+          "enable_minutecast": "Minute-by-minute precipitation forecast"
         },
         "data_description": {
           "weather_units": "Temperature and wind speed units for raw sensor values. Home Assistant can convert units for display independently.",
-          "enable_weather_alerts": "Creates three sensors: Alert Count (number of active warnings), Alert Highest Severity (MINOR/MODERATE/SEVERE/EXTREME), and Alert Event Types (comma-separated list of active alert codes). All show empty/0 when no alerts are active."
+          "weather_hourly_hours": "How far ahead the hourly forecast reaches. Google returns at most 24 hours per API call, so each extra 24 hours costs one more call every time the forecast refreshes. Longer forecasts are automatically refreshed less often to stay within your monthly limit.",
+          "enable_weather_alerts": "Creates three sensors: Alert Count (number of active warnings), Alert Highest Severity (MINOR/MODERATE/SEVERE/EXTREME), and Alert Event Types (comma-separated list of active alert codes). All show empty/0 when no alerts are active.",
+          "enable_minutecast": "Experimental. Adds a 6-hour precipitation nowcast with four sensors, refreshed every 15 minutes. Google has not documented this endpoint's availability or billing, so it is budgeted as if billed — roughly 2,200 extra calls per month per location, about a quarter of the free tier. Coverage appears limited to the US and Europe; where it is unavailable the feature disables itself and raises a repair notice."
         }
       },
       "api_limits": {
@@ -210,6 +268,14 @@
     "api_quota_exhausted": {
       "title": "{api_name} API quota exhausted",
       "description": "The {api_name} API monthly call quota has been reached. Data updates are paused until the next billing cycle. To resume sooner, increase the monthly limit in the integration options or disable Automagic mode."
+    },
+    "minutecast_unavailable": {
+      "title": "Minute forecast unavailable for {location}",
+      "description": "Google returned no minute-by-minute forecast for {location}. This endpoint is experimental and is not available everywhere. The feature has been paused for this location and will be retried the next time Particle Man reloads. No other weather data is affected."
+    },
+    "weather_budget_degraded": {
+      "title": "Weather refresh reduced to stay within the API limit",
+      "description": "Your configured locations need more Google Weather API calls than the monthly limit allows, so refresh intervals have been lengthened. Hourly forecast horizon is now {hours} hours; disabled endpoints: {dropped}. Reduce the number of locations, shorten the hourly forecast, or raise the monthly limit to restore full speed."
     }
   }
 }

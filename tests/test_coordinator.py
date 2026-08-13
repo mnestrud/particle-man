@@ -268,9 +268,9 @@ def test_is_quiet_hours_normal_range(coordinator: ParticleManCoordinator) -> Non
     coordinator._quiet_end = "12:00:00"
     # Time at 11:00 is inside range
     fake_now = datetime(2026, 4, 22, 11, 0, 0)
-    with patch("custom_components.particle_man.coordinator.datetime") as mock_dt:
-        mock_dt.now.return_value = fake_now
-        mock_dt.fromisoformat = datetime.fromisoformat
+    with patch(
+        "custom_components.particle_man.coordinator.dt_util.now", return_value=fake_now
+    ):
         assert coordinator._is_quiet_hours() is True
 
 
@@ -282,13 +282,13 @@ def test_is_quiet_hours_spans_midnight(coordinator: ParticleManCoordinator) -> N
     fake_2am = datetime(2026, 4, 22, 2, 0, 0)
     # 14:00 is outside
     fake_2pm = datetime(2026, 4, 22, 14, 0, 0)
-    with patch("custom_components.particle_man.coordinator.datetime") as mock_dt:
-        mock_dt.now.return_value = fake_2am
-        mock_dt.fromisoformat = datetime.fromisoformat
+    with patch(
+        "custom_components.particle_man.coordinator.dt_util.now", return_value=fake_2am
+    ):
         assert coordinator._is_quiet_hours() is True
-    with patch("custom_components.particle_man.coordinator.datetime") as mock_dt:
-        mock_dt.now.return_value = fake_2pm
-        mock_dt.fromisoformat = datetime.fromisoformat
+    with patch(
+        "custom_components.particle_man.coordinator.dt_util.now", return_value=fake_2pm
+    ):
         assert coordinator._is_quiet_hours() is False
 
 
@@ -482,6 +482,29 @@ async def test_update_data_successful(
 
 
 @pytest.mark.asyncio
+async def test_update_data_counts_all_weather_endpoints(
+    hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
+) -> None:
+    """All four weather endpoints are fetched and counted when alerts are enabled.
+
+    Regression guard for the conftest alerts mock: `publicAlerts:lookup` is
+    mixed-case, so a case-sensitive `.*alerts.*` pattern never matches, the
+    request falls into the failure path, and weather_inc silently comes back
+    3 instead of 4.
+    """
+    register_api_mocks(aioclient_mock)
+    coordinator._save_tracking = AsyncMock()
+    coordinator.data = {}
+
+    result = await coordinator._async_update_data()
+
+    assert coordinator.enable_weather_alerts is True
+    assert "weather_alerts" in result
+    coordinator._save_tracking.assert_awaited_once()
+    assert coordinator._save_tracking.await_args.kwargs["weather_inc"] == 4
+
+
+@pytest.mark.asyncio
 async def test_update_data_pollen_success(
     hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
 ) -> None:
@@ -656,32 +679,38 @@ async def test_update_data_weather_backed_off(
 async def test_update_data_weather_client_response_error(
     hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
 ) -> None:
-    """ClientResponseError from weather build hits line 503-504."""
+    """A build failure is recorded against that endpoint alone."""
     import aiohttp
     register_api_mocks(aioclient_mock)
     err = aiohttp.ClientResponseError(request_info=MagicMock(), history=(), status=503)
-    with patch.object(coordinator, "_build_weather_data", side_effect=err):
+    with patch.object(coordinator, "_build_weather_current_data", side_effect=err):
         coordinator.enable_air_quality = False
         coordinator.enable_pollen = False
         coordinator._save_tracking = AsyncMock()
         coordinator.data = {"weather_current": {}}
         await coordinator._async_update_data()
-    assert coordinator._api_failures.get("weather") == 1
+    assert coordinator._api_failures.get("weather_current") == 1
+    # Siblings are unaffected — error namespaces are per endpoint.
+    assert coordinator._api_failures.get("weather_hours") is None
 
 
 @pytest.mark.asyncio
 async def test_update_data_weather_generic_exception(
     hass: HomeAssistant, coordinator: ParticleManCoordinator, aioclient_mock
 ) -> None:
-    """Generic exception from weather build hits lines 505-507."""
+    """A generic build exception does not take down the whole update."""
     register_api_mocks(aioclient_mock)
-    with patch.object(coordinator, "_build_weather_data", side_effect=RuntimeError("build error")):
+    with patch.object(
+        coordinator, "_build_weather_current_data", side_effect=RuntimeError("build error")
+    ):
         coordinator.enable_air_quality = False
         coordinator.enable_pollen = False
         coordinator._save_tracking = AsyncMock()
         coordinator.data = {"weather_current": {}}
-        await coordinator._async_update_data()
-    assert coordinator._api_failures.get("weather") == 1
+        result = await coordinator._async_update_data()
+    assert coordinator._api_failures.get("weather_current") == 1
+    # The endpoints that parsed fine still landed.
+    assert "weather_hourly" in result
 
 
 # ---------------------------------------------------------------------------
@@ -1140,7 +1169,15 @@ def test_build_aqi_daily_forecast_with_data(coordinator: ParticleManCoordinator)
     uaqi_daily, local_daily = coordinator._build_aqi_daily_forecast(hours)
     assert len(uaqi_daily) >= 1
     aqi_values = {d["aqi"] for d in uaqi_daily}
-    assert 60 in aqi_values  # peak of day April 22
+    # UAQI is inverted (higher = better): the daily summary is the WORST hour,
+    # so April 22 reports 40 (Moderate), not the cleaner 60.
+    assert 40 in aqi_values
+    assert 60 not in aqi_values
+    for entry in uaqi_daily:
+        assert "severity" in entry
+        assert "color_hex" in entry
+    # Local AQIs read higher = worse and keep max-of-day.
+    assert local_daily and local_daily[0]["aqi"] == 45
 
 
 def test_build_pollutant_daily_forecast_with_data(coordinator: ParticleManCoordinator) -> None:
@@ -1503,9 +1540,54 @@ def test_coordinator_custom_fetch_intervals(hass: HomeAssistant, mock_config_ent
             longitude=TEST_LON,
             aq_fetch_interval=timedelta(minutes=90),
             pollen_fetch_interval=timedelta(minutes=120),
-            weather_calls_per_poll=4,
             config_entry=mock_config_entry,
         )
     assert c._aq_fetch_interval == timedelta(minutes=90)
     assert c._pollen_fetch_interval == timedelta(minutes=120)
-    assert c.weather_calls_per_poll == 4
+    # A coordinator built without an explicit plan solves its own.
+    assert c.weather_plan.cadences
+    # calls_per_poll is now the average billable events per tick, not a fixed
+    # integer, because endpoints refresh at different cadences.
+    assert isinstance(c.weather_calls_per_poll, float)
+    assert 0 < c.weather_calls_per_poll < sum(c.weather_plan.pages.values())
+
+
+def test_index_color_hex_uses_band_palette_for_uaqi() -> None:
+    """uaqi colors come from the documented ladder, not the API gradient —
+    the gradient returns green for uaqi < 50 (R/G transposed upstream)."""
+    from custom_components.particle_man.coordinator import _index_color_hex
+
+    green_bug = {"code": "uaqi", "aqi": 38, "color": {"green": 0.73}}
+    assert _index_color_hex(green_bug) == "#ff8c00"  # Low band, orange
+    assert _index_color_hex({"code": "uaqi", "aqi": 0}) == "#800000"
+    assert _index_color_hex({"code": "uaqi", "aqi": 85}) == "#009e3a"
+    # Local AQIs keep the API's own palette.
+    local = {"code": "usa_epa", "aqi": 38, "color": {"green": 0.8}}
+    assert _index_color_hex(local) == "#00cc00"
+
+
+def test_forecast_entries_carry_below_action_level(
+    coordinator: ParticleManCoordinator,
+) -> None:
+    hours: list[dict[str, Any]] = [
+        {
+            "dateTime": "2026-04-22T01:00:00Z",
+            "indexes": [{"code": "uaqi", "aqi": 38, "category": "Low air quality"}],
+            "pollutants": [
+                {"code": "pm25", "concentration": {"value": 5.0, "units": "MICROGRAMS_PER_CUBIC_METER"}},
+            ],
+        },
+        {
+            "dateTime": "2026-04-22T02:00:00Z",
+            "indexes": [{"code": "uaqi", "aqi": 75, "category": "Good air quality"}],
+            "pollutants": [
+                {"code": "pm25", "concentration": {"value": 60.0, "units": "MICROGRAMS_PER_CUBIC_METER"}},
+            ],
+        },
+    ]
+    uaqi_hourly, _ = coordinator._build_aqi_hourly_forecast(hours)
+    assert uaqi_hourly[0]["below_action_level"] is False  # 38 acts
+    assert uaqi_hourly[1]["below_action_level"] is True   # 75 quiet
+    pollutants = coordinator._build_pollutant_hourly_forecast(hours)
+    assert pollutants["pm25"][0]["below_action_level"] is True   # Good
+    assert pollutants["pm25"][1]["below_action_level"] is False  # elevated

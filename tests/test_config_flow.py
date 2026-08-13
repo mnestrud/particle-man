@@ -18,6 +18,10 @@ from custom_components.particle_man.config_flow import (
 )
 from custom_components.particle_man.const import (
     CONF_API_KEY,
+    CONF_AUTOMAGIC_MODE,
+    CONF_QUIET_END,
+    CONF_QUIET_HOURS_ENABLED,
+    CONF_QUIET_START,
     CONF_LATITUDE,
     CONF_LOCATION_NAME,
     CONF_LONGITUDE,
@@ -736,3 +740,93 @@ def test_usage_summary_uses_minutes_per_month() -> None:
                                minutes_per_month=31 * 24 * 60)
     assert "1440" in result_30
     assert "1488" in result_31
+
+
+# ---------------------------------------------------------------------------
+# Weather plan preview text
+# ---------------------------------------------------------------------------
+
+def test_weather_summary_lists_cadences_and_projection() -> None:
+    """The options screens show the resolved plan, not a static sentence."""
+    from custom_components.particle_man.config_flow import _weather_summary
+    from custom_components.particle_man.const import solve_weather_plan
+
+    plan = solve_weather_plan(
+        num_locations=1,
+        effective_minutes=33480,
+        monthly_limit=10000,
+        enable_alerts=True,
+        enable_minutecast=False,
+    )
+    text = _weather_summary(plan, 10000)
+
+    assert "current 15 min" in text
+    assert "x5 pages" in text          # 120-hour forecast costs five calls
+    assert "6,324" in text
+    assert "disabled to fit" not in text
+
+
+def test_weather_summary_reports_dropped_endpoints() -> None:
+    """When the budget forces a drop, say so rather than silently omitting it."""
+    from custom_components.particle_man.config_flow import _weather_summary
+    from custom_components.particle_man.const import solve_weather_plan
+
+    plan = solve_weather_plan(
+        num_locations=8,
+        effective_minutes=33480,
+        monthly_limit=10000,
+        enable_alerts=True,
+        enable_minutecast=True,
+    )
+    assert plan.dropped, "8 locations plus minutecast should not fit"
+    assert "disabled to fit: minutes" in _weather_summary(plan, 10000)
+
+
+async def test_pending_automagic_choice_drives_the_preview(
+    hass: HomeAssistant, mock_config_entry
+) -> None:
+    """The plan preview must reflect the toggle just set, not the saved value."""
+    mock_config_entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    flow = hass.config_entries.options._progress[result["flow_id"]]
+
+    flow._options[CONF_AUTOMAGIC_MODE] = False
+    assert flow._automagic() is False
+    flow._options[CONF_AUTOMAGIC_MODE] = True
+    assert flow._automagic() is True
+
+
+async def test_automagic_falls_back_to_the_saved_entry(
+    hass: HomeAssistant, mock_config_entry
+) -> None:
+    """Before the first step commits, the saved value decides."""
+    mock_config_entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    flow = hass.config_entries.options._progress[result["flow_id"]]
+
+    flow._options.pop(CONF_AUTOMAGIC_MODE, None)
+    assert flow._automagic() is bool(
+        mock_config_entry.options.get(CONF_AUTOMAGIC_MODE, True)
+    )
+
+
+async def test_effective_minutes_subtracts_quiet_hours(
+    hass: HomeAssistant, mock_config_entry
+) -> None:
+    """Quiet hours shrink the month, which is what the whole budget scales to."""
+    mock_config_entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    flow = hass.config_entries.options._progress[result["flow_id"]]
+
+    flow._options.update({
+        CONF_QUIET_HOURS_ENABLED: True,
+        CONF_QUIET_START: "23:00:00",
+        CONF_QUIET_END: "05:00:00",
+    })
+    quiet = flow._effective_minutes()
+
+    flow._options[CONF_QUIET_HOURS_ENABLED] = False
+    full = flow._effective_minutes()
+
+    assert quiet < full
+    assert quiet == full * 18 // 24        # 18 active hours a day

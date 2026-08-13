@@ -29,7 +29,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - run: pip install ruff
+      # Pinned deliberately: an unpinned ruff turns every upstream release into
+      # a potential CI break with no code change on our side, which is exactly
+      # how this workflow went red between v1.5.4 and 0.16.2.
+      - run: pip install ruff==0.16.2
       - run: ruff check custom_components/
 
   typecheck:

@@ -816,3 +816,103 @@ def test_monthly_quiet_hours_window_none_when_disabled(coord: ParticleManCoordin
     attrs = MonthlyAqUsageSensor(coord).extra_state_attributes
     assert attrs["quiet_hours_window"] is None
     assert attrs["active_hours_per_day"] == 24.0
+
+
+# ---------------------------------------------------------------------------
+# Harmonized severity attributes (v1.7.0)
+# ---------------------------------------------------------------------------
+
+
+def test_aqi_sensor_severity_attributes(coord: ParticleManCoordinator) -> None:
+    coord.data["aqi"]["color_hex"] = "#00cc00"
+    coord.data["aqi"]["severity"] = 2
+    attrs = AqiSensor(coord).extra_state_attributes
+    assert attrs["color_hex"] == "#00cc00"
+    assert attrs["severity"] == 2
+    assert attrs["severity_max"] == 4
+    # uaqi 45 is in the Moderate band -> acts (only Good/Excellent are quiet)
+    assert attrs["below_action_level"] is False
+
+
+def test_aqi_sensor_action_level_boundary(coord: ParticleManCoordinator) -> None:
+    coord.data["aqi"]["value"] = 60
+    attrs = AqiSensor(coord).extra_state_attributes
+    assert attrs["below_action_level"] is True
+    coord.data["aqi"]["value"] = None
+    attrs = AqiSensor(coord).extra_state_attributes
+    assert attrs["below_action_level"] is None
+
+
+def test_local_aqi_severity_unmapped_by_design(coord: ParticleManCoordinator) -> None:
+    coord.data["local_aqi"]["color_hex"] = "#123456"
+    attrs = LocalAqiSensor(coord).extra_state_attributes
+    assert attrs["color_hex"] == "#123456"
+    assert attrs["severity"] is None
+    assert attrs["severity_max"] is None
+    assert attrs["below_action_level"] is None
+
+
+def test_pollutant_sensor_severity_attributes(coord: ParticleManCoordinator) -> None:
+    attrs = PollutantSensor(coord, "pm25").extra_state_attributes
+    assert attrs["color_hex"] == "#00e400"  # EPA Good
+    assert attrs["severity"] == 0
+    assert attrs["severity_max"] == 5
+    assert attrs["below_action_level"] is True
+    coord.data["pollutant_pm25"]["epa_category"] = "Unhealthy"
+    attrs = PollutantSensor(coord, "pm25").extra_state_attributes
+    assert attrs["severity"] == 3
+    assert attrs["below_action_level"] is False
+
+
+def test_pollen_type_sensor_severity_attributes(coord: ParticleManCoordinator) -> None:
+    attrs = PollenTypeSensor(coord, "tree").extra_state_attributes
+    # UPI 2 (Low) -> severity == index; quiet below Moderate (3)
+    assert attrs["severity"] == 2
+    assert attrs["severity_max"] == 5
+    assert attrs["below_action_level"] is True
+    coord.data["pollen_type_tree"]["value"] = 3
+    attrs = PollenTypeSensor(coord, "tree").extra_state_attributes
+    assert attrs["below_action_level"] is False
+
+
+def test_pollen_plant_sensor_severity_attributes(coord: ParticleManCoordinator) -> None:
+    coord.data["pollen_plant_alder"]["value"] = 4
+    attrs = PollenPlantSensor(coord, "alder").extra_state_attributes
+    assert attrs["severity"] == 4
+    assert attrs["below_action_level"] is False
+
+
+def test_pollen_advisory_severity_attributes(coord: ParticleManCoordinator) -> None:
+    coord.data["pollen_advisory"] = {
+        "value": "Moderate",
+        "dominant_type": "tree",
+        "dominant_index": 3,
+    }
+    attrs = PollenAdvisorySensor(coord).extra_state_attributes
+    assert attrs["severity"] == 3
+    assert attrs["severity_max"] == 5
+    assert attrs["color_hex"] == "#FFBA00"
+
+
+def test_aq_advisory_severity_attributes(coord: ParticleManCoordinator) -> None:
+    coord.data["aqi"]["color_hex"] = "#00cc00"
+    attrs = AirQualityAdvisorySensor(coord).extra_state_attributes
+    assert attrs["severity"] == 2  # aqi 45 -> Moderate band
+    assert attrs["severity_max"] == 4
+    assert attrs["color_hex"] == "#00cc00"
+
+
+def test_alert_count_severity_ranks(coord: ParticleManCoordinator) -> None:
+    coord.data["weather_alerts"] = [
+        {"severity": "SEVERE", "event_type": "THUNDERSTORM"},
+        {"severity": "MINOR", "event_type": "FOG"},
+        {"severity": "SEVERITY_UNKNOWN", "event_type": "OTHER"},
+    ]
+    attrs = WeatherAlertCountSensor(coord).extra_state_attributes
+    assert attrs["highest_severity"] == "SEVERE"
+    assert attrs["highest_severity_rank"] == 2
+    assert attrs["severity_max"] == 3
+    ranks = {a["event_type"]: a["severity_rank"] for a in attrs["alerts"]}
+    assert ranks == {"THUNDERSTORM": 2, "FOG": 0, "OTHER": None}
+    # Enrichment must not leak into shared coordinator data
+    assert "severity_rank" not in coord.data["weather_alerts"][0]

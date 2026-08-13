@@ -6,83 +6,141 @@
 
 Particle Man polls Google's APIs on a schedule and enforces monthly quotas to keep usage within Google's free tier.
 
-### API calls per poll
+### API calls
 
-| API | Calls per poll | Endpoints hit |
+| API | Endpoints | Cost |
 |---|---|---|
-| Air Quality | 2 | current conditions + forecast |
-| Pollen | 1 | daily forecast lookup |
-| Weather | 3 | current conditions + hourly + daily forecast |
-| Weather alerts (optional) | +1 | public alerts lookup |
+| Air Quality | current conditions + forecast | 2 calls per refresh |
+| Pollen | daily forecast lookup | 1 call per refresh |
+| Weather | current conditions, hourly forecast, daily forecast, alerts, minutecast | 1 call per endpoint per refresh — except the hourly forecast, which costs one call per 24 hours requested |
+
+Google caps the hourly forecast at 24 hours per call, so a 120-hour forecast is
+five billable calls every time it refreshes. That page cost is why forecast
+length and refresh rate trade against each other.
 
 ### Polling cadence
 
-**Air Quality and Pollen** are fetched at most once per hour, matching Google's own data refresh rate. Polling faster would return the same data. At 7+ locations the interval scales longer than 1 hour — see [Automagic interval calculation](#automagic-interval-calculation) below.
+**Air Quality and Pollen** are fetched at most once per hour, matching Google's
+own data refresh rate. Polling faster would return identical data. At 7+
+locations the interval scales beyond an hour.
 
-**Weather** uses either the Automagic-calculated interval if enabled (DEFAULT) or a manually configured one for advanced / custom configurations.  
+**Weather endpoints each refresh on their own cadence.** They do not all fire
+together. Base cadences follow Google's regeneration rates — current conditions
+every 15 minutes, forecasts every 30 — and where Particle Man polls slower than
+that, it is deliberate: the saved calls buy forecast length instead.
 
-### Automagic interval calculation
-
-Automagic mode computes the minimum safe polling interval — the shortest interval that keeps total calls within the monthly limit over the billing period.
-
-**Inputs:**
-
-| Input | Source | Example |
+| Endpoint | Base cadence | Why |
 |---|---|---|
-| `calls_per_poll` | Fixed per API (weather = 3 or 4) | 4 (weather alerts on) |
-| `num_locations` | Number of configured locations | 2 |
-| `monthly_limit` | Google free tier (DEFAULT) or custom | 10,000 |
-| `billing_month_days` | Actual days in current month (Pacific Time) | 31 |
-| `active_minutes_per_month` | `billing_month_days × 24 × 60` minus quiet hours | 33,480 |
-| `safety_buffer` | Fixed 5% | 1.05 |
+| Current conditions | 15 min | Matches Google's regeneration exactly |
+| Hourly forecast | 60 min | Google regenerates every 30 min; the content moves slowly |
+| Daily forecast | 180 min | Tomorrow's high barely changes hour to hour |
+| Weather alerts | 30 min | Latency matters most here |
+| Minutecast (opt-in) | 15 min | A nowcast is useless if stale |
 
-**Formula:**
+### Automagic: the weather budget
+
+Automagic expresses the weather budget as calls per month rather than a single
+polling interval:
+
+```
+monthly_calls(endpoint) = ⌈ active_minutes / cadence ⌉ × pages × num_locations
+constraint: Σ(enabled endpoints) × 1.05 ≤ monthly_limit
+```
+
+At one location with default settings — a 120-hour hourly forecast, alerts on,
+quiet hours 23:00–05:00, 31-day month (33,480 active minutes):
+
+| Endpoint | Cadence | Pages | Calls/month |
+|---|---|---|---|
+| Current conditions | 15 min | 1 | 2,232 |
+| Hourly forecast | 60 min | 5 | 2,790 |
+| Daily forecast | 180 min | 1 | 186 |
+| Weather alerts | 30 min | 1 | 1,116 |
+| **Total** | | | **6,324** of 10,000 |
+
+Adding minutecast brings that to 8,556 — still inside the free tier at one
+location.
+
+**When it does not fit**, cadences stretch by a single scale factor, except that
+alerts and current conditions stop at 60 minutes. Stretching those is a bad
+trade: a tornado warning delivered 100 minutes late is worthless, and capping
+them costs little. If even the capped plan does not fit, minutecast is dropped
+rather than served far past its useful freshness, and only then is the hourly
+forecast shortened.
+
+| Locations | Current | Hourly | Daily | Alerts | Total (buffered) |
+|---|---|---|---|---|---|
+| 1 | 15 min | 60 min | 180 min | 30 min | 6,640 |
+| 2 | 20 min | 80 min | 240 min | 40 min | 9,967 |
+| 5 | 60 min | 240 min | 480 min | 60 min | 9,902 |
+| 10 | 120 min | 480 min | 1200 min | 120 min | 9,828 |
+
+Cadences are always exact multiples of the coordinator's wake interval, since
+an endpoint can only refresh on a tick.
+
+### AQ and Pollen interval calculation
+
+Air quality and pollen still use a single interval each:
 
 ```
 safe_interval_minutes = ⌈ active_minutes × calls_per_poll × num_locations × 1.05 / monthly_limit ⌉
 ```
 
-Floored at 15 minutes. If the result would be less than 15, 15 is used, because the weather model itself is on an approximately 15 minute update. 
-
-**Example** — 2 locations, alerts on (4 calls/poll), 10,000 (DEFAULT API CALLS) weather limit, May (31 days), quiet hours 23:00–05:00 (18 active hours/day):
-
-```
-active_minutes = 31 × 18 × 60 = 33,480
-safe_interval  = ⌈ 33,480 × 4 × 2 × 1.05 / 10,000 ⌉ = ⌈ 28.1 ⌉ = 29 min
-```
+Floored at 60 minutes, which is how often Google regenerates the data.
 
 **Where to see the live assumptions:**
 
-Open any of the three monthly usage diagnostic sensors (**Monthly AQ Calls**, **Monthly Pollen Calls**, **Monthly Weather Calls**) in **Developer Tools → States**. The attributes include every input used in the current calculation:
+Open any of the three monthly usage diagnostic sensors (**Monthly AQ Calls**,
+**Monthly Pollen Calls**, **Monthly Weather Calls**) in **Developer Tools →
+States**. The weather sensor additionally reports the resolved plan:
 
 ```
 automagic_mode: true
-num_locations: 2
-calls_per_poll: 4
-fetch_interval_minutes: 29
+num_locations: 1
+calls_per_poll: 2.83
+fetch_interval_minutes: 15
+endpoint_cadences: {current: 15, hours: 60, days: 180, alerts: 30}
+endpoint_pages: {current: 1, hours: 5, days: 1, alerts: 1}
+endpoint_calls_per_month: {current: 2232, hours: 2790, days: 186, alerts: 1116}
+projected_monthly_calls: 6324
+cadence_scale_factor: 1.0
+hourly_forecast_hours: 120
+minutecast_enabled: false
+dropped_endpoints: []
+plan_degraded: false
 quiet_hours_enabled: true
 quiet_hours_window: 23:00–05:00
 active_hours_per_day: 18.0
 billing_month_days: 31
 effective_minutes_per_month: 33480
 safety_buffer_pct: 5
-days_remaining: 14
-calls_per_day: 58.3
 ```
 
-### Monthly usage at common intervals (1 location, all APIs, 31-day month, no quiet hours)
+!!! note "`calls_per_poll` is now an average"
+    Because endpoints refresh at different rates, this is the mean number of
+    billable calls per coordinator wake-up rather than a fixed integer. The
+    relationship it always satisfied still holds:
+    `calls_per_poll × (effective_minutes ÷ fetch_interval_minutes) ≈ projected_monthly_calls`.
 
-| Interval | AQ calls | Pollen calls | Weather calls | Status |
+### Monthly usage by location count (default settings, 31-day month, quiet hours on)
+
+| Locations | AQ calls | Pollen calls | Weather calls | Status |
 |---|---|---|---|---|
-| 60 min | 1,488 | 744 | 2,232 | ✅ All within free tier |
-| 30 min | 2,976 | 1,488 | 4,464 | ✅ All within free tier |
-| 15 min | 5,952 | 2,976 | 8,928 | ❌ AQ exceeds 10k limit |
+| 1 | 558 | 558 | 6,324 | ✅ All within free tier |
+| 2 | 1,116 | 1,116 | 9,492 | ✅ Weather cadences stretched |
+| 5 | 2,790 | 2,790 | 9,430 | ✅ Alerts capped at 60 min |
 
 Free tier limits: [Air Quality](https://developers.google.com/maps/documentation/air-quality/usage-and-billing) (10,000/mo), [Pollen](https://developers.google.com/maps/documentation/pollen/usage-and-billing) (5,000/mo), [Weather](https://developers.google.com/maps/documentation/weather/usage-and-billing) (10,000/mo).
 
 ### Quota behavior
 
-When an API reaches its monthly limit, Particle Man pauses **only that API**. Other APIs continue normally. Tracking resets automatically on the 1st of the month (midnight Pacific Time).  Reconfigure the integration to add quota. 
+When an API approaches its monthly limit, Particle Man degrades rather than
+stopping dead. Past 95% of the weather limit only alerts and current conditions
+keep running; below that, endpoints drop in reverse priority order until the
+remaining quota covers the refresh. Air Quality and Pollen pause entirely when
+their own limits are reached. Other APIs are never affected.
+
+Tracking resets automatically on the 1st of the month (midnight Pacific Time).
 
 ### Quota tracking
 
@@ -96,26 +154,35 @@ If counts get out of sync (e.g. after migrating to a new HA instance), remove an
 
 The four advisory/severity scales used by Particle Man sensors — air quality categories, pollen levels, UV index, and weather alert severity — come from different sources. Details below.
 
-### Air Quality category scale
+### Air Quality category scales
 
-**Sensor:** Air Quality Advisory — state is the raw category text returned by Google.
+Two distinct ladders are in play — they are **not** the same vocabulary:
 
-**Source:** Google uses the same six category names as the [US EPA AQI](https://www.airnow.gov/aqi/aqi-basics/). The categories are also consistent with the WHO UAQI framework.
+**Universal AQI (UAQI)** — the Universal AQI sensor state and the Air Quality
+Advisory. Google's proprietary 0–100 index where **higher is better**, banded
+per the [official UAQI table](https://developers.google.com/maps/documentation/air-quality/laqis):
 
-| Category | AQI range | PM2.5 (μg/m³, 24-h avg)* |
-|---|---|---|
-| Good | 0–50 | 0.0–9.0 |
-| Moderate | 51–100 | 9.1–35.4 |
-| Unhealthy for Sensitive Groups | 101–150 | 35.5–55.4 |
-| Unhealthy | 151–200 | 55.5–125.4 |
-| Very Unhealthy | 201–300 | 125.5–225.4 |
-| Hazardous | 301–500 | ≥ 225.5 |
+| UAQI | Category |
+|---|---|
+| 80–100 | Excellent air quality |
+| 60–79 | Good air quality |
+| 40–59 | Moderate air quality |
+| 20–39 | Low air quality |
+| 0–19 | Poor air quality |
 
-*PM2.5 breakpoints use the [2024 EPA NAAQS revision](https://www.epa.gov/criteria-air-pollutants/naaqs-table). Other pollutants (PM10, O3, NO2, CO, SO2) follow current EPA NAAQS breakpoints. Google derives its Universal AQI category from the dominant pollutant's concentration.
+**EPA AQI categories** — the per-pollutant sensors' `epa_category` attribute
+and their `*_level` companions, calculated locally from
+[US EPA NAAQS breakpoints](https://www.epa.gov/criteria-air-pollutants/naaqs-table)
+(PM2.5 uses the 2024 revision):
 
-**Alignment note:** Google's category boundary *names* match EPA AQI exactly. The underlying index score uses Google's proprietary UAQI formula, which may assign different numeric values than raw EPA AQI — but the category text returned by the API (and exposed as the sensor state) is identical to EPA terminology.
-
-The per-pollutant sensors (PM2.5, PM10, O3, etc.) under the Air Quality section also expose an `epa_category` attribute, calculated locally from the EPA breakpoints above.
+| Category | PM2.5 (μg/m³, 24-h avg) |
+|---|---|
+| Good | 0.0–9.0 |
+| Moderate | 9.1–35.4 |
+| Unhealthy for Sensitive Groups | 35.5–55.4 |
+| Unhealthy | 55.5–125.4 |
+| Very Unhealthy | 125.5–225.4 |
+| Hazardous | ≥ 225.5 |
 
 ---
 
@@ -135,6 +202,30 @@ The per-pollutant sensors (PM2.5, PM10, O3, etc.) under the Air Quality section 
 | 5 | Very High |
 
 Google does not publish fixed concentration thresholds for the UPI levels — the index is calculated from a proprietary model combining pollen concentration models, historical data, and regional plant phenology.
+
+---
+
+### Harmonized severity attributes (v1.7.0)
+
+Every categorized sensor additionally exposes presentation metadata so dashboards can draw uniform severity graphics without hardcoding any vocabulary:
+
+| Attribute | Meaning |
+|---|---|
+| `severity` | The reading's rank within **its own** canonical scale, `0` = least severe. `null` when unmapped. |
+| `severity_max` | The scale's top rank (UAQI 4, EPA 5, UPI 5, alerts 3, minutecast intensity 3). |
+| `below_action_level` | `true` when the reading is below the domain's action boundary (see below). `null` when unknown. |
+| `color_hex` | The canonical category color — Google's own index/pollen color where the API provides one (UAQI, local AQI, pollen), the EPA palette for pollutants. |
+
+These are *additive*: the canonical `category` / `epa_category` strings, state values, and scales are unchanged and remain authoritative. `severity` asserts no cross-domain equivalence — a full pollen bar means "top of the UPI scale", not "as hazardous as Poor air quality." Forecast array entries (`daily_forecast` / `hourly_forecast`) carry `severity` and `color_hex` too. Weather alert entries carry `severity_rank` alongside Google's `severity` string; local AQI severity is `null` by design (country vocabularies vary).
+
+**Action boundaries** (Google documents none, so these are explicit, documented choices):
+
+- **Air quality**: quiet at UAQI ≥ 60 — only the Good and Excellent bands are quiet; "Moderate air quality" and below act.
+- **Pollutants**: quiet only at EPA **Good** — matches the advisory's existing `elevated_pollutants` logic.
+- **Pollen**: quiet below UPI **3 (Moderate)** — None, Very Low and Low are quiet.
+- **Alerts**: never quiet.
+
+**Daily AQI forecast fix (v1.7.0):** the UAQI `daily_forecast` previously summarized each day with `max(aqi)` — on an inverted scale that was the day's *cleanest* hour. It now reports the worst hour (`min(aqi)` for UAQI; local AQIs keep `max`).
 
 ---
 

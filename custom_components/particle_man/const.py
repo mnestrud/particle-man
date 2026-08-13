@@ -1,7 +1,9 @@
 """Constants for Particle Man integration."""
 import calendar as _cal
 import math
+from dataclasses import dataclass
 from datetime import datetime as _dt
+from functools import reduce
 from zoneinfo import ZoneInfo
 
 DOMAIN = "particle_man"
@@ -34,6 +36,8 @@ CONF_ENABLE_POLLEN = "enable_pollen"
 CONF_ENABLE_WEATHER = "enable_weather"
 CONF_ENABLE_WEATHER_ALERTS = "enable_weather_alerts"
 CONF_WEATHER_UNITS = "weather_units"  # "METRIC" | "IMPERIAL"
+CONF_WEATHER_HOURLY_HOURS = "weather_hourly_hours"
+CONF_ENABLE_MINUTECAST = "enable_minutecast"
 
 # API limit options (manual mode only)
 CONF_AQ_MONTHLY_LIMIT = "aq_monthly_limit"
@@ -58,6 +62,15 @@ DEFAULT_ENABLE_POLLEN = True
 DEFAULT_ENABLE_WEATHER = True
 DEFAULT_ENABLE_WEATHER_ALERTS = True
 DEFAULT_WEATHER_UNITS = "METRIC"
+
+# Hourly forecast horizon. Google caps forecast/hours pageSize at 24, so each
+# 24-hour block is one extra billable page — only multiples of 24 avoid waste.
+DEFAULT_WEATHER_HOURLY_HOURS = 120
+WEATHER_HOURLY_HOURS_CHOICES = (24, 48, 72, 120, 240)
+
+# Minutecast is Experimental (pre-GA) at Google and its billing is undocumented,
+# so it is opt-in and budgeted as if billed.
+DEFAULT_ENABLE_MINUTECAST = False
 
 # Corrected free-tier limits (Google Maps Platform)
 DEFAULT_AQ_MONTHLY_LIMIT = 10000
@@ -120,6 +133,375 @@ def safe_interval_minutes(
         if limit > 0
     ]
     return max(15, max(intervals)) if intervals else 15
+
+
+# ---------------------------------------------------------------------------
+# Weather per-endpoint refresh budget
+#
+# Weather endpoints no longer share one poll interval. Each refreshes on its own
+# cadence, and the budget is expressed as calls-per-month rather than a single
+# calls-per-poll scalar:
+#
+#     monthly_calls(endpoint) = ceil(E / cadence) * pages * num_locations
+#     constraint: sum(enabled endpoints) * buffer <= monthly_limit
+#
+# where E is the effective polling minutes per billing month.
+# ---------------------------------------------------------------------------
+
+# Endpoint identifiers — also the keys of every per-endpoint dict below.
+W_CURRENT = "current"
+W_HOURS = "hours"
+W_DAYS = "days"
+W_ALERTS = "alerts"
+W_MINUTES = "minutes"
+WEATHER_ENDPOINTS = (W_CURRENT, W_HOURS, W_DAYS, W_ALERTS, W_MINUTES)
+
+# Base cadence in minutes, derived from Google's own data regeneration rates
+# (current conditions 15 min, hourly 30 min, daily 30 min). Where we poll slower
+# than Google regenerates, that is deliberate: the content changes slowly and the
+# saved calls buy forecast length instead.
+_WEATHER_BASE_CADENCE: dict[str, int] = {
+    W_CURRENT: 15,    # matches regeneration exactly
+    W_HOURS: 60,      # deliberate 2x under-poll
+    W_DAYS: 180,      # deliberate 6x under-poll
+    W_ALERTS: 30,     # latency-sensitive
+    W_MINUTES: 15,    # nowcast is useless if stale
+}
+
+# Hard ceiling on automagic stretch. None = unbounded. An alert or a current
+# reading delivered an hour late is not worth the quota it saves; a daily
+# forecast an extra six hours old still is.
+_WEATHER_MAX_CADENCE: dict[str, int | None] = {
+    W_CURRENT: 60,
+    W_HOURS: None,
+    W_DAYS: None,
+    W_ALERTS: 60,
+    W_MINUTES: 30,
+}
+
+# Preserved first -> last when quota runs short.
+_WEATHER_PRIORITY = (W_ALERTS, W_CURRENT, W_HOURS, W_DAYS, W_MINUTES)
+
+_WEATHER_HOURLY_PAGE_SIZE = 24    # Google's hard cap on forecast/hours pageSize
+_WEATHER_HOURLY_MAX_PAGES = 10    # 240 h API max; also a runaway-token guard
+_WEATHER_HOURLY_PAGE_LADDER = (5, 3, 2, 1)
+
+# Beyond this, a long hourly forecast is so stale that fewer pages refreshed
+# more often is the better trade.
+_WEATHER_HOURS_CADENCE_SANITY = 720  # 12 h
+
+# Smallest coordinator wake interval. Ticks are cheap (no API calls unless an
+# endpoint is due), but there is no point waking more often than this.
+_MIN_TICK_MINUTES = 5
+
+# Cadences are quantized onto this grid so they stay human-legible and remain
+# exact multiples of the coordinator tick.
+_CADENCE_GRID = (15, 20, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440)
+
+# Minutecast interpretation
+_MINUTECAST_PROBABILITY_THRESHOLD = 50
+_MINUTECAST_INTENSITY_ORDER: dict[str, int] = {
+    "NO_INTENSITY": 0, "LIGHT": 1, "MODERATE": 2, "HEAVY": 3,
+}
+_MINUTECAST_HORIZON_MINUTES = 360
+
+
+@dataclass(frozen=True)
+class WeatherPlan:
+    """Resolved per-endpoint refresh plan for one config entry."""
+
+    cadences: dict[str, int]        # endpoint -> minutes; always tick multiples
+    pages: dict[str, int]           # endpoint -> billable events per refresh
+    tick_minutes: int               # master coordinator interval
+    monthly_calls: dict[str, int]   # endpoint -> projected calls/month, all locations
+    total_monthly_calls: int        # sum, before the safety buffer
+    scale_factor: float             # k actually applied
+    dropped: tuple[str, ...]        # endpoints disabled to fit the budget
+    hourly_hours: int               # after any page-ladder reduction
+    degraded: bool                  # True if anything was stretched or dropped
+
+
+def weather_hourly_pages(hourly_hours: int) -> int:
+    """Billable pages for an N-hour forecast (pageSize caps at 24)."""
+    pages = math.ceil(max(1, hourly_hours) / _WEATHER_HOURLY_PAGE_SIZE)
+    return max(1, min(pages, _WEATHER_HOURLY_MAX_PAGES))
+
+
+def weather_endpoint_calls(
+    cadence_minutes: int, pages: int, effective_minutes: int, num_locations: int
+) -> int:
+    """Projected billable events per month for one endpoint."""
+    if cadence_minutes <= 0:
+        return 0
+    return math.ceil(effective_minutes / cadence_minutes) * pages * num_locations
+
+
+def _active_endpoints(enable_alerts: bool, enable_minutecast: bool) -> list[str]:
+    active = [W_CURRENT, W_HOURS, W_DAYS]
+    if enable_alerts:
+        active.append(W_ALERTS)
+    if enable_minutecast:
+        active.append(W_MINUTES)
+    return active
+
+
+def _solve_scale(
+    active: list[str],
+    pages: dict[str, int],
+    effective_minutes: int,
+    num_locations: int,
+    budget: float,
+    use_caps: bool,
+) -> tuple[dict[str, int], float] | None:
+    """Closed-form scale factor k, solved iteratively as per-endpoint caps bind.
+
+    Caps are step functions of k, so this converges in at most len(active)
+    iterations. Returns None when the capped endpoints alone exceed the budget.
+    """
+    uncapped = set(active)
+    capped: dict[str, int] = {}
+    k = 1.0
+
+    while True:
+        frozen = sum(
+            weather_endpoint_calls(cap, pages[name], effective_minutes, num_locations)
+            for name, cap in capped.items()
+        )
+        remaining = budget - frozen
+        if remaining <= 0:
+            return None
+        base_calls = sum(
+            weather_endpoint_calls(
+                _WEATHER_BASE_CADENCE[name], pages[name], effective_minutes, num_locations
+            )
+            for name in uncapped
+        )
+        if not uncapped or base_calls <= 0:
+            break
+        k = max(1.0, base_calls / remaining)
+        if not use_caps:
+            break
+        newly = {
+            name
+            for name in uncapped
+            if (cap := _WEATHER_MAX_CADENCE[name]) is not None
+            and _WEATHER_BASE_CADENCE[name] * k > cap
+        }
+        if not newly:
+            break
+        uncapped -= newly
+        for name in newly:
+            cap = _WEATHER_MAX_CADENCE[name]
+            assert cap is not None
+            capped[name] = cap
+
+    cadences: dict[str, int] = {}
+    for name in active:
+        if name in capped:
+            cadences[name] = capped[name]
+        else:
+            cadences[name] = max(
+                _WEATHER_BASE_CADENCE[name], math.ceil(_WEATHER_BASE_CADENCE[name] * k)
+            )
+    return cadences, k
+
+
+def _quantize(cadences: dict[str, int]) -> tuple[int, dict[str, int]]:
+    """Pick a coordinator tick that every cadence is an exact multiple of.
+
+    Gates only fire on ticks, so a cadence that isn't a tick multiple silently
+    realizes as the next tick boundary — reporting the unrounded value would be
+    a lie. Prefer the GCD, which keeps every cadence exactly as solved; fall back
+    to rounding onto the grid when the GCD is too small to be a sane wake
+    interval. Rounding up can only reduce call volume, never increase it.
+    """
+    values = list(cadences.values())
+    tick = reduce(math.gcd, values)
+    if tick >= _MIN_TICK_MINUTES and tick % _MIN_TICK_MINUTES == 0:
+        # The GCD is itself a round interval, so every cadence survives exactly.
+        return tick, dict(cadences)
+    # An arbitrary GCD (say 27) would preserve exactness at the cost of cadences
+    # no user can read. Snap to the grid instead and accept the rounding.
+    smallest = min(values)
+    tick = next((g for g in _CADENCE_GRID if g >= smallest), smallest)
+    return tick, {name: math.ceil(c / tick) * tick for name, c in cadences.items()}
+
+
+def _total_calls(
+    cadences: dict[str, int],
+    pages: dict[str, int],
+    effective_minutes: int,
+    num_locations: int,
+) -> tuple[dict[str, int], int]:
+    per = {
+        name: weather_endpoint_calls(c, pages[name], effective_minutes, num_locations)
+        for name, c in cadences.items()
+    }
+    return per, sum(per.values())
+
+
+def _reclaim_slack(
+    cadences: dict[str, int],
+    pages: dict[str, int],
+    tick: int,
+    effective_minutes: int,
+    num_locations: int,
+    budget: float,
+) -> dict[str, int]:
+    """Spend leftover budget by stepping high-priority endpoints back down.
+
+    Quantizing always rounds up, which can leave a sizeable slice of the budget
+    unspent. Walk the priority order and pull each endpoint down one grid level
+    while it still fits.
+    """
+    result = dict(cadences)
+    for name in _WEATHER_PRIORITY:
+        if name not in result:
+            continue
+        while True:
+            current = result[name]
+            lower = [g for g in _CADENCE_GRID if g < current and g >= tick and g % tick == 0]
+            if not lower:
+                break
+            candidate = max(lower)
+            if candidate < _WEATHER_BASE_CADENCE[name]:
+                break
+            trial = dict(result)
+            trial[name] = candidate
+            _, total = _total_calls(trial, pages, effective_minutes, num_locations)
+            if total > budget:
+                break
+            result = trial
+    return result
+
+
+def solve_weather_plan(
+    *,
+    num_locations: int,
+    effective_minutes: int,
+    monthly_limit: int,
+    enable_alerts: bool,
+    enable_minutecast: bool,
+    hourly_hours: int = DEFAULT_WEATHER_HOURLY_HOURS,
+    automagic: bool = True,
+    manual_tick_minutes: int | None = None,
+    buffer: float = _AUTOMAGIC_BUFFER,
+) -> WeatherPlan:
+    """Resolve per-endpoint cadences that keep monthly weather calls in budget."""
+    num_locations = max(1, num_locations)
+    active = _active_endpoints(enable_alerts, enable_minutecast)
+    requested_pages = weather_hourly_pages(hourly_hours)
+
+    def _build(
+        cadences: dict[str, int],
+        pages: dict[str, int],
+        k: float,
+        hours: int,
+        dropped: tuple[str, ...],
+        degraded: bool,
+    ) -> WeatherPlan:
+        tick, quantized = _quantize(cadences)
+        if monthly_limit > 0:
+            quantized = _reclaim_slack(
+                quantized, pages, tick, effective_minutes, num_locations,
+                monthly_limit / buffer,
+            )
+        per, total = _total_calls(quantized, pages, effective_minutes, num_locations)
+        return WeatherPlan(
+            cadences=quantized,
+            pages=pages,
+            tick_minutes=tick,
+            monthly_calls=per,
+            total_monthly_calls=total,
+            scale_factor=round(k, 3),
+            dropped=dropped,
+            hourly_hours=hours,
+            degraded=degraded,
+        )
+
+    def _pages_for(count: int) -> dict[str, int]:
+        return {name: (count if name == W_HOURS else 1) for name in active}
+
+    # Manual mode: CONF_UPDATE_INTERVAL keeps its existing meaning ("never poll
+    # faster than this"), mapped onto the base cadences. No solve, no new UI.
+    if not automagic:
+        tick_floor = manual_tick_minutes or DEFAULT_UPDATE_INTERVAL
+        cadences = {
+            name: max(_WEATHER_BASE_CADENCE[name], tick_floor) for name in active
+        }
+        return _build(cadences, _pages_for(requested_pages), 1.0, hourly_hours, (), False)
+
+    # No enforced limit: everything at base cadence.
+    if monthly_limit <= 0:
+        cadences = {name: _WEATHER_BASE_CADENCE[name] for name in active}
+        return _build(cadences, _pages_for(requested_pages), 1.0, hourly_hours, (), False)
+
+    budget = monthly_limit / buffer
+
+    # Degradation ladder. Capped scaling is preferred because it protects the
+    # latency-sensitive endpoints; uniform scaling is the fallback when the caps
+    # themselves cannot be afforded. Page reduction comes last and only when the
+    # hourly forecast would otherwise be refreshed absurdly rarely.
+    # (pages, use_caps, keep_minutecast). Dropping an opted-in minutecast is
+    # preferred over serving it far past its cap: a 6-hour nowcast refreshed
+    # every 90 minutes tells you nothing useful.
+    attempts: list[tuple[int, bool, bool]] = [
+        (requested_pages, True, True),
+        (requested_pages, False, True),
+        (requested_pages, True, False),
+        (requested_pages, False, False),
+    ]
+    for p in _WEATHER_HOURLY_PAGE_LADDER:
+        if p < requested_pages:
+            attempts += [(p, False, True), (p, False, False)]
+
+    minutes_cap = _WEATHER_MAX_CADENCE[W_MINUTES]
+    fallback: WeatherPlan | None = None
+
+    for page_count, use_caps, keep_minutes in attempts:
+        if not keep_minutes and W_MINUTES not in active:
+            continue  # nothing to drop; identical to the keep_minutes attempt
+        endpoints = (
+            active if keep_minutes else [n for n in active if n != W_MINUTES]
+        )
+        pages = {name: (page_count if name == W_HOURS else 1) for name in endpoints}
+        solved = _solve_scale(
+            endpoints, pages, effective_minutes, num_locations, budget, use_caps
+        )
+        if solved is None:
+            continue
+        cadences, k = solved
+        dropped: tuple[str, ...] = (
+            () if keep_minutes or W_MINUTES not in active else (W_MINUTES,)
+        )
+        hours = page_count * _WEATHER_HOURLY_PAGE_SIZE
+        degraded = bool(k > 1.0 or page_count < requested_pages or dropped)
+        plan = _build(cadences, pages, k, hours, dropped, degraded)
+        if plan.total_monthly_calls > budget:
+            continue
+        if fallback is None:
+            fallback = plan
+        stale_hours = plan.cadences[W_HOURS] > _WEATHER_HOURS_CADENCE_SANITY
+        stale_minutes = (
+            W_MINUTES in plan.cadences
+            and minutes_cap is not None
+            and plan.cadences[W_MINUTES] > minutes_cap
+        )
+        if not stale_hours and not stale_minutes:
+            return plan
+
+    if fallback is not None:
+        return fallback
+
+    # Pathological input (e.g. a limit so small nothing fits): park everything at
+    # the slowest grid cadence rather than returning an unusable plan.
+    endpoints = [n for n in active if n != W_MINUTES]
+    pages = {name: 1 for name in endpoints}
+    cadences = {name: _CADENCE_GRID[-1] for name in endpoints}
+    return _build(
+        cadences, pages, 1.0, _WEATHER_HOURLY_PAGE_SIZE,
+        (W_MINUTES,) if W_MINUTES in active else (), True,
+    )
 
 
 # --- API URLs ---
@@ -294,3 +676,116 @@ EPA_BREAKPOINTS: dict[str, tuple[str, list[tuple[float, str]]]] = {
 # Molecular weights (g/mol) for µg/m³ ↔ ppb/ppm conversion at 25°C, 1 atm
 GAS_MW: dict[str, float] = {"no2": 46.0, "o3": 48.0, "co": 28.0, "so2": 64.0}
 MOLAR_VOL = 24.45  # L/mol at 25°C, 1 atm
+
+# ---------------------------------------------------------------------------
+# Harmonized severity model (additive presentation metadata for consumers)
+#
+# Each domain keeps its own canonical scale — Google UAQI bands, EPA AQI
+# categories, Google UPI, CAP alert severities, minutecast intensities.
+# `severity` is a reading's RANK within its own scale (0 = least severe) and
+# `severity_max` the scale's top rank, so a card can draw uniform geometry
+# (severity / severity_max) without any cross-domain equivalence being
+# asserted. Never derive behavior from these; the canonical fields stay
+# authoritative.
+# ---------------------------------------------------------------------------
+
+# UAQI severity from the numeric index — locale-independent, unlike the
+# localized category strings. Bands per the official UAQI table
+# (developers.google.com/maps/documentation/air-quality/laqis):
+# 80-100 Excellent, 60-79 Good, 40-59 Moderate, 20-39 Low, 0-19 Poor.
+# Higher UAQI = better air, hence the inverted rank.
+_UAQI_BAND_FLOORS: tuple[tuple[int, int], ...] = (
+    (80, 0),  # Excellent air quality
+    (60, 1),  # Good air quality
+    (40, 2),  # Moderate air quality
+    (20, 3),  # Low air quality
+    (0, 4),   # Poor air quality (uaqi 0-19)
+)
+UAQI_SEVERITY_MAX = 4
+
+# Official per-category UAQI colors (laqis band table), indexed by severity
+# rank. These are AUTHORITATIVE for uaqi, not a fallback: the API's default
+# color gradient returns green hues for uaqi < 50 (red/green channels appear
+# transposed — e.g. uaqi 38 comes back #01ba00 where the gradient should read
+# ~#ba0100), contradicting the documented ladder where those bands are
+# orange/red. Severity-indexed so localized category strings can't break it.
+UAQI_SEVERITY_COLORS: tuple[str, ...] = (
+    "#009e3a",  # 0 Excellent air quality
+    "#84cf33",  # 1 Good air quality
+    "#ffff00",  # 2 Moderate air quality
+    "#ff8c00",  # 3 Low air quality
+    "#ff0000",  # 4 Poor air quality (uaqi 1-19)
+)
+UAQI_ZERO_COLOR = "#800000"  # uaqi == 0 shares the "Poor" label, maroon
+
+# Kept for reference/docs: the same ladder keyed by English category strings.
+UAQI_CATEGORY_COLORS: dict[str, str] = {
+    "Excellent air quality": "#009e3a",
+    "Good air quality": "#84cf33",
+    "Moderate air quality": "#ffff00",
+    "Low air quality": "#ff8c00",
+    "Poor air quality": "#ff0000",
+}
+
+# EPA AQI category ladder (order = severity rank). Same vocabulary as
+# EPA_BREAKPOINTS/EPA_COLORS — integration-computed, so locale-stable.
+EPA_CATEGORY_ORDER: tuple[str, ...] = (
+    "Good",
+    "Moderate",
+    "Unhealthy for Sensitive Groups",
+    "Unhealthy",
+    "Very Unhealthy",
+    "Hazardous",
+)
+EPA_SEVERITY_MAX = len(EPA_CATEGORY_ORDER) - 1
+
+# Google UPI is already ordinal: severity == index value (0 None … 5 Very High).
+UPI_SEVERITY_MAX = 5
+
+# publicAlerts severity enum, least → most severe. SEVERITY_UNKNOWN (and any
+# future value) maps to severity None.
+ALERT_SEVERITY_ORDER: tuple[str, ...] = ("MINOR", "MODERATE", "SEVERE", "EXTREME")
+ALERT_SEVERITY_MAX = len(ALERT_SEVERITY_ORDER) - 1
+
+MINUTECAST_SEVERITY_MAX = 3  # ranks in _MINUTECAST_INTENSITY_ORDER
+
+# --- Action levels ---------------------------------------------------------
+# Google documents no "act at this level" boundary for AQ or pollen, so these
+# are explicit policy choices (user-confirmed 2026-08-13), each anchored to a
+# canonical scale:
+# - AQ: anything below the "Good air quality" band acts — i.e. "Moderate air
+#   quality" (uaqi 40-59) and worse are surfaced; only Good/Excellent are quiet.
+# - Pollutants: EPA "Good" is quiet — matches the existing elevated_pollutants
+#   logic in the AQ advisory (anything above Good is surfaced).
+# - Pollen: UPI "Moderate" (3) and above act; None/Very Low/Low are quiet
+#   (raised from 2 on user request 2026-08-13 — Low was too chatty).
+# Alerts are never quiet.
+AQ_ACTION_MIN_UAQI = 60          # below_action_level when uaqi >= 60
+POLLUTANT_ACTION_CATEGORY = "Good"  # below_action_level when epa_category == Good
+POLLEN_ACTION_MIN_UPI = 3        # below_action_level when index < 3
+
+
+def uaqi_severity(aqi: float | None) -> int | None:
+    """Rank of a Universal AQI value within the official band ladder."""
+    if not isinstance(aqi, (int, float)):
+        return None
+    for floor, rank in _UAQI_BAND_FLOORS:
+        if aqi >= floor:
+            return rank
+    return UAQI_SEVERITY_MAX
+
+
+def epa_severity(category: str | None) -> int | None:
+    """Rank of an EPA AQI category within the EPA ladder."""
+    try:
+        return EPA_CATEGORY_ORDER.index(category)
+    except ValueError:
+        return None
+
+
+def alert_severity_rank(severity: str | None) -> int | None:
+    """Rank of a publicAlerts severity enum value; unknown values → None."""
+    try:
+        return ALERT_SEVERITY_ORDER.index(severity)
+    except ValueError:
+        return None
