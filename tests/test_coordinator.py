@@ -1550,3 +1550,44 @@ def test_coordinator_custom_fetch_intervals(hass: HomeAssistant, mock_config_ent
     # integer, because endpoints refresh at different cadences.
     assert isinstance(c.weather_calls_per_poll, float)
     assert 0 < c.weather_calls_per_poll < sum(c.weather_plan.pages.values())
+
+
+def test_index_color_hex_uses_band_palette_for_uaqi() -> None:
+    """uaqi colors come from the documented ladder, not the API gradient —
+    the gradient returns green for uaqi < 50 (R/G transposed upstream)."""
+    from custom_components.particle_man.coordinator import _index_color_hex
+
+    green_bug = {"code": "uaqi", "aqi": 38, "color": {"green": 0.73}}
+    assert _index_color_hex(green_bug) == "#ff8c00"  # Low band, orange
+    assert _index_color_hex({"code": "uaqi", "aqi": 0}) == "#800000"
+    assert _index_color_hex({"code": "uaqi", "aqi": 85}) == "#009e3a"
+    # Local AQIs keep the API's own palette.
+    local = {"code": "usa_epa", "aqi": 38, "color": {"green": 0.8}}
+    assert _index_color_hex(local) == "#00cc00"
+
+
+def test_forecast_entries_carry_below_action_level(
+    coordinator: ParticleManCoordinator,
+) -> None:
+    hours: list[dict[str, Any]] = [
+        {
+            "dateTime": "2026-04-22T01:00:00Z",
+            "indexes": [{"code": "uaqi", "aqi": 38, "category": "Low air quality"}],
+            "pollutants": [
+                {"code": "pm25", "concentration": {"value": 5.0, "units": "MICROGRAMS_PER_CUBIC_METER"}},
+            ],
+        },
+        {
+            "dateTime": "2026-04-22T02:00:00Z",
+            "indexes": [{"code": "uaqi", "aqi": 75, "category": "Good air quality"}],
+            "pollutants": [
+                {"code": "pm25", "concentration": {"value": 60.0, "units": "MICROGRAMS_PER_CUBIC_METER"}},
+            ],
+        },
+    ]
+    uaqi_hourly, _ = coordinator._build_aqi_hourly_forecast(hours)
+    assert uaqi_hourly[0]["below_action_level"] is False  # 38 acts
+    assert uaqi_hourly[1]["below_action_level"] is True   # 75 quiet
+    pollutants = coordinator._build_pollutant_hourly_forecast(hours)
+    assert pollutants["pm25"][0]["below_action_level"] is True   # Good
+    assert pollutants["pm25"][1]["below_action_level"] is False  # elevated

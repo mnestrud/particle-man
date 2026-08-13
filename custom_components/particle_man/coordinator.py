@@ -32,6 +32,7 @@ from .const import (
     _WEATHER_HOURLY_MAX_PAGES,
     _WEATHER_HOURLY_PAGE_SIZE,
     _WEATHER_PRIORITY,
+    AQ_ACTION_MIN_UAQI,
     BASE_URL,
     CONDITION_MAP,
     CURRENT_EXTRA_COMPUTATIONS_BASE,
@@ -58,8 +59,11 @@ from .const import (
     FORECAST_EXTRA_COMPUTATIONS,
     GAS_MW,
     MOLAR_VOL,
+    POLLEN_ACTION_MIN_UPI,
     POLLEN_API_URL,
-    UAQI_CATEGORY_COLORS,
+    POLLUTANT_ACTION_CATEGORY,
+    UAQI_SEVERITY_COLORS,
+    UAQI_ZERO_COLOR,
     W_ALERTS,
     W_CURRENT,
     W_DAYS,
@@ -260,14 +264,23 @@ def _rgb_to_hex(rgb: tuple[int, int, int] | None) -> str | None:
 
 
 def _index_color_hex(idx: dict[str, Any]) -> str | None:
-    """Hex of an AQ index's API `color`, falling back to the official UAQI
-    category palette when the response omits the field entirely."""
-    hex_color = _rgb_to_hex(_rgb_from_api(idx.get("color")))
-    if hex_color is not None:
-        return hex_color
+    """Hex color for an AQ index.
+
+    The Universal AQI uses the documented band palette (severity-indexed), NOT
+    the response's `color` field: the API's default gradient returns green for
+    uaqi < 50 — red/green channels transposed — contradicting the official
+    ladder where those bands are orange/red. Local AQIs keep their API colors
+    (each has its own predetermined palette).
+    """
     if idx.get("code") == "uaqi":
-        return UAQI_CATEGORY_COLORS.get(idx.get("category") or "")
-    return None
+        aqi = idx.get("aqi")
+        if isinstance(aqi, (int, float)):
+            if aqi == 0:
+                return UAQI_ZERO_COLOR
+            severity = uaqi_severity(aqi)
+            if severity is not None:
+                return UAQI_SEVERITY_COLORS[severity]
+    return _rgb_to_hex(_rgb_from_api(idx.get("color")))
 
 
 def _day_to_datetime(date_obj: dict[str, Any]) -> str | None:
@@ -1238,6 +1251,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                         "category": idx.get("category"),
                         "color_hex": _index_color_hex(idx),
                         "severity": uaqi_severity(idx["aqi"]),
+                        "below_action_level": idx["aqi"] >= AQ_ACTION_MIN_UAQI,
                         "dominant_pollutant": idx.get("dominantPollutant"),
                     })
                 elif (
@@ -1272,6 +1286,11 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                         "epa_category": category,
                         "color_hex": EPA_COLORS.get(category) if category else None,
                         "severity": epa_severity(category),
+                        "below_action_level": (
+                            category == POLLUTANT_ACTION_CATEGORY
+                            if category
+                            else None
+                        ),
                     })
         return dict(result)
 
@@ -1297,6 +1316,7 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                             "aqi": idx["aqi"],
                             "category": idx.get("category"),
                             "color_hex": _index_color_hex(idx),
+                            "dominant_pollutant": idx.get("dominantPollutant"),
                         }
                     )
                 elif idx.get("code") not in ("uaqi", None) and idx.get("aqi") is not None:
@@ -1327,6 +1347,10 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                 }
                 if uaqi:
                     entry["severity"] = uaqi_severity(peak["aqi"])
+                    entry["below_action_level"] = peak["aqi"] >= AQ_ACTION_MIN_UAQI
+                    # The worst hour's dominant pollutant — the forecast we have
+                    # for "what drives that day's air quality".
+                    entry["dominant_pollutant"] = peak.get("dominant_pollutant")
                 result.append(entry)
             return result
 
@@ -1368,6 +1392,11 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                         "epa_category": category,
                         "color_hex": EPA_COLORS.get(category) if category else None,
                         "severity": epa_severity(category),
+                        "below_action_level": (
+                            category == POLLUTANT_ACTION_CATEGORY
+                            if category
+                            else None
+                        ),
                     }
                 )
             result[code] = daily
@@ -1529,6 +1558,11 @@ class ParticleManCoordinator(DataUpdateCoordinator):
                     "color_hex": _rgb_to_hex(frgb),
                     # UPI is already ordinal: severity == index value.
                     "severity": fvalue if isinstance(fvalue, int) else None,
+                    "below_action_level": (
+                        fvalue < POLLEN_ACTION_MIN_UPI
+                        if isinstance(fvalue, int)
+                        else None
+                    ),
                 }
             )
         return forecast

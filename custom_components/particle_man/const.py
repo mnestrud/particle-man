@@ -703,14 +703,28 @@ _UAQI_BAND_FLOORS: tuple[tuple[int, int], ...] = (
 )
 UAQI_SEVERITY_MAX = 4
 
-# Official per-category UAQI colors (RED_GREEN palette, laqis table) — used
-# only as a fallback when the API response omits the index `color` field.
+# Official per-category UAQI colors (laqis band table), indexed by severity
+# rank. These are AUTHORITATIVE for uaqi, not a fallback: the API's default
+# color gradient returns green hues for uaqi < 50 (red/green channels appear
+# transposed — e.g. uaqi 38 comes back #01ba00 where the gradient should read
+# ~#ba0100), contradicting the documented ladder where those bands are
+# orange/red. Severity-indexed so localized category strings can't break it.
+UAQI_SEVERITY_COLORS: tuple[str, ...] = (
+    "#009e3a",  # 0 Excellent air quality
+    "#84cf33",  # 1 Good air quality
+    "#ffff00",  # 2 Moderate air quality
+    "#ff8c00",  # 3 Low air quality
+    "#ff0000",  # 4 Poor air quality (uaqi 1-19)
+)
+UAQI_ZERO_COLOR = "#800000"  # uaqi == 0 shares the "Poor" label, maroon
+
+# Kept for reference/docs: the same ladder keyed by English category strings.
 UAQI_CATEGORY_COLORS: dict[str, str] = {
     "Excellent air quality": "#009e3a",
     "Good air quality": "#84cf33",
     "Moderate air quality": "#ffff00",
     "Low air quality": "#ff8c00",
-    "Poor air quality": "#ff0000",  # uaqi 1-19; uaqi 0 is maroon #800000
+    "Poor air quality": "#ff0000",
 }
 
 # EPA AQI category ladder (order = severity rank). Same vocabulary as

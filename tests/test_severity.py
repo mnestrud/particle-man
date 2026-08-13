@@ -121,3 +121,16 @@ def test_action_levels() -> None:
     assert uaqi_severity(AQ_ACTION_MIN_UAQI - 1) == 2
     # Pollen (user-confirmed): only None/Very Low quiet; Low acts.
     assert POLLEN_ACTION_MIN_UPI == 2
+
+
+def test_uaqi_severity_colors_match_ladder() -> None:
+    from custom_components.particle_man.const import (
+        UAQI_SEVERITY_COLORS,
+        UAQI_ZERO_COLOR,
+    )
+
+    assert len(UAQI_SEVERITY_COLORS) == UAQI_SEVERITY_MAX + 1
+    # Low band (severity 3) is orange per the official table — the API's
+    # gradient wrongly returns green there (channel transposition bug).
+    assert UAQI_SEVERITY_COLORS[3] == "#ff8c00"
+    assert UAQI_ZERO_COLOR == "#800000"

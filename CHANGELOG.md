@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.1] — 2026-08-13
+
+### Fixed
+
+- **Universal AQI colors now come from the documented band palette instead of the API's `color` gradient.** Google's default gradient returns green hues for UAQI below 50 — the red/green channels appear transposed upstream (uaqi 38 comes back `#01ba00` where the gradient math implies `#ba0100`) — contradicting the official band table where those bands are orange/red. Severity-indexed mapping, so localized category strings can't break it. Local AQIs keep their API-provided palettes.
+- Daily UAQI forecast entries now carry `dominant_pollutant` (from the day's worst hour); previously only hourly entries had it.
+
+### Added
+
+- Forecast array entries (UAQI hourly/daily, pollutants, pollen) now carry `below_action_level`, matching the current-state sensors, so dashboards can apply the same quiet-row treatment to forecast data.
+
+---
+
 ## [1.7.0] — 2026-08-13
 
 ### Added
