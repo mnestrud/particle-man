@@ -757,11 +757,12 @@ MINUTECAST_SEVERITY_MAX = 3  # ranks in _MINUTECAST_INTENSITY_ORDER
 #   quality" (uaqi 40-59) and worse are surfaced; only Good/Excellent are quiet.
 # - Pollutants: EPA "Good" is quiet — matches the existing elevated_pollutants
 #   logic in the AQ advisory (anything above Good is surfaced).
-# - Pollen: UPI "Low" (2) and above act; only None/Very Low are quiet.
+# - Pollen: UPI "Moderate" (3) and above act; None/Very Low/Low are quiet
+#   (raised from 2 on user request 2026-08-13 — Low was too chatty).
 # Alerts are never quiet.
 AQ_ACTION_MIN_UAQI = 60          # below_action_level when uaqi >= 60
 POLLUTANT_ACTION_CATEGORY = "Good"  # below_action_level when epa_category == Good
-POLLEN_ACTION_MIN_UPI = 2        # below_action_level when index < 2
+POLLEN_ACTION_MIN_UPI = 3        # below_action_level when index < 3
 
 
 def uaqi_severity(aqi: float | None) -> int | None:

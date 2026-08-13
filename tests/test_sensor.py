@@ -866,13 +866,13 @@ def test_pollutant_sensor_severity_attributes(coord: ParticleManCoordinator) -> 
 
 def test_pollen_type_sensor_severity_attributes(coord: ParticleManCoordinator) -> None:
     attrs = PollenTypeSensor(coord, "tree").extra_state_attributes
-    # UPI 2 (Low) -> severity == index; Low acts, only None/Very Low are quiet
+    # UPI 2 (Low) -> severity == index; quiet below Moderate (3)
     assert attrs["severity"] == 2
     assert attrs["severity_max"] == 5
-    assert attrs["below_action_level"] is False
-    coord.data["pollen_type_tree"]["value"] = 1
-    attrs = PollenTypeSensor(coord, "tree").extra_state_attributes
     assert attrs["below_action_level"] is True
+    coord.data["pollen_type_tree"]["value"] = 3
+    attrs = PollenTypeSensor(coord, "tree").extra_state_attributes
+    assert attrs["below_action_level"] is False
 
 
 def test_pollen_plant_sensor_severity_attributes(coord: ParticleManCoordinator) -> None:

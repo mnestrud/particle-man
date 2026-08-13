@@ -222,7 +222,7 @@ These are *additive*: the canonical `category` / `epa_category` strings, state v
 
 - **Air quality**: quiet at UAQI ≥ 60 — only the Good and Excellent bands are quiet; "Moderate air quality" and below act.
 - **Pollutants**: quiet only at EPA **Good** — matches the advisory's existing `elevated_pollutants` logic.
-- **Pollen**: quiet below UPI **2 (Low)** — only None and Very Low are quiet.
+- **Pollen**: quiet below UPI **3 (Moderate)** — None, Very Low and Low are quiet.
 - **Alerts**: never quiet.
 
 **Daily AQI forecast fix (v1.7.0):** the UAQI `daily_forecast` previously summarized each day with `max(aqi)` — on an inverted scale that was the day's *cleanest* hour. It now reports the worst hour (`min(aqi)` for UAQI; local AQIs keep `max`).

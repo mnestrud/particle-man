@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.2] — 2026-08-13
+
+### Changed
+
+- **Pollen action level raised to UPI 3 (Moderate)** — None, Very Low and Low are now quiet (was: only None/Very Low). Applies to `below_action_level` on the pollen sensors and their forecast entries.
+
+---
+
 ## [1.7.1] — 2026-08-13
 
 ### Fixed

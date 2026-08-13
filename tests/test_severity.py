@@ -119,8 +119,8 @@ def test_action_levels() -> None:
     assert AQ_ACTION_MIN_UAQI == 60
     assert uaqi_severity(AQ_ACTION_MIN_UAQI) == 1
     assert uaqi_severity(AQ_ACTION_MIN_UAQI - 1) == 2
-    # Pollen (user-confirmed): only None/Very Low quiet; Low acts.
-    assert POLLEN_ACTION_MIN_UPI == 2
+    # Pollen (user-raised 2026-08-13): None/Very Low/Low quiet; Moderate acts.
+    assert POLLEN_ACTION_MIN_UPI == 3
 
 
 def test_uaqi_severity_colors_match_ladder() -> None:
